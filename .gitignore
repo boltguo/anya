@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Runtime data
+pids/
+*.pid
+
+# Test coverage
+coverage/

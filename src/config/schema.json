@@ -1,0 +1,213 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Vela Configuration",
+  "description": "Configuration file for the Vela AI Agent. Place at ~/.vela/config.json",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for editor auto-completion."
+    },
+    "version": {
+      "type": "string",
+      "description": "Configuration version, should match the Vela version."
+    },
+    "agent": {
+      "type": "object",
+      "description": "Agent identity settings.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The agent's name. Used in prompts and UI.",
+          "default": "vela"
+        },
+        "personality": {
+          "type": "string",
+          "description": "System prompt personality. Defines how the agent behaves and responds.",
+          "default": "你是 Vela，一个简洁、直接的个人 AI 助手。"
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "description": "LLM provider configuration.",
+      "properties": {
+        "primary": {
+          "type": "string",
+          "description": "Primary model name (e.g. gemini-2.5-flash).",
+          "default": "gemini-2.5-flash"
+        },
+        "api_key": {
+          "type": "string",
+          "description": "API key for the LLM provider. Get from https://aistudio.google.com/"
+        },
+        "base_url": {
+          "type": "string",
+          "description": "Base URL for the API endpoint."
+        },
+        "max_tokens": {
+          "type": "integer",
+          "description": "Maximum tokens in the response.",
+          "default": 8192
+        },
+        "temperature": {
+          "type": "number",
+          "description": "Sampling temperature (0.0 - 2.0).",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 2
+        },
+        "max_retries": {
+          "type": "integer",
+          "description": "Max retries on transient failures.",
+          "default": 3
+        }
+      },
+      "required": ["primary", "api_key"]
+    },
+    "tools": {
+      "type": "object",
+      "description": "Tool system configuration.",
+      "properties": {
+        "enabled": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of enabled tool names."
+        },
+        "shell": {
+          "type": "object",
+          "properties": {
+            "require_approval": {
+              "type": "boolean",
+              "description": "Whether shell commands need user approval.",
+              "default": true
+            },
+            "approval_allowlist": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Shell command prefixes that skip approval."
+            },
+            "working_directory": {
+              "type": "string",
+              "description": "Default working directory for shell commands.",
+              "default": "~"
+            }
+          }
+        },
+        "web_search": {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "type": "string",
+              "description": "Search backend (currently only 'tavily').",
+              "enum": ["tavily"],
+              "default": "tavily"
+            },
+            "api_key": {
+              "type": "string",
+              "description": "API key for the search backend."
+            },
+            "max_results": {
+              "type": "integer",
+              "description": "Maximum number of search results.",
+              "default": 5
+            }
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "description": "Security settings for file access and command execution.",
+      "properties": {
+        "allowed_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Directories the agent can access without approval. Supports ~ for home."
+        },
+        "fence_mode": {
+          "type": "string",
+          "enum": ["ask", "deny", "allow"],
+          "description": "'ask' prompts user, 'deny' blocks, 'allow' permits all.",
+          "default": "ask"
+        }
+      }
+    },
+    "telegram": {
+      "type": "object",
+      "description": "Telegram bot configuration.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "bot_token": {
+          "type": "string",
+          "description": "Telegram bot token from @BotFather."
+        },
+        "allowed_user_ids": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "description": "Telegram user IDs allowed to interact with the bot."
+        }
+      }
+    },
+    "cron": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "description": "UI display settings.",
+      "properties": {
+        "show_tool_calls": {
+          "type": "boolean",
+          "description": "Show tool call details in the terminal.",
+          "default": true
+        },
+        "show_thinking": {
+          "type": "boolean",
+          "description": "Show model thinking process.",
+          "default": false
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "description": "Advanced settings. Usually don't need to change.",
+      "properties": {
+        "context_window": {
+          "type": "integer",
+          "description": "Model context window size in tokens.",
+          "default": 1000000
+        },
+        "compress_threshold": {
+          "type": "number",
+          "description": "Context usage ratio to trigger compression.",
+          "default": 0.8
+        },
+        "session_history_limit": {
+          "type": "integer",
+          "description": "Max number of sessions to keep.",
+          "default": 50
+        },
+        "log_level": {
+          "type": "string",
+          "enum": ["fatal", "error", "warn", "info", "debug", "trace"],
+          "description": "Minimum log level.",
+          "default": "info"
+        },
+        "max_react_loops": {
+          "type": "integer",
+          "description": "Maximum ReAct loop iterations to prevent infinite loops.",
+          "default": 20
+        }
+      }
+    }
+  }
+}
