@@ -29,11 +29,19 @@ export async function runChat(options: ChatOptions): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.advanced.log_level);
 
-  // Check API key
-  if (!config.provider.api_key) {
+  // Check provider credentials
+  if (config.provider.active === 'gemini' && !config.provider.gemini.api_key) {
     console.log(chalk.red('Error: Gemini API key not configured.'));
-    console.log(chalk.dim('  Run "anya init" or "anya config edit" to set it.'));
+    console.log(chalk.dim('  Run "anya init" or "anya model" to set it.'));
     process.exit(1);
+  }
+  if (config.provider.active === 'openai') {
+    const { hasCodexAuth } = await import('../lib/auth.js');
+    if (!hasCodexAuth()) {
+      console.log(chalk.red('Error: OpenAI not authenticated.'));
+      console.log(chalk.dim('  Run "anya model" to authenticate.'));
+      process.exit(1);
+    }
   }
 
   // Create adapter and agent

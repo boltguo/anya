@@ -46,19 +46,10 @@ export async function runInit(): Promise<void> {
   // Build config
   const config: AnyaConfig = { ...DEFAULT_CONFIG };
 
-  // --- Gemini API Key (required) ---
+  // --- 1. Model Provider ---
   console.log();
-  console.log(chalk.bold('1. Gemini API Key') + chalk.dim(' (required)'));
-  console.log(chalk.dim('   Get a free key: https://aistudio.google.com/\n'));
-
-  const apiKey = await input({
-    message: 'Gemini API Key:',
-    validate: (value) => {
-      if (!value.trim()) return 'API key is required';
-      return true;
-    },
-  });
-  config.provider.api_key = apiKey.trim();
+  const { selectProvider } = await import('./providerSelect.js');
+  await selectProvider(config);
 
   // --- Tavily API Key (optional) ---
   console.log();
@@ -150,23 +141,28 @@ export async function runInit(): Promise<void> {
   }
   console.log(chalk.dim('  [ok] cron/jobs.json'));
 
-  // --- Copy SOUL persona ---
-  const soulPath = join(ANYA_HOME, 'SOUL.md');
-  if (!existsSync(soulPath)) {
-    try {
-      const __dirname = dirname(fileURLToPath(import.meta.url));
-      const soulSource = join(__dirname, '..', 'src', 'config', 'SOUL.template.md');
-      const soulSourceAlt = join(__dirname, '..', 'config', 'SOUL.template.md');
-      
-      if (existsSync(soulSource)) {
-        copyFileSync(soulSource, soulPath);
-        console.log(chalk.dim('  [ok] SOUL.md'));
-      } else if (existsSync(soulSourceAlt)) {
-        copyFileSync(soulSourceAlt, soulPath);
-        console.log(chalk.dim('  [ok] SOUL.md'));
+  // --- Copy SOUL & RULES persona files ---
+  const { SOUL_PATH, RULES_PATH } = await import('../lib/paths.js');
+  for (const { label, dest, template } of [
+    { label: 'SOUL.md', dest: SOUL_PATH, template: 'SOUL.template.md' },
+    { label: 'RULES.md', dest: RULES_PATH, template: 'RULES.template.md' },
+  ]) {
+    if (!existsSync(dest)) {
+      try {
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        const src1 = join(__dirname, '..', 'src', 'config', template);
+        const src2 = join(__dirname, '..', 'config', template);
+
+        if (existsSync(src1)) {
+          copyFileSync(src1, dest);
+          console.log(chalk.dim(`  [ok] ${label}`));
+        } else if (existsSync(src2)) {
+          copyFileSync(src2, dest);
+          console.log(chalk.dim(`  [ok] ${label}`));
+        }
+      } catch {
+        // Non-critical, skip
       }
-    } catch {
-      // Non-critical, skip
     }
   }
 

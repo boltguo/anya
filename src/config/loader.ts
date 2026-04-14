@@ -37,11 +37,21 @@ function deepMerge(target: Record<string, any>, source: Record<string, any>): Re
  */
 function applyEnvOverrides(config: AnyaConfig): AnyaConfig {
   const envMap: Record<string, (c: AnyaConfig, v: string) => void> = {
-    ANYA_GEMINI_API_KEY: (c, v) => { c.provider.api_key = v; },
+    ANYA_GEMINI_API_KEY: (c, v) => { c.provider.gemini.api_key = v; },
     ANYA_TAVILY_API_KEY: (c, v) => { c.tools.web_search.api_key = v; },
     ANYA_TELEGRAM_BOT_TOKEN: (c, v) => { c.telegram.bot_token = v; },
     ANYA_LOG_LEVEL: (c, v) => { c.advanced.log_level = v; },
-    ANYA_MODEL: (c, v) => { c.provider.primary = v; },
+    ANYA_MODEL: (c, v) => {
+      // Detect provider from model name
+      if (v.startsWith('gpt') || v.startsWith('o1') || v.startsWith('o3')) {
+        c.provider.active = 'openai';
+        c.provider.openai.model = v;
+      } else {
+        c.provider.active = 'gemini';
+        c.provider.gemini.model = v;
+      }
+    },
+    ANYA_PROVIDER: (c, v) => { c.provider.active = v; },
   };
 
   for (const [envKey, setter] of Object.entries(envMap)) {
@@ -54,6 +64,43 @@ function applyEnvOverrides(config: AnyaConfig): AnyaConfig {
   return config;
 }
 
+/**
+ * Migrate v0.1 config (flat provider) to v0.2 (nested provider).
+ * Handles existing configs that have provider.api_key and provider.primary.
+ */
+function migrateConfig(raw: Record<string, any>): Record<string, any> {
+  const provider = raw.provider;
+  if (!provider || typeof provider !== 'object') return raw;
+
+  // Already v0.2+ format — has nested gemini/openai objects
+  if (provider.gemini && typeof provider.gemini === 'object') return raw;
+
+  // Migrate flat → nested
+  const migrated = { ...raw };
+  migrated.provider = {
+    active: 'gemini',
+    gemini: {
+      model: provider.primary || 'gemini-3-flash-preview',
+      api_key: provider.api_key || '',
+    },
+    openai: {
+      model: 'gpt-5.4',
+    },
+    max_tokens: provider.max_tokens || 8192,
+    temperature: provider.temperature ?? 0.7,
+    max_retries: provider.max_retries || 3,
+  };
+
+  // Auto-save migrated config
+  try {
+    writeFileSync(CONFIG_PATH, JSON.stringify(migrated, null, 2) + '\n', 'utf-8');
+  } catch {
+    // Non-critical
+  }
+
+  return migrated;
+}
+
 // Singleton config instance
 let _config: AnyaConfig | null = null;
 
@@ -63,7 +110,7 @@ let _config: AnyaConfig | null = null;
  *
  * Priority (low to high):
  * 1. Built-in defaults
- * 2. config.json
+ * 2. config.json (auto-migrated from v0.1 if needed)
  * 3. Environment variables
  */
 export function loadConfig(): AnyaConfig {
@@ -72,7 +119,8 @@ export function loadConfig(): AnyaConfig {
   if (existsSync(CONFIG_PATH)) {
     try {
       const raw = readFileSync(CONFIG_PATH, 'utf-8');
-      fileConfig = JSON.parse(raw) as Partial<AnyaConfig>;
+      const parsed = JSON.parse(raw) as Record<string, any>;
+      fileConfig = migrateConfig(parsed) as Partial<AnyaConfig>;
     } catch (err) {
       console.error(`Warning: Failed to parse config.json: ${(err as Error).message}`);
       console.error('   Using default configuration.');

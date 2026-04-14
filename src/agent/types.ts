@@ -102,6 +102,8 @@ export interface LLMResponse {
     /** Thinking/reasoning tokens consumed (Gemini 2.5+). */
     thoughtsTokens?: number;
   };
+  /** API call duration in milliseconds (set by the provider). */
+  durationMs?: number;
 }
 
 // ── Agent Options ────────────────────────────────────────────────────────────

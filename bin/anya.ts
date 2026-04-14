@@ -44,6 +44,15 @@ program
     await runInit();
   });
 
+// --- anya model ---
+program
+  .command('model')
+  .description('Switch model provider (Gemini / OpenAI)')
+  .action(async () => {
+    const { runModelSelect } = await import('../src/commands/model.js');
+    await runModelSelect();
+  });
+
 // --- anya chat ---
 program
   .command('chat')
@@ -99,13 +108,22 @@ program
       const { loadConfig } = await import('../src/config/loader.js');
       const config = loadConfig();
 
-      const hasKey = !!config.provider.api_key;
-      console.log(`  API Key:   ${hasKey ? '[ok]' : '[!!]'} Gemini ${hasKey ? 'configured' : 'not configured'}`);
+      const active = config.provider.active;
+      if (active === 'gemini') {
+        const hasKey = !!config.provider.gemini.api_key;
+        console.log(`  Auth:      ${hasKey ? '[ok]' : '[!!]'} Gemini API key ${hasKey ? 'configured' : 'not configured'}`);
+      } else {
+        const { hasCodexAuth } = await import('../src/lib/auth.js');
+        const hasAuth = hasCodexAuth();
+        console.log(`  Auth:      ${hasAuth ? '[ok]' : '[!!]'} OpenAI Codex ${hasAuth ? 'authenticated' : 'not authenticated'}`);
+      }
 
       const hasTavily = !!config.tools.web_search.api_key;
       console.log(`  Tavily:    ${hasTavily ? '[ok]' : '[--]'} ${hasTavily ? 'configured' : 'not configured (web_search unavailable)'}`);
 
-      console.log(`  Model:     [..] ${config.provider.primary}`);
+      const model = active === 'openai' ? config.provider.openai.model : config.provider.gemini.model;
+      console.log(`  Provider:  [..] ${active}`);
+      console.log(`  Model:     [..] ${model}`);
 
       const { loadSkills } = await import('../src/skills/loader.js');
       const skills = loadSkills();

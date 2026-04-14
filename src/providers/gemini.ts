@@ -129,14 +129,14 @@ export class GeminiProvider implements LLMProvider {
     tools: Array<{ name: string; description: string; parameters: ToolParameterSchema }>,
     config: AnyaConfig,
   ): Promise<LLMResponse> {
-    if (!config.provider.api_key) {
+    if (!config.provider.gemini.api_key) {
       throw new Error(
-        'Gemini API key not configured. Run "anya config edit" or "anya init" to set it.\n' +
+        'Gemini API key not configured. Run "anya model" or "anya init" to set it.\n' +
         'Get a free API key at: https://aistudio.google.com/'
       );
     }
 
-    const genai = new GoogleGenAI({ apiKey: config.provider.api_key });
+    const genai = new GoogleGenAI({ apiKey: config.provider.gemini.api_key });
 
     // Convert tools to Gemini function declarations
     const functionDeclarations: FunctionDeclaration[] = tools.map(t => ({
@@ -154,7 +154,7 @@ export class GeminiProvider implements LLMProvider {
       try {
         agentLogger.debug({
           msg: 'api_call',
-          model: config.provider.primary,
+          model: config.provider.gemini.model,
           attempt,
           messageCount: contents.length,
           toolCount: functionDeclarations.length,
@@ -163,7 +163,7 @@ export class GeminiProvider implements LLMProvider {
         const startTime = Date.now();
 
         const response = await genai.models.generateContent({
-          model: config.provider.primary,
+          model: config.provider.gemini.model,
           contents,
           config: {
             systemInstruction: systemInstruction,
@@ -177,12 +177,6 @@ export class GeminiProvider implements LLMProvider {
 
         const durationMs = Date.now() - startTime;
 
-        agentLogger.info({
-          msg: 'api_response',
-          model: config.provider.primary,
-          duration_ms: durationMs,
-        });
-
         // Parse the response
         const candidate = response.candidates?.[0];
         if (!candidate?.content?.parts) {
@@ -193,6 +187,7 @@ export class GeminiProvider implements LLMProvider {
         const result: LLMResponse = {
           // Preserve raw parts for round-tripping (thought_signature etc)
           rawModelParts: rawParts,
+          durationMs,
         };
 
         // Extract text content

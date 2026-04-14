@@ -33,6 +33,31 @@ import '../tools/skillTools.js';
 import '../tools/clarifyTools.js';
 import '../tools/telegramTools.js';
 
+// ── Model Pricing (per 1M tokens) ────────────────────────────────────────────
+// Used for cost estimation in logs. Codex OAuth calls are subscription-based
+// (effectively free), but we log the equivalent API cost for monitoring.
+
+interface ModelPricing {
+  input: number;
+  cached: number;
+  output: number;
+}
+
+const MODEL_PRICING: Record<string, ModelPricing> = {
+  // Gemini
+  'gemini-3-flash-preview':   { input: 0.50, cached: 0.05, output: 3.00 },
+  'gemini-3-flash':           { input: 0.50, cached: 0.05, output: 3.00 },
+  'gemini-3-pro':             { input: 2.50, cached: 0.25, output: 15.00 },
+
+  // OpenAI
+  'gpt-5.4':                  { input: 2.50, cached: 1.25, output: 15.00 },
+  'gpt-5.4-mini':             { input: 0.75, cached: 0.375, output: 4.50 },
+  'gpt-5.4-nano':             { input: 0.20, cached: 0.10,  output: 1.25 },
+
+  // Fallback
+  'default':                  { input: 1.00, cached: 0.10, output: 5.00 },
+};
+
 /** Options for {@link Agent.run}. */
 export interface RunOptions {
   /** Session key for history persistence (e.g., 'tg:12345' or 'cli:local'). */
@@ -154,10 +179,13 @@ export class Agent {
       const isTelegram = this.adapter.constructor.name === 'TelegramSessionAdapter';
       const toolSchemas = getToolSchemas(this.config, isTelegram);
 
-      // Call LLM
-      const model = this.config.provider.primary;
+      // Call LLM — resolve active provider and model
+      const activeProvider = this.config.provider.active;
+      const model = activeProvider === 'openai'
+        ? this.config.provider.openai.model
+        : this.config.provider.gemini.model;
       const provider = getProvider(model);
-      const response = await provider.chat(messages, toolSchemas, this.config);
+      const response = await provider.chat(messages, toolSchemas, this.config, { sessionId });
 
       // Single consolidated log per LLM call
       const u = response.usage;
@@ -166,6 +194,7 @@ export class Agent {
         model,
         sessionId,
         loop,
+        duration_ms: response.durationMs || 0,
       };
 
       if (u) {
@@ -173,12 +202,12 @@ export class Agent {
         const thoughts = u.thoughtsTokens || 0;
         const inputNonCached = u.promptTokens - cached;
 
-        // Gemini 3 Flash pricing (per 1M tokens):
-        //   Input: $0.50, Cached: $0.05, Output: $3.00
-        const cost = (inputNonCached / 1_000_000) * 0.50
-          + (cached / 1_000_000) * 0.05
-          + (u.completionTokens / 1_000_000) * 3.00
-          + (thoughts / 1_000_000) * 3.00;
+        // Per-model pricing (per 1M tokens)
+        const pricing = MODEL_PRICING[model] || MODEL_PRICING['default'];
+        const cost = (inputNonCached / 1_000_000) * pricing.input
+          + (cached / 1_000_000) * pricing.cached
+          + (u.completionTokens / 1_000_000) * pricing.output
+          + (thoughts / 1_000_000) * pricing.output;
 
         Object.assign(logEntry, {
           tokens: { in: u.promptTokens, out: u.completionTokens, cached, thoughts, total: u.totalTokens },

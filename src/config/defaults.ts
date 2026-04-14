@@ -1,7 +1,13 @@
 /**
- * Anya configuration type definition and default values.
+ * @module config/defaults
+ * @description Anya configuration type definition and default values.
+ *
  * Every field has a sensible default so the agent works out of the box
- * (except API keys which must be provided by the user).
+ * (except API keys / auth which must be provided by the user).
+ *
+ * Provider structure supports multiple backends:
+ * - `gemini`: Google AI Studio (API key)
+ * - `openai`: OpenAI Codex (OAuth device code)
  */
 
 export interface AnyaConfig {
@@ -14,9 +20,20 @@ export interface AnyaConfig {
   };
 
   provider: {
-    primary: string;
-    api_key: string;
-    base_url: string;
+    /** Active provider: 'gemini' | 'openai' */
+    active: string;
+
+    gemini: {
+      model: string;
+      api_key: string;
+    };
+
+    openai: {
+      model: string;
+      // No api_key — tokens stored in auth.json
+    };
+
+    /** Shared generation parameters */
     max_tokens: number;
     temperature: number;
     max_retries: number;
@@ -68,7 +85,7 @@ export interface AnyaConfig {
 
 export const DEFAULT_CONFIG: AnyaConfig = {
   $schema: './config.schema.json',
-  version: '0.1.0',
+  version: '0.2.0',
 
   agent: {
     name: 'anya',
@@ -76,9 +93,17 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   },
 
   provider: {
-    primary: 'gemini-3-flash-preview',
-    api_key: '',
-    base_url: 'https://generatianyanguage.googleapis.com',
+    active: 'gemini',
+
+    gemini: {
+      model: 'gemini-3-flash-preview',
+      api_key: '',
+    },
+
+    openai: {
+      model: 'gpt-5.4',
+    },
+
     max_tokens: 8192,
     temperature: 0.7,
     max_retries: 3,

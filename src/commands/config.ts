@@ -16,8 +16,8 @@ export function runConfigShow(): void {
   // Deep clone and mask sensitive values
   const display = JSON.parse(JSON.stringify(config));
 
-  if (display.provider?.api_key) {
-    display.provider.api_key = maskKey(display.provider.api_key);
+  if (display.provider?.gemini?.api_key) {
+    display.provider.gemini.api_key = maskKey(display.provider.gemini.api_key);
   }
   if (display.tools?.web_search?.api_key) {
     display.tools.web_search.api_key = maskKey(display.tools.web_search.api_key);

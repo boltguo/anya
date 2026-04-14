@@ -5,6 +5,11 @@ import type { AnyaConfig } from '../config/defaults.js';
  * Abstract LLM Provider interface.
  * All providers must implement this contract.
  */
+export interface ChatOptions {
+  /** Session ID for prompt caching (Codex uses prompt_cache_key). */
+  sessionId?: string;
+}
+
 export interface LLMProvider {
   readonly name: string;
 
@@ -19,5 +24,6 @@ export interface LLMProvider {
       parameters: ToolParameterSchema;
     }>,
     config: AnyaConfig,
+    options?: ChatOptions,
   ): Promise<LLMResponse>;
 }
