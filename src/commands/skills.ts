@@ -5,7 +5,7 @@ import { loadSkills, getSkill, listSkillFiles } from '../skills/loader.js';
 export const skillsCommand = new Command('skills')
   .description('Manage installed skills');
 
-// --- vela skills list ---
+// --- anya skills list ---
 skillsCommand
   .command('list')
   .description('List all installed skills')
@@ -39,7 +39,7 @@ skillsCommand
     console.log('');
   });
 
-// --- vela skills view <name> ---
+// --- anya skills view <name> ---
 skillsCommand
   .command('view <name>')
   .description('View a skill\'s full SKILL.md content')
@@ -70,7 +70,7 @@ skillsCommand
     console.log(`\n${skill.body}\n`);
   });
 
-// --- vela skills create <name> ---
+// --- anya skills create <name> ---
 skillsCommand
   .command('create <name>')
   .description('Create a new empty skill template')

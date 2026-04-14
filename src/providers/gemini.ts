@@ -1,7 +1,7 @@
 import { GoogleGenAI, type Content, type Part, type FunctionDeclaration, type Schema, Type } from '@google/genai';
 import type { LLMProvider } from './base.js';
 import type { Message, LLMResponse, ToolParameterSchema } from '../agent/types.js';
-import type { VelaConfig } from '../config/defaults.js';
+import type { AnyaConfig } from '../config/defaults.js';
 import { agentLogger } from '../lib/logger.js';
 
 /**
@@ -17,6 +17,10 @@ function toGeminiSchema(params: ToolParameterSchema): Schema {
     };
     if (prop.enum) {
       schema.enum = prop.enum as string[];
+    }
+    // Gemini requires 'items' for ARRAY type properties
+    if (prop.type === 'array' && prop.items) {
+      schema.items = { type: prop.items.type.toUpperCase() as Type };
     }
     properties[key] = schema;
   }
@@ -123,11 +127,11 @@ export class GeminiProvider implements LLMProvider {
   async chat(
     messages: Message[],
     tools: Array<{ name: string; description: string; parameters: ToolParameterSchema }>,
-    config: VelaConfig,
+    config: AnyaConfig,
   ): Promise<LLMResponse> {
     if (!config.provider.api_key) {
       throw new Error(
-        'Gemini API key not configured. Run "vela config edit" or "vela init" to set it.\n' +
+        'Gemini API key not configured. Run "anya config edit" or "anya init" to set it.\n' +
         'Get a free API key at: https://aistudio.google.com/'
       );
     }
@@ -217,10 +221,13 @@ export class GeminiProvider implements LLMProvider {
 
         // Extract usage if available
         if (response.usageMetadata) {
+          const meta = response.usageMetadata as Record<string, number>;
           result.usage = {
-            promptTokens: response.usageMetadata.promptTokenCount || 0,
-            completionTokens: response.usageMetadata.candidatesTokenCount || 0,
-            totalTokens: response.usageMetadata.totalTokenCount || 0,
+            promptTokens: meta.promptTokenCount || 0,
+            completionTokens: meta.candidatesTokenCount || 0,
+            totalTokens: meta.totalTokenCount || 0,
+            cachedTokens: meta.cachedContentTokenCount || 0,
+            thoughtsTokens: meta.thoughtsTokenCount || 0,
           };
         }
 

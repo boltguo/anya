@@ -4,7 +4,7 @@
 const _emit = process.emit;
 // @ts-expect-error -- patching process.emit to filter warnings
 process.emit = function (event: string, ...args: unknown[]) {
-  if (event === 'warning' && (args[0] as { name?: string })?.name === 'ExperimentalWarning') {
+  if (event === 'warning' && ['ExperimentalWarning', 'DeprecationWarning'].includes((args[0] as { name?: string })?.name || '')) {
     return false;
   }
   return _emit.apply(process, [event, ...args] as Parameters<typeof _emit>);
@@ -31,20 +31,20 @@ try {
 const program = new Command();
 
 program
-  .name('vela')
-  .description('Vela - A self-evolving personal AI agent')
+  .name('anya')
+  .description('Anya - A self-evolving personal AI agent')
   .version(version, '-v, --version');
 
-// --- vela init ---
+// --- anya init ---
 program
   .command('init')
-  .description('Initialize ~/.vela/ directory and configuration')
+  .description('Initialize ~/.anya/ directory and configuration')
   .action(async () => {
     const { runInit } = await import('../src/commands/init.js');
     await runInit();
   });
 
-// --- vela chat ---
+// --- anya chat ---
 program
   .command('chat')
   .description('Start an interactive chat session with the agent')
@@ -55,7 +55,7 @@ program
     await runChat(options);
   });
 
-// --- vela config ---
+// --- anya config ---
 const configCmd = program
   .command('config')
   .description('Manage configuration');
@@ -78,22 +78,22 @@ configCmd
     execSync(`${editor} "${CONFIG_PATH}"`, { stdio: 'inherit' });
   });
 
-// --- vela doctor ---
+// --- anya doctor ---
 program
   .command('doctor')
   .description('Check environment and configuration')
   .action(async () => {
     const chalk = (await import('chalk')).default;
-    const { isInitialized, CONFIG_PATH, VELA_HOME } = await import('../src/lib/paths.js');
+    const { isInitialized, CONFIG_PATH, ANYA_HOME } = await import('../src/lib/paths.js');
 
-    console.log(chalk.bold.cyan('\nVela Doctor\n'));
+    console.log(chalk.bold.cyan('\nAnya Doctor\n'));
 
     const nodeVersion = process.version;
     const major = parseInt(nodeVersion.slice(1), 10);
     console.log(`  Node.js:   ${major >= 20 ? '[ok]' : '[!!]'} ${nodeVersion} ${major < 20 ? '(>= 20 required)' : ''}`);
 
     const inited = isInitialized();
-    console.log(`  Init:      ${inited ? '[ok]' : '[!!]'} ${inited ? CONFIG_PATH : 'Not initialized. Run: vela init'}`);
+    console.log(`  Init:      ${inited ? '[ok]' : '[!!]'} ${inited ? CONFIG_PATH : 'Not initialized. Run: anya init'}`);
 
     if (inited) {
       const { loadConfig } = await import('../src/config/loader.js');
@@ -118,11 +118,11 @@ program
       console.log(`  Cron:      ${cr.running ? '[ok] running (PID ' + cr.pid + ')' : '[--] stopped'}`);
     }
 
-    console.log(`  Data dir:  [..] ${VELA_HOME}`);
+    console.log(`  Data dir:  [..] ${ANYA_HOME}`);
     console.log();
   });
 
-// --- vela skills ---
+// --- anya skills ---
 const skillsCmd = program
   .command('skills')
   .description('Manage installed skills');
@@ -238,7 +238,7 @@ How to confirm the task was completed correctly.
     console.log(`  Edit the SKILL.md to fill in the procedure.\n`);
   });
 
-// --- vela gateway ---
+// --- anya gateway ---
 const gatewayCmd = program
   .command('gateway')
   .description('Manage Telegram bot gateway');
@@ -285,7 +285,7 @@ gatewayCmd
     runGatewayLogs(parseInt(opts.lines, 10));
   });
 
-// --- vela cron ---
+// --- anya cron ---
 const cronCmd = program
   .command('cron')
   .description('Manage cron jobs');
@@ -331,7 +331,7 @@ cronCmd
 
     if (jobs.length === 0) {
       console.log('\n  No cron jobs configured.');
-      console.log('  Use "vela cron add" to create one.\n');
+      console.log('  Use "anya cron add" to create one.\n');
       return;
     }
 
@@ -396,7 +396,7 @@ cronCmd
     }
   });
 
-// --- vela sessions ---
+// --- anya sessions ---
 const sessionsCmd = program
   .command('sessions')
   .description('Manage chat sessions');
@@ -446,37 +446,37 @@ sessionsCmd
     console.log('');
   });
 
-// --- vela export ---
+// --- anya export ---
 program
   .command('export <file>')
-  .description('Export ~/.vela/ data')
+  .description('Export ~/.anya/ data')
   .option('--soul', 'Export soul layer only (config, memory, skills, cron)')
   .action(async (file: string, opts: { soul?: boolean }) => {
     const { execSync } = await import('node:child_process');
-    const { VELA_HOME } = await import('../src/lib/paths.js');
+    const { ANYA_HOME } = await import('../src/lib/paths.js');
 
     if (opts.soul) {
       execSync(
-        `tar -czf "${file}" -C "${VELA_HOME}" config.json config.schema.json memory/ skills/ cron/jobs.json 2>/dev/null || true`,
+        `tar -czf "${file}" -C "${ANYA_HOME}" config.json config.schema.json memory/ skills/ cron/jobs.json 2>/dev/null || true`,
         { stdio: 'inherit' },
       );
     } else {
-      execSync(`tar -czf "${file}" -C "${VELA_HOME}" .`, { stdio: 'inherit' });
+      execSync(`tar -czf "${file}" -C "${ANYA_HOME}" .`, { stdio: 'inherit' });
     }
 
     console.log(`\n  [ok] Exported to ${file}\n`);
   });
 
-// --- vela import ---
+// --- anya import ---
 program
   .command('import <file>')
   .description('Import from a backup')
   .action(async (file: string) => {
     const { execSync } = await import('node:child_process');
-    const { VELA_HOME, ensureDirectories } = await import('../src/lib/paths.js');
+    const { ANYA_HOME, ensureDirectories } = await import('../src/lib/paths.js');
 
     ensureDirectories();
-    execSync(`tar -xzf "${file}" -C "${VELA_HOME}"`, { stdio: 'inherit' });
+    execSync(`tar -xzf "${file}" -C "${ANYA_HOME}"`, { stdio: 'inherit' });
     console.log(`\n  [ok] Imported from ${file}\n`);
   });
 

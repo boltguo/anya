@@ -1,6 +1,6 @@
 import { resolve, normalize } from 'node:path';
 import { homedir } from 'node:os';
-import type { VelaConfig } from '../config/defaults.js';
+import type { AnyaConfig } from '../config/defaults.js';
 
 /**
  * Expand ~ to home directory in a path.
@@ -16,7 +16,7 @@ function expandHome(p: string): string {
  * Check if a file path is within the allowed directories.
  * Returns true if the path is inside any of config.security.allowed_paths.
  */
-export function isPathAllowed(filePath: string, config: VelaConfig): boolean {
+export function isPathAllowed(filePath: string, config: AnyaConfig): boolean {
   const resolved = normalize(resolve(expandHome(filePath)));
 
   for (const allowed of config.security.allowed_paths) {
@@ -33,7 +33,7 @@ export function isPathAllowed(filePath: string, config: VelaConfig): boolean {
  * Check if a shell command matches the approval allowlist.
  * Matches if the command starts with any allowed prefix.
  */
-export function isCommandAllowed(command: string, config: VelaConfig): boolean {
+export function isCommandAllowed(command: string, config: AnyaConfig): boolean {
   if (!config.tools.shell.require_approval) {
     return true;
   }

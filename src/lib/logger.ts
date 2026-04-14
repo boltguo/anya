@@ -9,7 +9,7 @@ if (!existsSync(LOGS_DIR)) {
 
 /**
  * Create a pino logger for a specific service.
- * Logs to ~/.vela/logs/<service>.log as JSON lines.
+ * Logs to ~/.anya/logs/<service>.log as JSON lines.
  * Falls back to stderr-only if file transport fails.
  */
 function createLogger(service: string, level: string = 'info'): pino.Logger {

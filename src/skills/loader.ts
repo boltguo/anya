@@ -9,7 +9,7 @@ import { parseSkill, type Skill } from './parser.js';
 let _cache: Skill[] | null = null;
 
 /**
- * Scan ~/.vela/skills/ recursively and load all SKILL.md files.
+ * Scan ~/.anya/skills/ recursively and load all SKILL.md files.
  *
  * Directory structure:
  *   skills/

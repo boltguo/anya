@@ -1,10 +1,10 @@
 /**
- * Vela configuration type definition and default values.
+ * Anya configuration type definition and default values.
  * Every field has a sensible default so the agent works out of the box
  * (except API keys which must be provided by the user).
  */
 
-export interface VelaConfig {
+export interface AnyaConfig {
   $schema?: string;
   version: string;
 
@@ -60,24 +60,25 @@ export interface VelaConfig {
     context_window: number;
     compress_threshold: number;
     session_history_limit: number;
+    max_history_messages: number;
     log_level: string;
     max_react_loops: number;
   };
 }
 
-export const DEFAULT_CONFIG: VelaConfig = {
+export const DEFAULT_CONFIG: AnyaConfig = {
   $schema: './config.schema.json',
   version: '0.1.0',
 
   agent: {
-    name: 'vela',
-    personality: 'You are Vela, a concise and direct personal AI assistant. Prioritize solving the user\'s problem without unnecessary verbosity. Use tools when needed to complete tasks.',
+    name: 'anya',
+    personality: 'You are Anya, a concise and direct personal AI assistant. Prioritize solving the user\'s problem without unnecessary verbosity. Use tools when needed to complete tasks.',
   },
 
   provider: {
-    primary: 'gemini-2.5-flash',
+    primary: 'gemini-3-flash-preview',
     api_key: '',
-    base_url: 'https://generativelanguage.googleapis.com',
+    base_url: 'https://generatianyanguage.googleapis.com',
     max_tokens: 8192,
     temperature: 0.7,
     max_retries: 3,
@@ -93,6 +94,8 @@ export const DEFAULT_CONFIG: VelaConfig = {
       'memory_update',
       'skill_manage',
       'skill_view',
+      'clarify',
+      'tg',
     ],
     shell: {
       require_approval: true,
@@ -111,7 +114,7 @@ export const DEFAULT_CONFIG: VelaConfig = {
   },
 
   security: {
-    allowed_paths: ['~/.vela/'],
+    allowed_paths: ['~/.anya/'],
     fence_mode: 'ask',
   },
 
@@ -134,6 +137,7 @@ export const DEFAULT_CONFIG: VelaConfig = {
     context_window: 1000000,
     compress_threshold: 0.8,
     session_history_limit: 50,
+    max_history_messages: 50,
     log_level: 'info',
     max_react_loops: 20,
   },

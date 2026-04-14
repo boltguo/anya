@@ -1,5 +1,5 @@
 import type { Message, LLMResponse, ToolParameterSchema } from '../agent/types.js';
-import type { VelaConfig } from '../config/defaults.js';
+import type { AnyaConfig } from '../config/defaults.js';
 
 /**
  * Abstract LLM Provider interface.
@@ -18,6 +18,6 @@ export interface LLMProvider {
       description: string;
       parameters: ToolParameterSchema;
     }>,
-    config: VelaConfig,
+    config: AnyaConfig,
   ): Promise<LLMResponse>;
 }

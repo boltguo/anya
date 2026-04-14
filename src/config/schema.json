@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Vela Configuration",
-  "description": "Configuration file for the Vela AI Agent. Place at ~/.vela/config.json",
+  "title": "Anya Configuration",
+  "description": "Configuration file for the Anya AI Agent. Place at ~/.anya/config.json",
   "type": "object",
   "properties": {
     "$schema": {
@@ -10,7 +10,7 @@
     },
     "version": {
       "type": "string",
-      "description": "Configuration version, should match the Vela version."
+      "description": "Configuration version, should match the Anya version."
     },
     "agent": {
       "type": "object",
@@ -19,12 +19,12 @@
         "name": {
           "type": "string",
           "description": "The agent's name. Used in prompts and UI.",
-          "default": "vela"
+          "default": "anya"
         },
         "personality": {
           "type": "string",
           "description": "System prompt personality. Defines how the agent behaves and responds.",
-          "default": "你是 Vela，一个简洁、直接的个人 AI 助手。"
+          "default": "你是 Anya，一个简洁、直接的个人 AI 助手。"
         }
       }
     },
@@ -194,6 +194,11 @@
         "session_history_limit": {
           "type": "integer",
           "description": "Max number of sessions to keep.",
+          "default": 50
+        },
+        "max_history_messages": {
+          "type": "integer",
+          "description": "Max number of messages to send to LLM context.",
           "default": 50
         },
         "log_level": {

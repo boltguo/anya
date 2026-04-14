@@ -16,7 +16,7 @@ export interface CronJob {
 }
 
 /**
- * Load all jobs from ~/.vela/cron/jobs.json.
+ * Load all jobs from ~/.anya/cron/jobs.json.
  */
 export function loadJobs(): CronJob[] {
   if (!existsSync(CRON_JOBS_PATH)) return [];
@@ -30,7 +30,7 @@ export function loadJobs(): CronJob[] {
 }
 
 /**
- * Save jobs to ~/.vela/cron/jobs.json.
+ * Save jobs to ~/.anya/cron/jobs.json.
  */
 export function saveJobs(jobs: CronJob[]): void {
   writeFileSync(CRON_JOBS_PATH, JSON.stringify(jobs, null, 2) + '\n', 'utf-8');

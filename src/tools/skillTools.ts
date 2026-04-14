@@ -8,7 +8,7 @@ import type { ToolContext } from '../agent/types.js';
 // --- skill_manage ---
 register({
   name: 'skill_manage',
-  description: 'Create, edit, patch, or delete skills in ~/.vela/skills/. Skills are markdown procedures that help you handle similar tasks in the future.',
+  description: 'Create, edit, patch, or delete skills in ~/.anya/skills/. Skills are markdown procedures that help you handle similar tasks in the future.',
   parameters: {
     type: 'object',
     properties: {

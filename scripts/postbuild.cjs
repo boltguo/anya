@@ -2,12 +2,12 @@ const fs = require('fs');
 const path = require('path');
 
 // Add shebang to CLI entry
-const velaPath = 'dist/bin/vela.js';
-let content = fs.readFileSync(velaPath, 'utf8');
+const anyaPath = 'dist/bin/anya.js';
+let content = fs.readFileSync(anyaPath, 'utf8');
 if (!content.startsWith('#!')) {
-  fs.writeFileSync(velaPath, '#!/usr/bin/env -S node --no-warnings=ExperimentalWarning\n' + content);
+  fs.writeFileSync(anyaPath, '#!/usr/bin/env -S node --no-warnings=ExperimentalWarning\n' + content);
 }
-fs.chmodSync(velaPath, 0o755);
+fs.chmodSync(anyaPath, 0o755);
 
 // Fix node:sqlite imports -- esbuild strips the node: prefix
 const files = fs.readdirSync('dist').filter(f => f.endsWith('.js'));

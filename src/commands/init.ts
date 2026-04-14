@@ -11,24 +11,25 @@ import {
   MEMORY_MD_PATH,
   CRON_JOBS_PATH,
   isInitialized,
+  ANYA_HOME,
 } from '../lib/paths.js';
-import { DEFAULT_CONFIG, type VelaConfig } from '../config/defaults.js';
+import { DEFAULT_CONFIG, type AnyaConfig } from '../config/defaults.js';
 
 /**
- * `vela init` -- Interactive setup wizard.
+ * `anya init` -- Interactive setup wizard.
  *
- * Creates ~/.vela/ directory structure and guides the user
+ * Creates ~/.anya/ directory structure and guides the user
  * through initial configuration.
  */
 export async function runInit(): Promise<void> {
   console.log();
-  console.log(chalk.bold.cyan('Vela Setup'));
+  console.log(chalk.bold.cyan('Anya Setup'));
   console.log(chalk.dim('  Configure your personal AI agent\n'));
 
   // Check if already initialized
   if (isInitialized()) {
     const overwrite = await confirm({
-      message: '~/.vela/ already exists. Overwrite config? (memory and skills will be preserved)',
+      message: '~/.anya/ already exists. Overwrite config? (memory and skills will be preserved)',
       default: false,
     });
 
@@ -43,7 +44,7 @@ export async function runInit(): Promise<void> {
   ensureDirectories();
 
   // Build config
-  const config: VelaConfig = { ...DEFAULT_CONFIG };
+  const config: AnyaConfig = { ...DEFAULT_CONFIG };
 
   // --- Gemini API Key (required) ---
   console.log();
@@ -121,20 +122,53 @@ export async function runInit(): Promise<void> {
 
   // --- Initialize memory files ---
   if (!existsSync(USER_MD_PATH)) {
-    writeFileSync(USER_MD_PATH, '# User Profile\n\n_Vela will learn about you over time._\n', 'utf-8');
+    writeFileSync(USER_MD_PATH, '# User Profile\n\n_Anya will learn about you over time._\n', 'utf-8');
   }
   console.log(chalk.dim('  [ok] memory/USER.md'));
 
   if (!existsSync(MEMORY_MD_PATH)) {
-    writeFileSync(MEMORY_MD_PATH, '# Agent Notes\n\n_Vela will save notes here as it learns._\n', 'utf-8');
+    writeFileSync(MEMORY_MD_PATH, '# Agent Notes\n\n_Anya will save notes here as it learns._\n', 'utf-8');
   }
   console.log(chalk.dim('  [ok] memory/MEMORY.md'));
 
   // --- Initialize cron jobs ---
   if (!existsSync(CRON_JOBS_PATH)) {
-    writeFileSync(CRON_JOBS_PATH, '[]', 'utf-8');
+    try {
+      const __dirname = dirname(fileURLToPath(import.meta.url));
+      const jobsSource = join(__dirname, '..', 'src', 'cron', 'default_jobs.json');
+      const jobsSourceAlt = join(__dirname, '..', 'cron', 'default_jobs.json');
+      if (existsSync(jobsSource)) {
+        copyFileSync(jobsSource, CRON_JOBS_PATH);
+      } else if (existsSync(jobsSourceAlt)) {
+        copyFileSync(jobsSourceAlt, CRON_JOBS_PATH);
+      } else {
+        writeFileSync(CRON_JOBS_PATH, '[]', 'utf-8');
+      }
+    } catch {
+      writeFileSync(CRON_JOBS_PATH, '[]', 'utf-8');
+    }
   }
   console.log(chalk.dim('  [ok] cron/jobs.json'));
+
+  // --- Copy SOUL persona ---
+  const soulPath = join(ANYA_HOME, 'SOUL.md');
+  if (!existsSync(soulPath)) {
+    try {
+      const __dirname = dirname(fileURLToPath(import.meta.url));
+      const soulSource = join(__dirname, '..', 'src', 'config', 'SOUL.template.md');
+      const soulSourceAlt = join(__dirname, '..', 'config', 'SOUL.template.md');
+      
+      if (existsSync(soulSource)) {
+        copyFileSync(soulSource, soulPath);
+        console.log(chalk.dim('  [ok] SOUL.md'));
+      } else if (existsSync(soulSourceAlt)) {
+        copyFileSync(soulSourceAlt, soulPath);
+        console.log(chalk.dim('  [ok] SOUL.md'));
+      }
+    } catch {
+      // Non-critical, skip
+    }
+  }
 
   // --- Copy bundled skills ---
   try {
@@ -163,8 +197,8 @@ export async function runInit(): Promise<void> {
   console.log();
   console.log(chalk.bold.green('Setup complete.'));
   console.log();
-  console.log(chalk.dim('  Start chatting: ') + chalk.bold('vela chat'));
-  console.log(chalk.dim('  View config:    ') + chalk.bold('vela config show'));
-  console.log(chalk.dim('  Health check:   ') + chalk.bold('vela doctor'));
+  console.log(chalk.dim('  Start chatting: ') + chalk.bold('anya chat'));
+  console.log(chalk.dim('  View config:    ') + chalk.bold('anya config show'));
+  console.log(chalk.dim('  Health check:   ') + chalk.bold('anya doctor'));
   console.log();
 }

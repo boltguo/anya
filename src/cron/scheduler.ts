@@ -7,6 +7,7 @@ import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { CRON_HISTORY_DIR } from '../lib/paths.js';
 import type { Adapter } from '../agent/types.js';
+import { getOrCreateSession, saveMessages, loadMessages } from '../storage/sessionStore.js';
 
 const SERVICE = 'cron';
 
@@ -124,6 +125,17 @@ async function deliverResult(job: CronJob, result: string): Promise<void> {
         for (const userId of config.telegram.allowed_user_ids) {
           const header = `[cron: ${job.name}]\n\n`;
           await bot.api.sendMessage(userId, header + result).catch(() => {});
+          
+          // Inject into session history so the agent remembers this cron delivery
+          try {
+            const sessionKey = `tg:${userId}`;
+            const sessionId = getOrCreateSession(sessionKey);
+            const history = loadMessages(sessionId);
+            history.push({ role: 'assistant', content: header + result });
+            saveMessages(sessionId, history);
+          } catch (e) {
+            agentLogger.error({ msg: 'cron_memory_link_error', error: (e as Error).message });
+          }
         }
       }
     } catch (err) {

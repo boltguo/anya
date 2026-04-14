@@ -18,14 +18,14 @@ export async function runGatewayStart(foreground = false): Promise<void> {
   const { running, pid } = isServiceRunning(SERVICE);
   if (running) {
     console.log(`\n  Gateway is already running (PID ${pid}).`);
-    console.log(`  Run "vela gateway restart" to restart.\n`);
+    console.log(`  Run "anya gateway restart" to restart.\n`);
     return;
   }
 
   const config = loadConfig();
   if (!config.telegram.enabled || !config.telegram.bot_token) {
     console.log('\n  Telegram is not configured.');
-    console.log('  Run "vela init" or set telegram.enabled=true and telegram.bot_token in config.\n');
+    console.log('  Run "anya init" or set telegram.enabled=true and telegram.bot_token in config.\n');
     return;
   }
 
@@ -49,36 +49,30 @@ export async function runGatewayStart(foreground = false): Promise<void> {
     const adapter = new TelegramAdapter(config);
     await adapter.start();
   } else {
-    // Fork a background process
-    const __dir = dirname(fileURLToPath(import.meta.url));
-    // The gateway worker script path
-    const workerPath = join(__dir, '..', 'dist', 'gateway-worker.js');
-    const workerPathAlt = join(__dir, 'gateway-worker.js');
+    // Spawn a detached child process that runs in foreground mode,
+    // with stdout/stderr redirected to the gateway log file.
+    const { spawn } = await import('node:child_process');
+    const { openSync } = await import('node:fs');
 
-    let scriptPath = workerPath;
-    if (!existsSync(scriptPath) && existsSync(workerPathAlt)) {
-      scriptPath = workerPathAlt;
-    }
+    const logFd = openSync(LOG_PATH, 'a');
 
-    // For now, run in foreground mode since forking bundled ESM is complex
-    console.log(chalk.bold('\n  [gateway] Starting Telegram bot...\n'));
-    writePid(SERVICE);
+    // Resolve the `anya` binary path — could be a symlink via npm link
+    const anyaBin = process.argv[1]; // the current entry script
 
-    process.on('SIGINT', () => {
-      removePid(SERVICE);
-      process.exit(0);
-    });
-    process.on('SIGTERM', () => {
-      removePid(SERVICE);
-      process.exit(0);
-    });
-    process.on('exit', () => {
-      removePid(SERVICE);
+    const child = spawn(process.execPath, [anyaBin, 'gateway', 'start', '--foreground'], {
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+      env: { ...process.env },
     });
 
-    const { TelegramAdapter } = await import('../adapters/telegram.js');
-    const adapter = new TelegramAdapter(config);
-    await adapter.start();
+    child.unref();
+
+    console.log(chalk.bold('\n  [gateway] Started in background.'));
+    console.log(`  PID: ${child.pid}`);
+    console.log(`  Logs: ${LOG_PATH}`);
+    console.log(`  Stop: anya gateway stop\n`);
+
+    process.exit(0);
   }
 }
 

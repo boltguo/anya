@@ -1,11 +1,40 @@
+/**
+ * @module tools/registry
+ * @description Central tool registry for the Anya Agent.
+ *
+ * Tools register themselves at import time by calling {@link register}.
+ * The agent queries the registry at runtime via {@link getToolSchemas} to
+ * build LLM function declarations, and via {@link dispatch} to execute
+ * tool calls returned by the model.
+ *
+ * Platform-specific tools (e.g., `tg` for Telegram) are filtered out
+ * when not applicable, saving prompt tokens.
+ */
+
 import type { ToolDefinition, ToolContext, ToolParameterSchema } from '../agent/types.js';
-import type { VelaConfig } from '../config/defaults.js';
+import type { AnyaConfig } from '../config/defaults.js';
 import { agentLogger } from '../lib/logger.js';
 
+/** Internal store of all registered tools, keyed by tool name. */
 const tools = new Map<string, ToolDefinition>();
 
 /**
- * Register a tool. Called at import time by each tool module.
+ * Register a tool with the global registry.
+ *
+ * Called at module import time by each tool file. Duplicate names
+ * are logged as warnings but silently overwritten.
+ *
+ * @param tool - The tool definition to register.
+ *
+ * @example
+ * ```typescript
+ * register({
+ *   name: 'my_tool',
+ *   description: 'Does something useful.',
+ *   parameters: { type: 'object', properties: { ... }, required: ['...'] },
+ *   async execute(args, context) { return JSON.stringify({ ok: true }); },
+ * });
+ * ```
  */
 export function register(tool: ToolDefinition): void {
   if (tools.has(tool.name)) {
@@ -15,38 +44,64 @@ export function register(tool: ToolDefinition): void {
 }
 
 /**
- * Get all registered tools.
+ * Get all registered tools (regardless of config enablement).
+ * @returns Array of all tool definitions.
  */
 export function getAllTools(): ToolDefinition[] {
   return [...tools.values()];
 }
 
 /**
- * Get only the enabled tools based on config.
+ * Get only the tools enabled in the agent configuration.
+ *
+ * @param config - The current agent config (contains `tools.enabled` list).
+ * @returns Array of enabled tool definitions, in config order.
  */
-export function getEnabledTools(config: VelaConfig): ToolDefinition[] {
+export function getEnabledTools(config: AnyaConfig): ToolDefinition[] {
   return config.tools.enabled
     .map(name => tools.get(name))
     .filter((t): t is ToolDefinition => t !== undefined);
 }
 
 /**
- * Get tool schemas for LLM function calling.
+ * Get tool schemas formatted for LLM function calling.
+ *
+ * Returns the enabled tools' name, description, and parameter schema —
+ * the format expected by Gemini's `tools[].function_declarations`.
+ *
+ * Platform-specific tools are filtered based on the `isTelegram` flag
+ * to avoid wasting prompt tokens on inapplicable tools.
+ *
+ * @param config - The current agent config.
+ * @param isTelegram - Whether the current session is via Telegram.
+ *                     When false, the `tg` tool is excluded.
+ * @returns Array of tool schemas for the LLM.
  */
-export function getToolSchemas(config: VelaConfig): Array<{
+export function getToolSchemas(config: AnyaConfig, isTelegram: boolean = false): Array<{
   name: string;
   description: string;
   parameters: ToolParameterSchema;
 }> {
-  return getEnabledTools(config).map(t => ({
-    name: t.name,
-    description: t.description,
-    parameters: t.parameters,
-  }));
+  return getEnabledTools(config)
+    .filter(t => isTelegram || t.name !== 'tg')
+    .map(t => ({
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    }));
 }
 
 /**
- * Dispatch a tool call and return the result string.
+ * Dispatch a tool call and return the serialized result.
+ *
+ * Looks up the tool by name, executes it with the provided args and
+ * context, and returns the result string. Errors are caught and
+ * returned as error strings rather than thrown.
+ *
+ * @param toolName - Name of the tool to execute.
+ * @param args - Arguments from the LLM's function call.
+ * @param context - Execution context (adapter + config).
+ * @returns Serialized tool result (JSON string on success, error message on failure).
  */
 export async function dispatch(
   toolName: string,
@@ -81,9 +136,14 @@ export async function dispatch(
 }
 
 /**
- * List all tool names and their status (enabled/disabled).
+ * List all registered tools with their enabled/disabled status.
+ *
+ * Useful for debugging and the `anya tools` CLI command.
+ *
+ * @param config - The current agent config.
+ * @returns Array of tool info objects with name, description, and enabled flag.
  */
-export function listToolsWithStatus(config: VelaConfig): Array<{
+export function listToolsWithStatus(config: AnyaConfig): Array<{
   name: string;
   description: string;
   enabled: boolean;

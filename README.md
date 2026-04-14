@@ -1,8 +1,8 @@
-# Vela
+# Anya
 
-A self-evolving personal AI agent. Named after the Vela constellation — an agent that navigates autonomously.
+A self-evolving personal AI agent. Named after the Anya constellation — an agent that navigates autonomously.
 
-Vela is a minimalist but fully-featured personal AI agent built with TypeScript. It combines a ReAct reasoning loop, tool system, self-improving skills, and multi-platform support into a single CLI tool, with all user data living in one folder (`~/.vela/`).
+Anya is a minimalist but fully-featured personal AI agent built with TypeScript. It combines a ReAct reasoning loop, tool system, self-improving skills, and multi-platform support into a single CLI tool, with all user data living in one folder (`~/.anya/`).
 
 ## Features
 
@@ -12,7 +12,7 @@ Vela is a minimalist but fully-featured personal AI agent built with TypeScript.
 - **Multi-Platform** — CLI REPL + Telegram bot, same agent core
 - **Cron Jobs** — Schedule tasks (e.g. "daily news summary sent to Telegram")
 - **Soul/Environment Separation** — Migrate your agent's memory and skills to a new machine with one command
-- **Directory Fence** — File access outside `~/.vela/` requires your approval
+- **Directory Fence** — File access outside `~/.anya/` requires your approval
 - **Session History** — Conversations persisted in SQLite, searchable
 
 ## Architecture
@@ -20,7 +20,7 @@ Vela is a minimalist but fully-featured personal AI agent built with TypeScript.
 ```mermaid
 graph TB
   subgraph Adapters["Platform Adapters"]
-    CLI["CLI (vela chat)"]
+    CLI["CLI (anya chat)"]
     TG["Telegram Bot"]
     CRON["Cron Scheduler"]
   end
@@ -39,7 +39,7 @@ graph TB
     SK["skill_manage / skill_view"]
   end
 
-  subgraph Data["~/.vela/"]
+  subgraph Data["~/.anya/"]
     Config["config.json"]
     Memory["memory/ (USER.md + MEMORY.md)"]
     Skills["skills/ (SKILL.md files)"]
@@ -97,7 +97,7 @@ sequenceDiagram
 flowchart LR
   A["Complex task completed<br/>(5+ tool calls)"] --> B["Self-improvement prompt<br/>triggers agent"]
   B --> C["Agent calls skill_manage.create()"]
-  C --> D["SKILL.md saved to<br/>~/.vela/skills/"]
+  C --> D["SKILL.md saved to<br/>~/.anya/skills/"]
   D --> E["Next session:<br/>skill appears in prompt"]
   E --> F["Agent references skill<br/>for similar tasks"]
 ```
@@ -106,17 +106,17 @@ flowchart LR
 
 ```bash
 # 1. Install globally
-npm install -g vela
-# or: pnpm add -g vela
+npm install -g anya
+# or: pnpm add -g anya
 
 # 2. Initialize (interactive setup)
-vela init
-# → Creates ~/.vela/ directory structure
+anya init
+# → Creates ~/.anya/ directory structure
 # → Asks for Gemini API key (required, free from https://aistudio.google.com)
 # → Optionally configure Tavily key (for web search) and Telegram bot
 
 # 3. Start chatting
-vela chat
+anya chat
 ```
 
 ### Requirements
@@ -132,46 +132,46 @@ vela chat
 
 ```bash
 # Interactive REPL
-vela chat
+anya chat
 
 # Single question (exits after response)
-vela chat -q "What is the capital of France?"
+anya chat -q "What is the capital of France?"
 
 # New session (ignore previous history)
-vela chat --new
+anya chat --new
 ```
 
 ### Commands
 
 ```bash
-vela init                     # Setup wizard
-vela chat [options]           # Interactive chat
-vela doctor                   # Check environment health
-vela config show              # View configuration (API keys masked)
-vela config edit              # Open config.json in $EDITOR
+anya init                     # Setup wizard
+anya chat [options]           # Interactive chat
+anya doctor                   # Check environment health
+anya config show              # View configuration (API keys masked)
+anya config edit              # Open config.json in $EDITOR
 
-vela skills list              # List installed skills
-vela skills view <name>       # View skill details
-vela skills create <name>     # Create a skill template
+anya skills list              # List installed skills
+anya skills view <name>       # View skill details
+anya skills create <name>     # Create a skill template
 
-vela gateway start            # Start Telegram bot
-vela gateway stop             # Stop Telegram bot
-vela gateway status           # Check bot status
-vela gateway logs [-n 100]    # View bot logs
+anya gateway start            # Start Telegram bot
+anya gateway stop             # Stop Telegram bot
+anya gateway status           # Check bot status
+anya gateway logs [-n 100]    # View bot logs
 
-vela cron list                # List scheduled jobs
-vela cron add                 # Add a job (interactive)
-vela cron remove <id>         # Remove a job
-vela cron run <id>            # Run a job manually
-vela cron start               # Start scheduler
-vela cron stop                # Stop scheduler
+anya cron list                # List scheduled jobs
+anya cron add                 # Add a job (interactive)
+anya cron remove <id>         # Remove a job
+anya cron run <id>            # Run a job manually
+anya cron start               # Start scheduler
+anya cron stop                # Stop scheduler
 
-vela sessions list            # List recent sessions
-vela sessions search <query>  # Search messages
+anya sessions list            # List recent sessions
+anya sessions search <query>  # Search messages
 
-vela export backup.tar.gz         # Full backup
-vela export --soul soul.tar.gz    # Soul layer only
-vela import backup.tar.gz         # Restore from backup
+anya export backup.tar.gz         # Full backup
+anya export --soul soul.tar.gz    # Soul layer only
+anya import backup.tar.gz         # Restore from backup
 ```
 
 ## Telegram Setup
@@ -180,10 +180,10 @@ vela import backup.tar.gz         # Restore from backup
 
 2. **Get your user ID** — Talk to [@userinfobot](https://t.me/userinfobot) on Telegram, it will reply with your numeric user ID.
 
-3. **Configure Vela** — Either run `vela init` and enter the token when prompted, or edit the config directly:
+3. **Configure Anya** — Either run `anya init` and enter the token when prompted, or edit the config directly:
 
 ```bash
-vela config edit
+anya config edit
 ```
 
 Set these fields in `config.json`:
@@ -201,16 +201,16 @@ Set these fields in `config.json`:
 4. **Start the gateway**:
 
 ```bash
-vela gateway start
+anya gateway start
 ```
 
-5. **Talk to your bot** in Telegram. It responds using the same agent core as `vela chat`.
+5. **Talk to your bot** in Telegram. It responds using the same agent core as `anya chat`.
 
 > **Security**: Only users in `allowed_user_ids` can interact with the bot. All other messages are ignored.
 
 ## Configuration
 
-All configuration lives in `~/.vela/config.json`. The file has an associated JSON Schema for VS Code autocompletion.
+All configuration lives in `~/.anya/config.json`. The file has an associated JSON Schema for VS Code autocompletion.
 
 ### Key Settings
 
@@ -225,24 +225,24 @@ All configuration lives in `~/.vela/config.json`. The file has an associated JSO
 | `tools.shell.approval_allowlist` | `git status`, `ls`, etc. | Commands that skip approval |
 | `tools.web_search.api_key` | — | Tavily API key |
 | `security.fence_mode` | `ask` | `ask` / `allow` / `deny` for out-of-fence access |
-| `security.allowed_paths` | `["~/.vela/"]` | Paths the agent can access without approval |
+| `security.allowed_paths` | `["~/.anya/"]` | Paths the agent can access without approval |
 
 ### Environment Variables
 
 Override any config with env vars:
 
 ```bash
-VELA_GEMINI_API_KEY=AIza...    # Override provider.api_key
-VELA_TAVILY_API_KEY=tvly-...   # Override tools.web_search.api_key
-VELA_HOME=/custom/path          # Override ~/.vela/ location
+ANYA_GEMINI_API_KEY=AIza...    # Override provider.api_key
+ANYA_TAVILY_API_KEY=tvly-...   # Override tools.web_search.api_key
+ANYA_HOME=/custom/path          # Override ~/.anya/ location
 ```
 
 ## Data Directory
 
-Everything lives in `~/.vela/`:
+Everything lives in `~/.anya/`:
 
 ```
-~/.vela/
+~/.anya/
 ├── config.json              # All settings
 ├── config.schema.json       # JSON Schema (VS Code autocompletion)
 │
@@ -263,10 +263,10 @@ Everything lives in `~/.vela/`:
 
 ```bash
 # Export soul (memory + skills + config) to a new machine
-vela export --soul vela-soul.tar.gz
+anya export --soul anya-soul.tar.gz
 
 # On the new machine
-vela import vela-soul.tar.gz
+anya import anya-soul.tar.gz
 # Agent arrives with all its memories and skills intact
 ```
 
@@ -326,8 +326,8 @@ Skills load in 3 levels to conserve tokens:
 
 ```bash
 # Clone
-git clone https://github.com/aouos/vela.git
-cd vela
+git clone https://github.com/aouos/anya.git
+cd anya
 
 # Install
 pnpm install

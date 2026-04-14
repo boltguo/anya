@@ -1,0 +1,116 @@
+{
+  "jobs": [
+    {
+      "id": "caa409bef646",
+      "name": "Anya Daily Briefing",
+      "prompt": "Generate today's morning micro-lesson following the anya-daily skill. Read the current plan from learner.db, check MEMORY.md for focus and top errors, and personalize from USER.md hobbies. Rotate briefing format (A/B/C/D). Keep it under 200 words. If the learner hasn't practiced in 3+ days, use a gentle re-entry tone.",
+      "skills": [
+        "anya:anya-daily",
+        "anya:anya-tracker",
+        "anya:anya-wordbook"
+      ],
+      "skill": "anya:anya-daily",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 8 * * *",
+        "display": "30 8 * * *"
+      },
+      "schedule_display": "30 8 * * *",
+      "repeat": {
+        "times": null,
+        "completed": 1
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-12T17:08:26.188302+08:00",
+      "next_run_at": "2026-04-14T08:30:00+08:00",
+      "last_run_at": "2026-04-13T08:36:30.181477+08:00",
+      "last_status": "ok",
+      "last_error": null,
+      "deliver": "telegram",
+      "origin": null,
+      "last_delivery_error": null
+    },
+    {
+      "id": "6d3e5e86a1f5",
+      "name": "Anya Light Assessment",
+      "prompt": "[SILENT] Run light assessment. Query today's samples from learner.db via tracker_db.py. If no samples today, respond with only [SILENT]. Otherwise calculate: average band per skill, top 3 error recurrence_keys. Update MEMORY.md with EMA-smoothed band averages (alpha=0.3). This is a silent background update \u2014 do NOT message the learner.",
+      "skills": [
+        "anya:anya-assessment",
+        "anya:anya-tracker"
+      ],
+      "skill": "anya:anya-assessment",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 22 * * *",
+        "display": "0 22 * * *"
+      },
+      "schedule_display": "0 22 * * *",
+      "repeat": {
+        "times": null,
+        "completed": 1
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-12T17:08:35.027351+08:00",
+      "next_run_at": "2026-04-13T22:00:00+08:00",
+      "last_run_at": "2026-04-12T22:07:58.327473+08:00",
+      "last_status": "ok",
+      "last_error": null,
+      "deliver": "local",
+      "origin": null,
+      "last_delivery_error": null
+    },
+    {
+      "id": "6c462f80c161",
+      "name": "Anya Weekly Deep Assessment",
+      "prompt": "Run deep weekly assessment. Query all samples from the past 7 days, band-history, and error-stats from learner.db via tracker_db.py. Analyze: rolling band scores, new weaknesses, improvements, stagnation. Update MEMORY.md with latest band estimates, current focus, and top errors. Then trigger anya-planner to generate next week's plan. Finally, send the weekly report to the learner using the template in anya-assessment/templates/report.md.",
+      "skills": [
+        "anya:anya-assessment",
+        "anya:anya-tracker",
+        "anya:anya-planner",
+        "anya:anya-tg-send"
+      ],
+      "skill": "anya:anya-assessment",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 20 * * 0",
+        "display": "0 20 * * 0"
+      },
+      "schedule_display": "0 20 * * 0",
+      "repeat": {
+        "times": null,
+        "completed": 1
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-12T17:09:04.547181+08:00",
+      "next_run_at": "2026-04-19T20:00:00+08:00",
+      "last_run_at": "2026-04-12T20:03:45.769543+08:00",
+      "last_status": "ok",
+      "last_error": null,
+      "deliver": "telegram",
+      "origin": null,
+      "last_delivery_error": null
+    }
+  ],
+  "updated_at": "2026-04-13T08:36:30.183825+08:00"
+}

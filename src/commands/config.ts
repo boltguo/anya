@@ -3,11 +3,11 @@ import { loadConfig } from '../config/loader.js';
 import { CONFIG_PATH, isInitialized } from '../lib/paths.js';
 
 /**
- * `vela config show` -- Display current configuration with API keys masked.
+ * `anya config show` -- Display current configuration with API keys masked.
  */
 export function runConfigShow(): void {
   if (!isInitialized()) {
-    console.log(chalk.yellow('~/.vela/ not initialized. Run "vela init" first.'));
+    console.log(chalk.yellow('~/.anya/ not initialized. Run "anya init" first.'));
     return;
   }
 
@@ -26,7 +26,7 @@ export function runConfigShow(): void {
     display.telegram.bot_token = maskKey(display.telegram.bot_token);
   }
 
-  console.log(chalk.bold.cyan('\nVela Configuration'));
+  console.log(chalk.bold.cyan('\nAnya Configuration'));
   console.log(chalk.dim(`  ${CONFIG_PATH}\n`));
   console.log(JSON.stringify(display, null, 2));
   console.log();

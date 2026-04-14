@@ -15,12 +15,12 @@ interface ChatOptions {
 }
 
 /**
- * `vela chat` -- Interactive REPL or single-query mode.
+ * `anya chat` -- Interactive REPL or single-query mode.
  */
 export async function runChat(options: ChatOptions): Promise<void> {
   // Auto-init if not yet initialized
   if (!isInitialized()) {
-    console.log(chalk.yellow('~/.vela/ not initialized. Running setup...\n'));
+    console.log(chalk.yellow('~/.anya/ not initialized. Running setup...\n'));
     await runInit();
     console.log();
   }
@@ -32,7 +32,7 @@ export async function runChat(options: ChatOptions): Promise<void> {
   // Check API key
   if (!config.provider.api_key) {
     console.log(chalk.red('Error: Gemini API key not configured.'));
-    console.log(chalk.dim('  Run "vela init" or "vela config edit" to set it.'));
+    console.log(chalk.dim('  Run "anya init" or "anya config edit" to set it.'));
     process.exit(1);
   }
 
@@ -60,7 +60,7 @@ export async function runChat(options: ChatOptions): Promise<void> {
   }
 
   // --- REPL mode ---
-  console.log(chalk.bold.cyan('\nVela Chat'));
+  console.log(chalk.bold.cyan('\nAnya Chat'));
   console.log(chalk.dim('  Type a message to start. Ctrl+C to exit.\n'));
 
   // Create new session if --new flag
