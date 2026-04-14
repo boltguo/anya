@@ -54,14 +54,16 @@
  * preventing duplicates.
  */
 
-import { Bot, InlineKeyboard, Context } from 'grammy';
+import { Bot, InlineKeyboard, InputFile, Context } from 'grammy';
 import type { Adapter } from '../agent/types.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { Agent, type RunResult } from '../agent/Agent.js';
 import { agentLogger } from '../lib/logger.js';
 import { createSession } from '../storage/sessionStore.js';
 import { transcribeAudio } from '../lib/stt.js';
+import { analyzeImage } from '../lib/vision.js';
 import { AUDIO_CACHE_DIR } from '../lib/paths.js';
+import { markdownToTelegramHtml } from '../lib/tgFormat.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -202,24 +204,32 @@ export class TelegramSessionAdapter implements Adapter {
     if (!this.hasSentContent && content) {
       const replyTo = this.autoReplyTo();
       const replyParams = replyTo ? { message_id: replyTo } : undefined;
+      const html = markdownToTelegramHtml(content);
       const maxLen = 4000;
-      if (content.length <= maxLen) {
-        const msg = await this.bot.api.sendMessage(this.chatId, content, {
-          parse_mode: 'Markdown',
+      if (html.length <= maxLen) {
+        const msg = await this.bot.api.sendMessage(this.chatId, html, {
+          parse_mode: 'HTML',
           reply_parameters: replyParams,
         }).catch(() =>
+          // Fallback: send as plain text if HTML parsing fails
           this.bot.api.sendMessage(this.chatId, content, {
             reply_parameters: replyParams,
           })
         );
         if (msg) this.trackMessage(msg.message_id);
       } else {
-        for (let i = 0; i < content.length; i += maxLen) {
-          const chunk = content.substring(i, i + maxLen);
-          const rp = i === 0 ? replyParams : undefined; // only first chunk replies
+        // Split long messages into chunks
+        for (let i = 0; i < html.length; i += maxLen) {
+          const chunk = html.substring(i, i + maxLen);
+          const rp = i === 0 ? replyParams : undefined;
           const msg = await this.bot.api.sendMessage(this.chatId, chunk, {
+            parse_mode: 'HTML',
             reply_parameters: rp,
-          }).catch(() => null);
+          }).catch(() =>
+            this.bot.api.sendMessage(this.chatId, content.substring(i, i + maxLen), {
+              reply_parameters: rp,
+            }).catch(() => null)
+          );
           if (msg) this.trackMessage(msg.message_id);
         }
       }
@@ -232,17 +242,28 @@ export class TelegramSessionAdapter implements Adapter {
     }
   }
 
-  // ── Status window (enqueued) ──────────────────────────────────────────────
+  // ── Status window (compact single-line, enqueued) ───────────────────────────
+
+  private static TOOL_EMOJI: Record<string, string> = {
+    read_file: '📄', write_file: '✏️', list_dir: '📁',
+    shell: '💻', web_search: '🔍', memory_update: '🧠',
+    skill_manage: '🧩', skill_view: '🧩', clarify: '💬',
+    tg: '💬',
+  };
 
   showToolCall(toolName: string, _args: Record<string, unknown>): void {
-    this.statusLines.push(`⚙️ _Executing ${toolName}..._`);
+    const emoji = TelegramSessionAdapter.TOOL_EMOJI[toolName] || '⚙️';
+    this.statusLines = [`${emoji} ${toolName}...`];
     this.enqueue(() => this.flushStatus());
   }
 
   showToolResult(toolName: string, _result: string, isError: boolean): void {
-    const status = isError ? '❌' : '✅';
-    this.statusLines.pop();
-    this.statusLines.push(`${status} _Finished ${toolName}_`);
+    if (isError) {
+      this.statusLines = [`❌ ${toolName} failed`];
+    } else {
+      // Show brief checkmark — will be replaced by next tool or deleted by reply()
+      this.statusLines = [`✅ ${toolName}`];
+    }
     this.enqueue(() => this.flushStatus());
   }
 
@@ -256,7 +277,7 @@ export class TelegramSessionAdapter implements Adapter {
     if (!text) return;
 
     if (!this.statusMessageId) {
-      const msg = await this.ctx.reply(text).catch(() => null);
+      const msg = await this.ctx.reply(text, { parse_mode: undefined }).catch(() => null);
       if (msg) this.statusMessageId = msg.message_id;
     } else {
       await this.bot.api.editMessageText(this.chatId, this.statusMessageId, text).catch(() => {});
@@ -315,7 +336,7 @@ export class TelegramSessionAdapter implements Adapter {
   async sendMessage(text: string, opts?: SendMessageOptions): Promise<number> {
     return this.enqueue(async () => {
       const replyTo = this.autoReplyTo(opts?.replyTo);
-      const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'Markdown');
+      const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'HTML');
 
       let msg;
       try {
@@ -336,12 +357,54 @@ export class TelegramSessionAdapter implements Adapter {
   }
 
   /**
+   * Send a photo with optional caption. Enqueued.
+   */
+  async sendPhoto(photo: string, caption?: string, opts?: SendMessageOptions): Promise<number> {
+    return this.enqueue(async () => {
+      const replyTo = this.autoReplyTo(opts?.replyTo);
+      const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'HTML');
+      const source = photo.startsWith('/') || photo.startsWith('.') ? new InputFile(photo) : photo;
+
+      const msg = await this.bot.api.sendPhoto(this.chatId, source, {
+        caption: caption || undefined,
+        parse_mode: parseMode as any,
+        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
+      });
+
+      this.trackMessage(msg.message_id, opts?.tag);
+      this.hasSentContent = true;
+      return msg.message_id;
+    });
+  }
+
+  /**
+   * Send an audio file with optional caption. Enqueued.
+   */
+  async sendAudio(audio: string, caption?: string, opts?: SendMessageOptions): Promise<number> {
+    return this.enqueue(async () => {
+      const replyTo = this.autoReplyTo(opts?.replyTo);
+      const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'HTML');
+      const source = audio.startsWith('/') || audio.startsWith('.') ? new InputFile(audio) : audio;
+
+      const msg = await this.bot.api.sendAudio(this.chatId, source, {
+        caption: caption || undefined,
+        parse_mode: parseMode as any,
+        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
+      });
+
+      this.trackMessage(msg.message_id, opts?.tag);
+      this.hasSentContent = true;
+      return msg.message_id;
+    });
+  }
+
+  /**
    * Send a message with an InlineKeyboard. Enqueued.
    */
   async sendKeyboard(text: string, buttons: string[][], opts?: SendMessageOptions): Promise<number> {
     return this.enqueue(async () => {
       const replyTo = this.autoReplyTo(opts?.replyTo);
-      const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'Markdown');
+      const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'HTML');
 
       const keyboard = new InlineKeyboard();
       for (const row of buttons) {
@@ -401,7 +464,7 @@ export class TelegramSessionAdapter implements Adapter {
       const replyTo = this.autoReplyTo(opts?.replyTo);
 
       const msg = await this.bot.api.sendMessage(this.chatId, text, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: { force_reply: true, selective: true },
         reply_parameters: replyTo ? { message_id: replyTo } : undefined,
       });
@@ -471,7 +534,7 @@ export class TelegramSessionAdapter implements Adapter {
       }
 
       await this.bot.api.editMessageText(this.chatId, msgId, text, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: replyMarkup,
       }).catch(async () => {
         await this.bot.api.editMessageText(this.chatId, msgId, text, {
@@ -574,6 +637,15 @@ export class TelegramSessionAdapter implements Adapter {
   }
 }
 
+// ── Typing Indicator ─────────────────────────────────────────────────────────
+// Telegram "typing..." status expires after ~5s, so we repeat every 4s.
+
+function startTypingIndicator(ctx: Context): ReturnType<typeof setInterval> {
+  const send = () => ctx.replyWithChatAction('typing').catch(() => {});
+  send(); // Send immediately
+  return setInterval(send, 4000);
+}
+
 // ── Error Formatting ─────────────────────────────────────────────────────────
 // Extracts human-readable messages from API errors instead of dumping raw JSON.
 
@@ -654,16 +726,23 @@ export class TelegramAdapter {
 
       agentLogger.info({ msg: 'tg_message', chatId: ctx.chat.id, userId, text: input.substring(0, 100) });
 
+      // Show "typing..." indicator while processing
+      const typingInterval = startTypingIndicator(ctx);
+
       const sessionAdapter = new TelegramSessionAdapter(ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices);
       const agent = new Agent(this.config, sessionAdapter);
 
       try {
         const result: RunResult = await agent.run(input, { sessionKey });
-        await sessionAdapter.reply(result.content);
+        if (!result.tgSent && result.content) {
+          await sessionAdapter.reply(result.content);
+        }
       } catch (err) {
         const error = err as Error;
         agentLogger.error({ msg: 'tg_error', chatId: ctx.chat.id, error: error.message });
         await ctx.reply(formatTgError(error), { link_preview_options: { is_disabled: true } });
+      } finally {
+        clearInterval(typingInterval);
       }
     });
 
@@ -717,19 +796,118 @@ export class TelegramAdapter {
       const input = `[语音消息: "${sttResult.transcript}"]`;
       agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, provider: sttResult.provider, text: sttResult.transcript.substring(0, 100) });
 
+      // Show "typing..." indicator while processing
+      const typingInterval = startTypingIndicator(ctx);
+
       const sessionAdapter = new TelegramSessionAdapter(ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices);
       const agent = new Agent(this.config, sessionAdapter);
 
       try {
         const result: RunResult = await agent.run(input, { sessionKey });
-        await sessionAdapter.reply(result.content);
+        if (!result.tgSent && result.content) {
+          await sessionAdapter.reply(result.content);
+        }
       } catch (err) {
         const error = err as Error;
         agentLogger.error({ msg: 'tg_error', chatId: ctx.chat.id, error: error.message });
         await ctx.reply(formatTgError(error), { link_preview_options: { is_disabled: true } });
       } finally {
+        clearInterval(typingInterval);
         // Clean up cached audio
         fs.unlink(audioPath, () => {});
+      }
+    });
+
+    // ── Photo message handler ──
+
+    this.bot.on('message:photo', async (ctx) => {
+      const userId = ctx.from?.id;
+
+      if (allowedUsers.length > 0 && userId && !allowedUsers.includes(userId)) {
+        await ctx.reply('Unauthorized.');
+        return;
+      }
+
+      const sessionKey = `tg:${ctx.chat.id}`;
+      const caption = ctx.message.caption || '';
+
+      agentLogger.info({ msg: 'tg_photo', chatId: ctx.chat.id, userId, caption: caption.substring(0, 100) });
+
+      // Show typing while processing
+      const typingInterval = startTypingIndicator(ctx);
+
+      // Download the largest photo size
+      const photo = ctx.message.photo[ctx.message.photo.length - 1];
+      let imagePath = '';
+
+      try {
+        const file = await ctx.api.getFile(photo.file_id);
+
+        if (!file.file_path) {
+          clearInterval(typingInterval);
+          await ctx.reply('❌ 无法获取图片文件。');
+          return;
+        }
+
+        // Download via Telegram file URL
+        const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.bot_token}/${file.file_path}`;
+        const response = await fetch(fileUrl);
+
+        if (!response.ok) {
+          clearInterval(typingInterval);
+          await ctx.reply('❌ 图片下载失败。');
+          return;
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const ext = path.extname(file.file_path) || '.jpg';
+        imagePath = path.join(AUDIO_CACHE_DIR, `photo_${Date.now()}${ext}`);
+        fs.writeFileSync(imagePath, buffer);
+
+        agentLogger.info({ msg: 'tg_photo_cached', path: imagePath, bytes: buffer.length });
+      } catch (err) {
+        clearInterval(typingInterval);
+        const error = err as Error;
+        agentLogger.error({ msg: 'tg_photo_download_error', error: error.message });
+        await ctx.reply('❌ 图片下载失败，请重试。');
+        return;
+      }
+
+      // Analyze image via Gemini Flash
+      const visionResult = await analyzeImage(imagePath, this.config, caption || undefined);
+
+      if (!visionResult.success || !visionResult.description) {
+        clearInterval(typingInterval);
+        const errMsg = visionResult.error || '无法分析图片内容';
+        agentLogger.warn({ msg: 'tg_vision_failed', error: errMsg });
+        await ctx.reply(`🖼️ ${errMsg}`);
+        fs.unlink(imagePath, () => {});
+        return;
+      }
+
+      // Inject description as user input
+      const input = caption
+        ? `[用户发送了一张图片，附带说明: "${caption}"]\n[图片分析: ${visionResult.description}]`
+        : `[用户发送了一张图片]\n[图片分析: ${visionResult.description}]`;
+
+      agentLogger.info({ msg: 'tg_vision_done', chatId: ctx.chat.id, descLength: visionResult.description.length });
+
+      const sessionAdapter = new TelegramSessionAdapter(ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices);
+      const agent = new Agent(this.config, sessionAdapter);
+
+      try {
+        const result: RunResult = await agent.run(input, { sessionKey });
+        if (!result.tgSent && result.content) {
+          await sessionAdapter.reply(result.content);
+        }
+      } catch (err) {
+        const error = err as Error;
+        agentLogger.error({ msg: 'tg_error', chatId: ctx.chat.id, error: error.message });
+        await ctx.reply(formatTgError(error), { link_preview_options: { is_disabled: true } });
+      } finally {
+        clearInterval(typingInterval);
+        // Clean up cached image
+        fs.unlink(imagePath, () => {});
       }
     });
 

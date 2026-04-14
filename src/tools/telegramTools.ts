@@ -76,12 +76,13 @@ function parseStringArray(raw: unknown): string[] {
 
 register({
   name: 'tg',
-  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, keyboard (inline buttons), quiz (auto-scored poll), force_reply, reply_keyboard (bottom menu), edit, dice, react, pin, action. See SOUL.md for usage patterns.',
+  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, keyboard (inline buttons), quiz (auto-scored poll), force_reply, reply_keyboard (bottom menu), edit, dice, react, pin, action. Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). See SOUL.md for usage patterns.',
   parameters: {
     type: 'object',
     properties: {
-      type:       { type: 'string', description: 'Message type: text | keyboard | quiz | force_reply | reply_keyboard | remove_keyboard | edit | edit_keyboard | dice | react | pin | action' },
-      text:       { type: 'string', description: 'Message text (Markdown). Required for text/keyboard/force_reply/reply_keyboard/remove_keyboard/edit.' },
+      type:       { type: 'string', description: 'Message type: text | photo | audio | keyboard | quiz | force_reply | reply_keyboard | remove_keyboard | edit | edit_keyboard | dice | react | pin | action' },
+      text:       { type: 'string', description: 'Message text/caption (HTML format). Use <b>bold</b>, <i>italic</i>, <code>code</code>, <pre>block</pre>, <tg-spoiler>hidden</tg-spoiler>.' },
+      url:        { type: 'string', description: 'For photo/audio: URL or file path of the media to send.' },
       buttons:    { type: 'string', description: 'JSON 2D array. For keyboard: [["label|callback_data",...]], for reply_keyboard: [["label",...]].' },
       options:    { type: 'string', description: 'For quiz: JSON array of option strings.' },
       correct:    { type: 'string', description: 'For quiz: 0-based index of correct answer.' },
@@ -93,7 +94,7 @@ register({
       action:     { type: 'string', description: 'For action type: typing, record_voice, upload_document, etc.' },
       one_time:   { type: 'string', description: 'For reply_keyboard: "true" to auto-hide after tap.' },
       silent:     { type: 'string', description: 'For pin: "true" to pin without notification.' },
-      parse_mode: { type: 'string', description: 'Parse mode: Markdown (default), HTML, or none.' },
+      parse_mode: { type: 'string', description: 'Parse mode: HTML (default), Markdown, MarkdownV2, or none.' },
     },
     required: ['type'],
   },
@@ -108,7 +109,31 @@ register({
         if (replyTo === 'user') replyTo = tg.getUserMessageId();
         const msgId = await tg.sendMessage(String(args.text || ''), {
           replyTo, tag: args.tag as string,
-          parseMode: (args.parse_mode as any) || 'Markdown',
+          parseMode: (args.parse_mode as any) || 'HTML',
+        });
+        return JSON.stringify({ ok: true, message_id: msgId });
+      }
+
+      case 'photo': {
+        const url = String(args.url || '');
+        if (!url) return JSON.stringify({ ok: false, error: 'url is required for photo type' });
+        let replyTo: number | string | undefined = args.reply_to as string | undefined;
+        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const msgId = await tg.sendPhoto(url, String(args.text || ''), {
+          replyTo, tag: args.tag as string,
+          parseMode: (args.parse_mode as any) || 'HTML',
+        });
+        return JSON.stringify({ ok: true, message_id: msgId });
+      }
+
+      case 'audio': {
+        const url = String(args.url || '');
+        if (!url) return JSON.stringify({ ok: false, error: 'url is required for audio type' });
+        let replyTo: number | string | undefined = args.reply_to as string | undefined;
+        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const msgId = await tg.sendAudio(url, String(args.text || ''), {
+          replyTo, tag: args.tag as string,
+          parseMode: (args.parse_mode as any) || 'HTML',
         });
         return JSON.stringify({ ok: true, message_id: msgId });
       }

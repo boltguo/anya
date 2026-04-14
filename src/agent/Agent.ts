@@ -76,6 +76,8 @@ export interface RunResult {
   sessionId: string;
   /** Total number of tool calls executed during this run. */
   toolCallCount: number;
+  /** Whether the tg tool already sent a message to the user. */
+  tgSent: boolean;
 }
 
 /**
@@ -172,6 +174,7 @@ export class Agent {
 
     const maxLoops = this.config.advanced.max_react_loops;
     let totalToolCalls = 0;
+    let tgSent = false;
 
     // --- ReAct Loop ---
     for (let loop = 0; loop < maxLoops; loop++) {
@@ -247,6 +250,11 @@ export class Agent {
             config: this.config,
           });
 
+          // Track if tg tool sent a message to the user
+          if (toolCall.name === 'tg' && !result.startsWith('Error')) {
+            tgSent = true;
+          }
+
           const isError = result.startsWith('Error');
 
           // Show tool result to user
@@ -285,6 +293,7 @@ export class Agent {
         content: finalContent,
         sessionId,
         toolCallCount: totalToolCalls,
+        tgSent,
       };
     }
 
@@ -297,6 +306,7 @@ export class Agent {
       content: fallbackMsg,
       sessionId,
       toolCallCount: totalToolCalls,
+      tgSent,
     };
   }
 

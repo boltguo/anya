@@ -69,6 +69,11 @@ export interface AnyaConfig {
     model: string;
   };
 
+  vision: {
+    gemini_api_key: string;
+    model: string;
+  };
+
   cron: {
     enabled: boolean;
   };
@@ -157,6 +162,11 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   stt: {
     groq_api_key: '',
     model: 'whisper-large-v3-turbo',
+  },
+
+  vision: {
+    gemini_api_key: '',
+    model: 'gemini-3-flash-preview',
   },
 
   cron: {

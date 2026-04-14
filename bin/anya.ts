@@ -120,6 +120,9 @@ program
       const hasSTT = !!config.stt?.groq_api_key;
       console.log(`  STT:       ${hasSTT ? '[ok]' : '[--]'} ${hasSTT ? `Groq Whisper (${config.stt?.model || 'whisper-large-v3-turbo'})` : 'not configured (voice messages unavailable)'}`);
 
+      const hasVision = !!(config.vision?.gemini_api_key || config.provider?.gemini?.api_key);
+      console.log(`  Vision:    ${hasVision ? '[ok]' : '[--]'} ${hasVision ? `Gemini (${config.vision?.model || 'gemini-3-flash-preview'})` : 'not configured (photo analysis unavailable)'}`);
+
       const model = active === 'openai' ? config.provider.openai.model : config.provider.gemini.model;
       console.log(`  Provider:  [..] ${active}`);
       console.log(`  Model:     [..] ${model}`);

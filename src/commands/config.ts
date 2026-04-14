@@ -40,6 +40,10 @@ export async function runConfigMenu(): Promise<void> {
         value: 'stt',
       },
       {
+        name: `Vision   ${chalk.dim(`(Gemini${hasVisionKey(config) ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+        value: 'vision',
+      },
+      {
         name: `Telegram ${chalk.dim(`(${config.telegram.enabled ? chalk.green('on') : 'off'})`)}`,
         value: 'telegram',
       },
@@ -60,6 +64,9 @@ export async function runConfigMenu(): Promise<void> {
       break;
     case 'stt':
       await configSTT(config);
+      break;
+    case 'vision':
+      await configVision(config);
       break;
     case 'telegram':
       await configTelegram(config);
@@ -157,6 +164,87 @@ export async function configSTT(config: AnyaConfig): Promise<void> {
   console.log(chalk.green('\n  [ok] STT configured.'));
   console.log(chalk.dim(`  Provider: Groq Whisper`));
   console.log(chalk.dim(`  Model: ${model}`));
+  await autoRestartGateway();
+}
+
+// ── Vision configuration ─────────────────────────────────────────────────────
+
+const VISION_MODELS = [
+  { name: 'Gemini 3 Flash Preview  (fast, recommended)', value: 'gemini-3-flash-preview' },
+  { name: 'Gemini 3.1 Flash Lite Preview  (ultra fast)',  value: 'gemini-3.1-flash-lite-preview' },
+  { name: 'Gemini 3.1 Pro Preview  (highest quality)',    value: 'gemini-3.1-pro-preview' },
+];
+
+function hasVisionKey(config: AnyaConfig): boolean {
+  return !!(config.vision?.gemini_api_key || config.provider?.gemini?.api_key);
+}
+
+export async function configVision(config: AnyaConfig): Promise<void> {
+  if (!config.vision) {
+    config.vision = { gemini_api_key: '', model: 'gemini-3-flash-preview' };
+  }
+
+  const currentKey = config.vision.gemini_api_key || config.provider?.gemini?.api_key || '';
+  const currentModel = config.vision.model || 'gemini-3-flash-preview';
+  const isUsingFallback = !config.vision.gemini_api_key && !!config.provider?.gemini?.api_key;
+
+  if (currentKey) {
+    console.log(chalk.dim(`\n  API Key: ${maskKey(currentKey)}${isUsingFallback ? ' (from model config)' : ''}`));
+    console.log(chalk.dim(`  Model: ${currentModel}`));
+
+    const action = await select({
+      message: 'Vision settings',
+      choices: [
+        { name: 'Change model only', value: 'model' },
+        { name: 'Full setup (key + model)', value: 'full' },
+        { name: 'Cancel', value: 'cancel' },
+      ],
+    });
+
+    if (action === 'cancel') return;
+
+    if (action === 'model') {
+      const model = await select({
+        message: 'Vision Model',
+        choices: VISION_MODELS,
+        default: currentModel,
+      });
+      config.vision.model = model;
+      writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+      console.log(chalk.green(`\n  [ok] Vision model → ${model}`));
+      await autoRestartGateway();
+      return;
+    }
+
+    // action === 'full' → fall through
+  }
+
+  console.log();
+  console.log(chalk.dim('  Get a free key: https://aistudio.google.com/apikey'));
+  console.log(chalk.dim('  Used for: image understanding (Telegram photos)'));
+  console.log(chalk.dim('  Leave blank to use the Gemini key from model config\n'));
+
+  const apiKey = await input({
+    message: 'Gemini API Key (Vision):',
+    default: config.vision.gemini_api_key || undefined,
+  });
+
+  config.vision.gemini_api_key = apiKey.trim();
+
+  const model = await select({
+    message: 'Vision Model',
+    choices: VISION_MODELS,
+    default: currentModel,
+  });
+
+  config.vision.model = model;
+
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  console.log(chalk.green('\n  [ok] Vision configured.'));
+  console.log(chalk.dim(`  Model: ${model}`));
+  if (!config.vision.gemini_api_key && config.provider?.gemini?.api_key) {
+    console.log(chalk.dim('  Using Gemini key from model config'));
+  }
   await autoRestartGateway();
 }
 
