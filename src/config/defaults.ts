@@ -64,6 +64,11 @@ export interface AnyaConfig {
     allowed_user_ids: number[];
   };
 
+  stt: {
+    groq_api_key: string;
+    model: string;
+  };
+
   cron: {
     enabled: boolean;
   };
@@ -147,6 +152,11 @@ export const DEFAULT_CONFIG: AnyaConfig = {
     enabled: false,
     bot_token: '',
     allowed_user_ids: [],
+  },
+
+  stt: {
+    groq_api_key: '',
+    model: 'whisper-large-v3-turbo',
   },
 
   cron: {

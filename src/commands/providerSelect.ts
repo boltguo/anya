@@ -1,9 +1,8 @@
 /**
  * @module commands/providerSelect
- * @description Shared provider selection UI for `anya init` and `anya model`.
+ * @description Shared provider selection UI for `anya init` and `anya config`.
  *
- * Shows an interactive prompt to choose between Gemini and OpenAI,
- * then handles provider-specific authentication.
+ * Flow: Choose provider → Authenticate → Select model
  *
  * Smart detection: if credentials already exist for the selected provider,
  * asks whether to re-authenticate or keep existing credentials.
@@ -15,15 +14,30 @@ import { writeFileSync } from 'node:fs';
 import { CONFIG_PATH } from '../lib/paths.js';
 import type { AnyaConfig } from '../config/defaults.js';
 
+// ── Model lists ──────────────────────────────────────────────────────────────
+
+const OPENAI_MODELS = [
+  { name: 'gpt-5.4' + chalk.dim(' (flagship)'), value: 'gpt-5.4' },
+  { name: 'gpt-5.4-mini' + chalk.dim(' (faster, cheaper)'), value: 'gpt-5.4-mini' },
+];
+
+const GEMINI_MODELS = [
+  { name: 'gemini-3.1-pro-preview' + chalk.dim(' (most capable)'), value: 'gemini-3.1-pro-preview' },
+  { name: 'gemini-3-flash-preview' + chalk.dim(' (fast, recommended)'), value: 'gemini-3-flash-preview' },
+  { name: 'gemini-3.1-flash-lite-preview' + chalk.dim(' (lightest)'), value: 'gemini-3.1-flash-lite-preview' },
+  { name: 'gemma-4-31b-it' + chalk.dim(' (open model)'), value: 'gemma-4-31b-it' },
+];
+
+// ── Provider selection flow ──────────────────────────────────────────────────
+
 /**
  * Run the provider selection flow.
  *
- * - Gemini: prompts for API key (skips if already configured)
- * - OpenAI: runs the device code OAuth flow (skips if already authenticated)
+ * - Choose provider (Gemini / OpenAI)
+ * - Authenticate (API key / OAuth)
+ * - Select model
  *
  * Updates config in-place and writes to disk.
- *
- * @param config - The config object to update (mutated in place).
  */
 export async function selectProvider(config: AnyaConfig): Promise<void> {
   const currentProvider = config.provider.active;
@@ -73,7 +87,14 @@ export async function selectProvider(config: AnyaConfig): Promise<void> {
       await promptGeminiKey(config);
     }
 
-    console.log(chalk.dim(`  Model: ${config.provider.gemini.model}`));
+    // Model selection
+    const geminiModel = await select({
+      message: 'Gemini Model',
+      choices: GEMINI_MODELS,
+      default: config.provider.gemini.model || 'gemini-3-flash-preview',
+    });
+    config.provider.gemini.model = geminiModel;
+    console.log(chalk.dim(`  Model: ${geminiModel}`));
 
   } else if (provider === 'openai') {
     if (hasOpenAIAuth) {
@@ -93,7 +114,14 @@ export async function selectProvider(config: AnyaConfig): Promise<void> {
       await runCodexLogin(config);
     }
 
-    console.log(chalk.dim(`  Model: ${config.provider.openai.model}`));
+    // Model selection
+    const openaiModel = await select({
+      message: 'OpenAI Model',
+      choices: OPENAI_MODELS,
+      default: config.provider.openai.model || 'gpt-5.4',
+    });
+    config.provider.openai.model = openaiModel;
+    console.log(chalk.dim(`  Model: ${openaiModel}`));
   }
 
   // Save updated config

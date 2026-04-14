@@ -1,10 +1,205 @@
+/**
+ * @module commands/config
+ * @description `anya config` — Interactive configuration manager.
+ *
+ * Menu-driven interface for all configurable sections:
+ *   - Model: Switch provider + model (Gemini / OpenAI)
+ *   - STT: Configure Groq Whisper for voice transcription
+ *   - Telegram: Bot token + user ID
+ *   - Show: Display current config with masked keys
+ *
+ * Each configSection is also callable standalone from `anya init`.
+ */
+
+import { select, input, confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
+import { writeFileSync } from 'node:fs';
 import { loadConfig } from '../config/loader.js';
 import { CONFIG_PATH, isInitialized } from '../lib/paths.js';
+import type { AnyaConfig } from '../config/defaults.js';
 
-/**
- * `anya config show` -- Display current configuration with API keys masked.
- */
+// ── anya config (interactive menu) ───────────────────────────────────────────
+
+export async function runConfigMenu(): Promise<void> {
+  if (!isInitialized()) {
+    console.log(chalk.yellow('~/.anya/ not initialized. Run "anya init" first.'));
+    return;
+  }
+
+  const config = loadConfig();
+
+  const section = await select({
+    message: 'Configure',
+    choices: [
+      {
+        name: `Model    ${chalk.dim(`(${config.provider.active}: ${getActiveModel(config)})`)}`,
+        value: 'model',
+      },
+      {
+        name: `STT      ${chalk.dim(`(Groq Whisper${config.stt?.groq_api_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+        value: 'stt',
+      },
+      {
+        name: `Telegram ${chalk.dim(`(${config.telegram.enabled ? chalk.green('on') : 'off'})`)}`,
+        value: 'telegram',
+      },
+      {
+        name: chalk.dim('Show config'),
+        value: 'show',
+      },
+      {
+        name: chalk.dim('Cancel'),
+        value: 'cancel',
+      },
+    ],
+  });
+
+  switch (section) {
+    case 'model':
+      await configModel(config);
+      break;
+    case 'stt':
+      await configSTT(config);
+      break;
+    case 'telegram':
+      await configTelegram(config);
+      break;
+    case 'show':
+      runConfigShow();
+      break;
+    case 'cancel':
+      return;
+  }
+}
+
+// ── Model configuration ──────────────────────────────────────────────────────
+
+export async function configModel(config: AnyaConfig): Promise<void> {
+  const { selectProvider } = await import('./providerSelect.js');
+  await selectProvider(config);
+  console.log(chalk.green('\n  [ok] Provider updated.'));
+  await autoRestartGateway();
+}
+
+// ── STT configuration ────────────────────────────────────────────────────────
+
+const STT_MODELS = [
+  { name: 'whisper-large-v3-turbo' + chalk.dim(' (faster, recommended)'), value: 'whisper-large-v3-turbo' },
+  { name: 'whisper-large-v3' + chalk.dim(' (more accurate, slower)'), value: 'whisper-large-v3' },
+];
+
+export async function configSTT(config: AnyaConfig): Promise<void> {
+  // Ensure stt section exists
+  if (!config.stt) {
+    (config as any).stt = { groq_api_key: '', model: 'whisper-large-v3-turbo' };
+  }
+
+  const hasKey = !!config.stt.groq_api_key;
+  const currentModel = config.stt.model || 'whisper-large-v3-turbo';
+
+  if (hasKey) {
+    const maskedKey = maskKey(config.stt.groq_api_key);
+    console.log(chalk.dim(`\n  Groq API Key: ${maskedKey}`));
+    console.log(chalk.dim(`  Model: ${currentModel}`));
+
+    const action = await select({
+      message: 'STT Settings',
+      choices: [
+        { name: 'Change Whisper model', value: 'model' },
+        { name: 'Update API key + model', value: 'full' },
+        { name: chalk.dim('Cancel'), value: 'cancel' },
+      ],
+    });
+
+    if (action === 'cancel') return;
+
+    if (action === 'model') {
+      // Just change model, keep existing key
+      const model = await select({
+        message: 'Whisper Model',
+        choices: STT_MODELS,
+        default: currentModel,
+      });
+      config.stt.model = model;
+      writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+      console.log(chalk.green(`\n  [ok] STT model → ${model}`));
+      await autoRestartGateway();
+      return;
+    }
+
+    // action === 'full' → fall through to full setup below
+  }
+
+  // Full STT setup: API key + model
+  console.log();
+  console.log(chalk.dim('  Get a free key: https://console.groq.com/'));
+  console.log(chalk.dim('  Used for: voice message transcription (Whisper)\n'));
+
+  const apiKey = await input({
+    message: 'Groq API Key:',
+    default: config.stt.groq_api_key || undefined,
+    validate: (v) => v.trim() ? true : 'API key is required for voice transcription',
+  });
+
+  config.stt.groq_api_key = apiKey.trim();
+
+  // Model selection
+  const model = await select({
+    message: 'Whisper Model',
+    choices: STT_MODELS,
+    default: currentModel,
+  });
+
+  config.stt.model = model;
+
+  // Save
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  console.log(chalk.green('\n  [ok] STT configured.'));
+  console.log(chalk.dim(`  Provider: Groq Whisper`));
+  console.log(chalk.dim(`  Model: ${model}`));
+  await autoRestartGateway();
+}
+
+// ── Telegram configuration ───────────────────────────────────────────────────
+
+export async function configTelegram(config: AnyaConfig): Promise<void> {
+  if (config.telegram.enabled && config.telegram.bot_token) {
+    console.log(chalk.dim(`\n  Bot token: ${maskKey(config.telegram.bot_token)}`));
+    console.log(chalk.dim(`  Allowed users: ${config.telegram.allowed_user_ids.join(', ') || 'all'}`));
+
+    const update = await confirm({
+      message: 'Update Telegram settings?',
+      default: false,
+    });
+    if (!update) return;
+  }
+
+  const botToken = await input({
+    message: 'Telegram Bot Token (from @BotFather):',
+    default: config.telegram.bot_token || undefined,
+  });
+
+  if (botToken.trim()) {
+    config.telegram.enabled = true;
+    config.telegram.bot_token = botToken.trim();
+
+    const userId = await input({
+      message: 'Your Telegram User ID (numeric, press Enter to allow all):',
+      default: config.telegram.allowed_user_ids[0]?.toString() || undefined,
+    });
+
+    if (userId.trim()) {
+      config.telegram.allowed_user_ids = [parseInt(userId.trim(), 10)];
+    }
+  }
+
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  console.log(chalk.green('\n  [ok] Telegram configured.'));
+  await autoRestartGateway();
+}
+
+// ── anya config show ─────────────────────────────────────────────────────────
+
 export function runConfigShow(): void {
   if (!isInitialized()) {
     console.log(chalk.yellow('~/.anya/ not initialized. Run "anya init" first.'));
@@ -25,6 +220,9 @@ export function runConfigShow(): void {
   if (display.telegram?.bot_token) {
     display.telegram.bot_token = maskKey(display.telegram.bot_token);
   }
+  if (display.stt?.groq_api_key) {
+    display.stt.groq_api_key = maskKey(display.stt.groq_api_key);
+  }
 
   console.log(chalk.bold.cyan('\nAnya Configuration'));
   console.log(chalk.dim(`  ${CONFIG_PATH}\n`));
@@ -32,7 +230,29 @@ export function runConfigShow(): void {
   console.log();
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function getActiveModel(config: AnyaConfig): string {
+  return config.provider.active === 'openai'
+    ? config.provider.openai.model
+    : config.provider.gemini.model;
+}
+
 function maskKey(key: string): string {
   if (key.length <= 8) return '****';
   return key.substring(0, 4) + '****' + key.substring(key.length - 4);
+}
+
+async function autoRestartGateway(): Promise<void> {
+  try {
+    const { isServiceRunning } = await import('../lib/pidfile.js');
+    const { running } = isServiceRunning('gateway');
+    if (running) {
+      console.log(chalk.dim('  Restarting gateway...'));
+      const { runGatewayRestart } = await import('./gateway.js');
+      await runGatewayRestart();
+    }
+  } catch {
+    // Non-critical
+  }
 }

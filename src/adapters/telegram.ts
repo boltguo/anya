@@ -60,6 +60,10 @@ import type { AnyaConfig } from '../config/defaults.js';
 import { Agent, type RunResult } from '../agent/Agent.js';
 import { agentLogger } from '../lib/logger.js';
 import { createSession } from '../storage/sessionStore.js';
+import { transcribeAudio } from '../lib/stt.js';
+import { AUDIO_CACHE_DIR } from '../lib/paths.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -660,6 +664,72 @@ export class TelegramAdapter {
         const error = err as Error;
         agentLogger.error({ msg: 'tg_error', chatId: ctx.chat.id, error: error.message });
         await ctx.reply(formatTgError(error), { link_preview_options: { is_disabled: true } });
+      }
+    });
+
+    // ── Voice message handler ──
+
+    this.bot.on('message:voice', async (ctx) => {
+      const userId = ctx.from?.id;
+
+      if (allowedUsers.length > 0 && userId && !allowedUsers.includes(userId)) {
+        await ctx.reply('Unauthorized.');
+        return;
+      }
+
+      const sessionKey = `tg:${ctx.chat.id}`;
+      agentLogger.info({ msg: 'tg_voice', chatId: ctx.chat.id, userId, duration: ctx.message.voice.duration });
+
+      // Download voice file
+      let audioPath: string;
+      try {
+        const file = await ctx.getFile();
+        const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.bot_token}/${file.file_path}`;
+        const response = await fetch(fileUrl);
+        if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const timestamp = Date.now();
+        audioPath = path.join(AUDIO_CACHE_DIR, `voice_${timestamp}.ogg`);
+        fs.mkdirSync(AUDIO_CACHE_DIR, { recursive: true });
+        fs.writeFileSync(audioPath, buffer);
+        agentLogger.info({ msg: 'tg_voice_cached', path: audioPath, bytes: buffer.length });
+      } catch (err) {
+        const error = err as Error;
+        agentLogger.error({ msg: 'tg_voice_download_error', error: error.message });
+        await ctx.reply('❌ 语音下载失败，请重试。');
+        return;
+      }
+
+      // Transcribe
+      const sttResult = await transcribeAudio(audioPath, this.config);
+
+      if (!sttResult.success || !sttResult.transcript) {
+        const errMsg = sttResult.error || '无法识别语音内容';
+        agentLogger.warn({ msg: 'tg_stt_failed', error: errMsg });
+        await ctx.reply(`🎤 ${errMsg}`);
+        // Clean up
+        fs.unlink(audioPath, () => {});
+        return;
+      }
+
+      // Inject transcribed text as user input
+      const input = `[语音消息: "${sttResult.transcript}"]`;
+      agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, provider: sttResult.provider, text: sttResult.transcript.substring(0, 100) });
+
+      const sessionAdapter = new TelegramSessionAdapter(ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices);
+      const agent = new Agent(this.config, sessionAdapter);
+
+      try {
+        const result: RunResult = await agent.run(input, { sessionKey });
+        await sessionAdapter.reply(result.content);
+      } catch (err) {
+        const error = err as Error;
+        agentLogger.error({ msg: 'tg_error', chatId: ctx.chat.id, error: error.message });
+        await ctx.reply(formatTgError(error), { link_preview_options: { is_disabled: true } });
+      } finally {
+        // Clean up cached audio
+        fs.unlink(audioPath, () => {});
       }
     });
 

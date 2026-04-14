@@ -44,15 +44,6 @@ program
     await runInit();
   });
 
-// --- anya model ---
-program
-  .command('model')
-  .description('Switch model provider (Gemini / OpenAI)')
-  .action(async () => {
-    const { runModelSelect } = await import('../src/commands/model.js');
-    await runModelSelect();
-  });
-
 // --- anya chat ---
 program
   .command('chat')
@@ -67,7 +58,12 @@ program
 // --- anya config ---
 const configCmd = program
   .command('config')
-  .description('Manage configuration');
+  .description('Manage configuration')
+  .action(async () => {
+    // Default action: interactive menu
+    const { runConfigMenu } = await import('../src/commands/config.js');
+    await runConfigMenu();
+  });
 
 configCmd
   .command('show')
@@ -120,6 +116,9 @@ program
 
       const hasTavily = !!config.tools.web_search.api_key;
       console.log(`  Tavily:    ${hasTavily ? '[ok]' : '[--]'} ${hasTavily ? 'configured' : 'not configured (web_search unavailable)'}`);
+
+      const hasSTT = !!config.stt?.groq_api_key;
+      console.log(`  STT:       ${hasSTT ? '[ok]' : '[--]'} ${hasSTT ? `Groq Whisper (${config.stt?.model || 'whisper-large-v3-turbo'})` : 'not configured (voice messages unavailable)'}`);
 
       const model = active === 'openai' ? config.provider.openai.model : config.provider.gemini.model;
       console.log(`  Provider:  [..] ${active}`);

@@ -86,6 +86,9 @@ export const SEARCH_CACHE_DIR = join(DATA_DIR, 'search');
 /** General-purpose cache. */
 export const CACHE_DIR = join(DATA_DIR, 'cache');
 
+/** Audio cache for voice message downloads. */
+export const AUDIO_CACHE_DIR = join(DATA_DIR, 'audio');
+
 // ── Runtime ──────────────────────────────────────────────────────────────────
 export const LOGS_DIR = join(ANYA_HOME, 'logs');
 export const RUN_DIR = join(ANYA_HOME, 'run');
@@ -110,6 +113,7 @@ export function ensureDirectories(): void {
     IELTS_LEARN_DIR,
     SEARCH_CACHE_DIR,
     CACHE_DIR,
+    AUDIO_CACHE_DIR,
     LOGS_DIR,
     RUN_DIR,
   ];

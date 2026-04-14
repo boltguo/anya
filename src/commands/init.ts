@@ -51,9 +51,32 @@ export async function runInit(): Promise<void> {
   const { selectProvider } = await import('./providerSelect.js');
   await selectProvider(config);
 
-  // --- Tavily API Key (optional) ---
+  // --- 2. Groq API Key (STT) ---
   console.log();
-  console.log(chalk.bold('2. Tavily API Key') + chalk.dim(' (optional, for web search)'));
+  console.log(chalk.bold('2. Groq API Key') + chalk.dim(' (optional, for voice message transcription)'));
+  console.log(chalk.dim('   Get a free key: https://console.groq.com/\n'));
+
+  const groqKey = await input({
+    message: 'Groq API Key (press Enter to skip):',
+  });
+  if (groqKey.trim()) {
+    config.stt.groq_api_key = groqKey.trim();
+
+    const { select: selectPrompt } = await import('@inquirer/prompts');
+    const sttModel = await selectPrompt({
+      message: 'Whisper Model',
+      choices: [
+        { name: 'whisper-large-v3-turbo' + chalk.dim(' (faster, recommended)'), value: 'whisper-large-v3-turbo' },
+        { name: 'whisper-large-v3' + chalk.dim(' (more accurate, slower)'), value: 'whisper-large-v3' },
+      ],
+      default: 'whisper-large-v3-turbo',
+    });
+    config.stt.model = sttModel;
+  }
+
+  // --- 3. Tavily API Key (optional) ---
+  console.log();
+  console.log(chalk.bold('3. Tavily API Key') + chalk.dim(' (optional, for web search)'));
   console.log(chalk.dim('   Get a free key: https://tavily.com/\n'));
 
   const tavilyKey = await input({
