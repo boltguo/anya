@@ -74,6 +74,11 @@ export interface AnyaConfig {
     model: string;
   };
 
+  tts: {
+    voice: string;
+    rate: string;
+  };
+
   cron: {
     enabled: boolean;
   };
@@ -131,6 +136,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
       'skill_view',
       'clarify',
       'tg',
+      'tts',
     ],
     shell: {
       require_approval: true,
@@ -167,6 +173,11 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   vision: {
     gemini_api_key: '',
     model: 'gemini-3-flash-preview',
+  },
+
+  tts: {
+    voice: 'en-US-AriaNeural',
+    rate: '+0%',
   },
 
   cron: {

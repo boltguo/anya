@@ -123,6 +123,9 @@ program
       const hasVision = !!(config.vision?.gemini_api_key || config.provider?.gemini?.api_key);
       console.log(`  Vision:    ${hasVision ? '[ok]' : '[--]'} ${hasVision ? `Gemini (${config.vision?.model || 'gemini-3-flash-preview'})` : 'not configured (photo analysis unavailable)'}`);
 
+      const ttsVoice = config.tts?.voice || 'en-US-AriaNeural';
+      console.log(`  TTS:       [ok] Edge TTS (${ttsVoice})`);
+
       const model = active === 'openai' ? config.provider.openai.model : config.provider.gemini.model;
       console.log(`  Provider:  [..] ${active}`);
       console.log(`  Model:     [..] ${model}`);

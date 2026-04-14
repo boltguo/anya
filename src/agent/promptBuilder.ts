@@ -76,6 +76,23 @@ export function buildSystemPrompt(config: AnyaConfig): string {
   sections.push('- Shell commands require user approval unless they are in the allowlist.');
   sections.push('- Never execute destructive commands without explicit user confirmation.');
 
+  // ── 7. Platform capabilities ────────────────────────────────────────
+  const caps: string[] = [];
+  caps.push('\n## Platform Capabilities\n');
+
+  // TTS
+  caps.push('- **TTS (Text-to-Speech)**: You have the `tts` tool. Use it to generate speech audio from any text. It sends as a voice bubble on Telegram. Always use the `tts` tool when the user asks you to read, speak, pronounce, or generate audio. You can specify voice (e.g. "zh-CN-XiaoxiaoNeural" for Chinese).');
+
+  // Media sending
+  caps.push('- **Rich Media**: On Telegram, use the `tg` tool with type "photo" or "audio" to send images/audio with captions. Use `<tg-spoiler>text</tg-spoiler>` in HTML to hide text (tap to reveal — great for learning/quiz scenarios).');
+
+  // Vision
+  if (config.vision?.gemini_api_key || config.provider?.gemini?.api_key) {
+    caps.push('- **Vision**: When the user sends a photo, it is automatically analyzed and the description is provided to you as text.');
+  }
+
+  sections.push(caps.join('\n'));
+
   return sections.join('\n');
 }
 

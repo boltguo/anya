@@ -44,6 +44,10 @@ export async function runConfigMenu(): Promise<void> {
         value: 'vision',
       },
       {
+        name: `TTS      ${chalk.dim(`(${config.tts?.voice || 'en-US-AriaNeural'})`)}`,
+        value: 'tts',
+      },
+      {
         name: `Telegram ${chalk.dim(`(${config.telegram.enabled ? chalk.green('on') : 'off'})`)}`,
         value: 'telegram',
       },
@@ -67,6 +71,9 @@ export async function runConfigMenu(): Promise<void> {
       break;
     case 'vision':
       await configVision(config);
+      break;
+    case 'tts':
+      await configTTS(config);
       break;
     case 'telegram':
       await configTelegram(config);
@@ -247,6 +254,36 @@ export async function configVision(config: AnyaConfig): Promise<void> {
   }
   await autoRestartGateway();
 }
+
+// ── TTS configuration ────────────────────────────────────────────────────────
+
+const EDGE_VOICES = [
+  { name: 'Aria   (American female, natural)',   value: 'en-US-AriaNeural' },
+  { name: 'Jenny  (American female, friendly)',  value: 'en-US-JennyNeural' },
+  { name: 'Guy    (American male, casual)',      value: 'en-US-GuyNeural' },
+  { name: '晓晓   (中文女声, 温柔)',               value: 'zh-CN-XiaoxiaoNeural' },
+  { name: '七海   (日本語女性, やさしい)',           value: 'ja-JP-NanamiNeural' },
+];
+
+export async function configTTS(config: AnyaConfig): Promise<void> {
+  if (!config.tts) {
+    config.tts = { voice: 'en-US-AriaNeural', rate: '+0%', pitch: '+0Hz', volume: '+0%' };
+  }
+
+  const voice = await select({
+    message: 'Voice',
+    choices: EDGE_VOICES,
+    default: config.tts.voice || 'en-US-AriaNeural',
+  });
+  config.tts.voice = voice;
+
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  console.log(chalk.green('\n  [ok] TTS → Edge TTS'));
+  console.log(chalk.dim(`  Voice: ${voice}`));
+
+  await autoRestartGateway();
+}
+
 
 // ── Telegram configuration ───────────────────────────────────────────────────
 

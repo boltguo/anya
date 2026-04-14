@@ -32,6 +32,7 @@ import '../tools/memoryTools.js';
 import '../tools/skillTools.js';
 import '../tools/clarifyTools.js';
 import '../tools/telegramTools.js';
+import '../tools/tts.js';
 
 // ── Model Pricing (per 1M tokens) ────────────────────────────────────────────
 // Used for cost estimation in logs. Codex OAuth calls are subscription-based

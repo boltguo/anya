@@ -62,7 +62,7 @@ import { agentLogger } from '../lib/logger.js';
 import { createSession } from '../storage/sessionStore.js';
 import { transcribeAudio } from '../lib/stt.js';
 import { analyzeImage } from '../lib/vision.js';
-import { AUDIO_CACHE_DIR } from '../lib/paths.js';
+import { AUDIO_CACHE_DIR, VOICE_DIR } from '../lib/paths.js';
 import { markdownToTelegramHtml } from '../lib/tgFormat.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -206,16 +206,26 @@ export class TelegramSessionAdapter implements Adapter {
       const replyParams = replyTo ? { message_id: replyTo } : undefined;
       const html = markdownToTelegramHtml(content);
       const maxLen = 4000;
+
+      // Fallback: strip markdown symbols so raw ** and ## never appear
+      const stripMarkdown = (text: string) => text
+        .replace(/^#{1,6}\s+/gm, '')    // ## headings
+        .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')  // **bold**, *italic*
+        .replace(/~~(.+?)~~/g, '$1')     // ~~strikethrough~~
+        .replace(/`([^`]+)`/g, '$1')     // `code`
+        .replace(/^[-*]{3,}$/gm, '')     // ---
+        .replace(/^\s*[-*]\s+/gm, '• '); // - list → bullet
+
       if (html.length <= maxLen) {
         const msg = await this.bot.api.sendMessage(this.chatId, html, {
           parse_mode: 'HTML',
           reply_parameters: replyParams,
-        }).catch(() =>
-          // Fallback: send as plain text if HTML parsing fails
-          this.bot.api.sendMessage(this.chatId, content, {
+        }).catch((err) => {
+          agentLogger.warn({ msg: 'html_parse_fallback', error: err?.message, htmlLen: html.length });
+          return this.bot.api.sendMessage(this.chatId, stripMarkdown(content), {
             reply_parameters: replyParams,
-          })
-        );
+          });
+        });
         if (msg) this.trackMessage(msg.message_id);
       } else {
         // Split long messages into chunks
@@ -225,11 +235,12 @@ export class TelegramSessionAdapter implements Adapter {
           const msg = await this.bot.api.sendMessage(this.chatId, chunk, {
             parse_mode: 'HTML',
             reply_parameters: rp,
-          }).catch(() =>
-            this.bot.api.sendMessage(this.chatId, content.substring(i, i + maxLen), {
+          }).catch((err) => {
+            agentLogger.warn({ msg: 'html_parse_fallback_chunk', error: err?.message });
+            return this.bot.api.sendMessage(this.chatId, stripMarkdown(content.substring(i, i + maxLen)), {
               reply_parameters: rp,
-            }).catch(() => null)
-          );
+            }).catch(() => null);
+          });
           if (msg) this.trackMessage(msg.message_id);
         }
       }
@@ -394,6 +405,28 @@ export class TelegramSessionAdapter implements Adapter {
 
       this.trackMessage(msg.message_id, opts?.tag);
       this.hasSentContent = true;
+      return msg.message_id;
+    });
+  }
+
+  /**
+   * Send a voice message (shows as voice bubble in Telegram). Enqueued.
+   * Requires .ogg Opus format for the native voice bubble UI.
+   */
+  async sendVoice(voicePath: string, opts?: SendMessageOptions): Promise<number> {
+    return this.enqueue(async () => {
+      const replyTo = this.autoReplyTo(opts?.replyTo);
+      const source = new InputFile(voicePath);
+
+      const msg = await this.bot.api.sendVoice(this.chatId, source, {
+        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
+      });
+
+      this.trackMessage(msg.message_id, opts?.tag);
+      this.hasSentContent = true;
+
+      // Keep audio files for debugging
+      agentLogger.info({ msg: 'tg_voice_sent', path: voicePath });
       return msg.message_id;
     });
   }
@@ -769,8 +802,8 @@ export class TelegramAdapter {
 
         const buffer = Buffer.from(await response.arrayBuffer());
         const timestamp = Date.now();
-        audioPath = path.join(AUDIO_CACHE_DIR, `voice_${timestamp}.ogg`);
-        fs.mkdirSync(AUDIO_CACHE_DIR, { recursive: true });
+        audioPath = path.join(VOICE_DIR, `voice_${timestamp}.ogg`);
+        fs.mkdirSync(VOICE_DIR, { recursive: true });
         fs.writeFileSync(audioPath, buffer);
         agentLogger.info({ msg: 'tg_voice_cached', path: audioPath, bytes: buffer.length });
       } catch (err) {

@@ -43,6 +43,7 @@
     "commander": "^13.0.0",
     "grammy": "^1.42.0",
     "gray-matter": "^4.0.3",
+    "msedge-tts": "^2.0.4",
     "pino": "^9.0.0",
     "pino-roll": "^2.0.0"
   },

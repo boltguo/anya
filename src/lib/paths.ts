@@ -89,6 +89,12 @@ export const CACHE_DIR = join(DATA_DIR, 'cache');
 /** Audio cache for voice message downloads. */
 export const AUDIO_CACHE_DIR = join(DATA_DIR, 'audio');
 
+/** Incoming voice messages from users. */
+export const VOICE_DIR = join(AUDIO_CACHE_DIR, 'voice');
+
+/** Generated TTS audio files. */
+export const TTS_DIR = join(AUDIO_CACHE_DIR, 'tts');
+
 // ── Runtime ──────────────────────────────────────────────────────────────────
 export const LOGS_DIR = join(ANYA_HOME, 'logs');
 export const RUN_DIR = join(ANYA_HOME, 'run');
