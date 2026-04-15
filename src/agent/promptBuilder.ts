@@ -99,6 +99,14 @@ export function buildSystemPrompt(config: AnyaConfig): string {
     caps.push('- **Image Generation**: You have the `image_gen` tool. Use it to generate images from text descriptions. After generating, use the `tg` tool with type="photo" and the returned path as `url` to send it to the user.');
   }
 
+  if (enabled.includes('pron_assess')) {
+    caps.push('- **Pronunciation Assessment**: You have the `pron_assess` tool (Azure Speech). Call it with `audio_path` from voice message metadata. Rules for when to use:');
+    caps.push('  - ✅ User explicitly asks for pronunciation feedback ("评测一下发音", "assess my pronunciation")');
+    caps.push('  - ✅ User is in a speaking practice session (you asked them to read a sentence, they sent voice)');
+    caps.push('  - ❌ User just sends a regular voice message to chat — do NOT assess, just respond normally');
+    caps.push('  - Format results clearly: overall score, weak words highlighted, actionable tips');
+  }
+
   // Multi-tool combination guidance
   if (enabled.includes('tg') && (enabled.includes('tts') || enabled.includes('image_gen'))) {
     caps.push('');

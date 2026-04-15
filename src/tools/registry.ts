@@ -34,6 +34,7 @@ export async function registerAllTools(): Promise<void> {
     import('../tools/telegramTools.js'),
     import('../tools/tts.js'),
     import('../tools/imageGen.js'),
+    import('../tools/pronAssess.js'),
   ]);
 }
 

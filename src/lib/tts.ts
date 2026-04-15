@@ -14,11 +14,10 @@
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import which from 'which';
 import { TTS_DIR } from './paths.js';
 import { agentLogger } from './logger.js';
+import { getFFmpegPath, convertToOgg } from './ffmpeg.js';
 import type { AnyaConfig } from '../config/defaults.js';
-import { execFileSync } from 'node:child_process';
 
 // ── Defaults ─────────────────────────────────────────────────────────────────
 
@@ -44,44 +43,7 @@ export interface TtsResult {
   durationSec?: number;
 }
 
-/** Cached ffmpeg path (null = not found, undefined = not yet checked) */
-let _ffmpegPath: string | null | undefined;
 
-function getFFmpegPath(): string | null {
-  if (_ffmpegPath === undefined) {
-    _ffmpegPath = which.sync('ffmpeg', { nothrow: true });
-  }
-  return _ffmpegPath;
-}
-
-/**
- * Convert webm to OGG Opus (Telegram sendVoice requires .ogg container).
- */
-function convertToOgg(inputPath: string): string | null {
-  const ffmpeg = getFFmpegPath();
-  if (!ffmpeg) return null;
-  const oggPath = inputPath.replace(/\.\w+$/, '.ogg');
-  if (inputPath === oggPath) return inputPath;
-  try {
-    execFileSync(ffmpeg, [
-      '-i', inputPath,
-      '-acodec', 'libopus',
-      '-ac', '1',
-      '-b:a', '64k',
-      '-vbr', 'off',
-      oggPath,
-      '-y',
-    ], { stdio: 'pipe', timeout: 30000 });
-
-    if (fs.existsSync(oggPath) && fs.statSync(oggPath).size > 0) {
-      agentLogger.info({ msg: 'ffmpeg_converted', from: inputPath, to: oggPath, bytes: fs.statSync(oggPath).size });
-      return oggPath;
-    }
-  } catch (err) {
-    agentLogger.warn({ msg: 'ffmpeg_convert_failed', error: (err as Error).message });
-  }
-  return null;
-}
 
 /**
  * Generate speech audio from text using Edge TTS.

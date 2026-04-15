@@ -18,9 +18,10 @@ import { configVision } from './vision.js';
 import { configTTS } from './tts.js';
 import { configTelegram } from './telegram.js';
 import { configImageGen } from './imageGen.js';
+import { configAzure } from './azure.js';
 import { getActiveModel, hasVisionKey, maskKey } from './helpers.js';
 
-export { configModel, configSTT, configVision, configTTS, configTelegram, configImageGen };
+export { configModel, configSTT, configVision, configTTS, configTelegram, configImageGen, configAzure };
 
 export async function runConfigMenu(): Promise<void> {
   if (!isInitialized()) {
@@ -28,70 +29,86 @@ export async function runConfigMenu(): Promise<void> {
     return;
   }
 
-  const config = loadConfig();
+  try {
+    const config = loadConfig();
 
-  const section = await select({
-    message: 'Configure',
-    choices: [
-      {
-        name: `Model    ${chalk.dim(`(${config.provider.active}: ${getActiveModel(config)})`)}`,
-        value: 'model',
-      },
-      {
-        name: `STT      ${chalk.dim(`(Groq Whisper${config.stt?.groq_api_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
-        value: 'stt',
-      },
-      {
-        name: `Vision   ${chalk.dim(`(Gemini${hasVisionKey(config) ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
-        value: 'vision',
-      },
-      {
-        name: `TTS      ${chalk.dim(`(${config.tts?.voice || 'en-US-AriaNeural'})`)}`,
-        value: 'tts',
-      },
-      {
-        name: `ImageGen ${chalk.dim(`(${config.image_gen?.backend || 'vertex'}${config.vertex?.project ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
-        value: 'image_gen',
-      },
-      {
-        name: `Telegram ${chalk.dim(`(${config.telegram.enabled ? chalk.green('on') : 'off'})`)}`,
-        value: 'telegram',
-      },
-      {
-        name: chalk.dim('Show config'),
-        value: 'show',
-      },
-      {
-        name: chalk.dim('Cancel'),
-        value: 'cancel',
-      },
-    ],
-  });
+    const section = await select({
+      message: 'Configure',
+      choices: [
+        {
+          name: `Model    ${chalk.dim(`(${config.provider.active}: ${getActiveModel(config)})`)}`,
+          value: 'model',
+        },
+        {
+          name: `STT      ${chalk.dim(`(Groq Whisper${config.stt?.groq_api_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+          value: 'stt',
+        },
+        {
+          name: `Vision   ${chalk.dim(`(Gemini${hasVisionKey(config) ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+          value: 'vision',
+        },
+        {
+          name: `TTS      ${chalk.dim(`(${config.tts?.voice || 'en-US-AriaNeural'})`)}`,
+          value: 'tts',
+        },
+        {
+          name: `ImageGen ${chalk.dim(`(${config.image_gen?.backend || 'vertex'}${config.vertex?.project ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+          value: 'image_gen',
+        },
+        {
+          name: `Azure    ${chalk.dim(`(Speech${config.azure?.speech_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+          value: 'azure',
+        },
+        {
+          name: `Telegram ${chalk.dim(`(${config.telegram.enabled ? chalk.green('on') : 'off'})`)}`,
+          value: 'telegram',
+        },
+        {
+          name: chalk.dim('Show config'),
+          value: 'show',
+        },
+        {
+          name: chalk.dim('Cancel'),
+          value: 'cancel',
+        },
+      ],
+    });
 
-  switch (section) {
-    case 'model':
-      await configModel(config);
-      break;
-    case 'stt':
-      await configSTT(config);
-      break;
-    case 'vision':
-      await configVision(config);
-      break;
-    case 'tts':
-      await configTTS(config);
-      break;
-    case 'image_gen':
-      await configImageGen(config);
-      break;
-    case 'telegram':
-      await configTelegram(config);
-      break;
-    case 'show':
-      runConfigShow();
-      break;
-    case 'cancel':
+    switch (section) {
+      case 'model':
+        await configModel(config);
+        break;
+      case 'stt':
+        await configSTT(config);
+        break;
+      case 'vision':
+        await configVision(config);
+        break;
+      case 'tts':
+        await configTTS(config);
+        break;
+      case 'image_gen':
+        await configImageGen(config);
+        break;
+      case 'azure':
+        await configAzure(config);
+        break;
+      case 'telegram':
+        await configTelegram(config);
+        break;
+      case 'show':
+        runConfigShow();
+        break;
+      case 'cancel':
+        return;
+    }
+  } catch (err) {
+    // Gracefully handle Ctrl+C (SIGINT) — just exit silently
+    if ((err as Error)?.name === 'ExitPromptError') {
+      console.log(chalk.dim('\n  Cancelled.'));
       return;
+    }
+    throw err;
   }
 }
 
@@ -117,6 +134,9 @@ export function runConfigShow(): void {
   }
   if (display.stt?.groq_api_key) {
     display.stt.groq_api_key = maskKey(display.stt.groq_api_key);
+  }
+  if (display.azure?.speech_key) {
+    display.azure.speech_key = maskKey(display.azure.speech_key);
   }
 
   console.log(chalk.bold.cyan('\nAnya Configuration'));

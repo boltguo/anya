@@ -164,10 +164,11 @@ export class TelegramAdapter {
       }
 
       // Step 3: Wrap transcript and feed into the agent
-      const input = `[语音消息: "${sttResult.transcript}"]`;
-      agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, provider: sttResult.provider, text: sttResult.transcript.substring(0, 100) });
+      // Include audio_path so tools (e.g. pron_assess) can reference the file
+      const input = `[语音消息 | audio_path: ${audioPath}]\n"${sttResult.transcript}"`;
+      agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, text: sttResult.transcript.substring(0, 100) });
 
-      await this.handleIncoming(ctx, input, () => fs.unlink(audioPath, () => {}));
+      await this.handleIncoming(ctx, input);
     });
 
     // ── Photo message handler (download → Gemini Vision → agent) ──

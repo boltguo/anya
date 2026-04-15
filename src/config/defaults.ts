@@ -117,6 +117,14 @@ export interface AnyaConfig {
     rate: string;
   };
 
+  /** Azure Speech Service settings (for pronunciation assessment). */
+  azure: {
+    /** Azure Speech resource key. */
+    speech_key: string;
+    /** Azure Speech resource region (e.g., 'eastasia'). */
+    speech_region: string;
+  };
+
   cron: {
     enabled: boolean;
   };
@@ -195,6 +203,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
       'tg',
       'tts',
       'image_gen',
+      'pron_assess',
     ],
     shell: {
       require_approval: true,
@@ -235,6 +244,11 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   tts: {
     voice: 'en-US-AriaNeural',
     rate: '+0%',
+  },
+
+  azure: {
+    speech_key: '',
+    speech_region: 'eastasia',
   },
 
   cron: {

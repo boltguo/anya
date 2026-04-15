@@ -80,6 +80,11 @@ const TtsSchema = z.object({
   rate: z.string().optional(),
 }).optional();
 
+const AzureSchema = z.object({
+  speech_key: z.string().optional(),
+  speech_region: z.string().optional(),
+}).optional();
+
 export const PartialAnyaConfigSchema = z.object({
   $schema: z.string().optional(),
   version: z.string().optional(),
@@ -96,6 +101,7 @@ export const PartialAnyaConfigSchema = z.object({
   stt: SttSchema,
   vision: VisionSchema,
   tts: TtsSchema,
+  azure: AzureSchema,
   cron: z.object({ enabled: z.boolean().optional() }).optional(),
   ui: z.object({
     show_tool_calls: z.boolean().optional(),
