@@ -1,108 +1,281 @@
 ---
 name: writing
-description: "IELTS writing practice: prompt → write → 4D scoring → error fix"
-version: "2.0.0"
+description: 'IELTS writing: brainstorming + TEEL scaffold + forced rewrite loop + Task 1/2'
+version: '3.0.0'
 metadatahermes:
-  tags: [ielts, writing, task1, task2]
+  tags: [ielts, writing, task1, task2, teel, rewrite]
   category: anya
 ---
 
-# Writing Coach
+# Writing Coach — Scaffolded Rewrite System
 
 ## When to Use
 
 - Learner says "写作", "writing", "练写作", "学写作", "作文", "写essay"
-- Callback: `ck:writing`
+- Callback: `ck:writing` or any `ck:writing:*` mode callback
 - Reply Keyboard tap: "✍️ 写作"
 
 ## Data
 
 Session saved to `~/.anya/data/ielts/learn/{timestamp}_writing.json` after completion.
-Synced to `learner.db` via `tracker_db.py`.
+Synced to `learner.db` via `tracker_db.js`.
+
+## Mode Matrix
+
+| Phase          | Mode                       | When                             | Callback           |
+| -------------- | -------------------------- | -------------------------------- | ------------------ |
+| **Cold start** | Brainstorming              | band < 5.5, brain blank          | `ck:writing:brain` |
+| **Paragraph**  | TEEL Drill                 | Logic scattered, can't structure | `ck:writing:teel`  |
+| **Full task**  | Full Task + Forced Rewrite | Regular training                 | `ck:writing`       |
+| **Task 1**     | Chart Description          | Task 1 practice                  | (via S2 decision)  |
+
+---
 
 ## Workflow
 
-### [ ] Step 1 — Assess & Plan
+### [ ] S1 — Context Load
 
 1. Read MEMORY.md → current writing band + weak dimensions
 2. Read USER.md → interests (for topic personalization)
-3. Decide task type:
-   - **Task 1** (150+ words): chart, graph, table, map, process
-   - **Task 2** (250+ words): opinion, discussion, problem-solution, advantages-disadvantages
-4. Target difficulty = current band + 0.5
+3. Query `tracker_db.js list-samples --skill-type writing --limit 5`
+4. Query `tracker_db.js list-errors --skill writing --limit 10`
 
-### [ ] Step 2 — Vocabulary Injection
+### [ ] S2 — Decision Engine
+
+Decide task type:
+
+- **Task 1** (150+ words): chart, graph, table, map, process
+- **Task 2** (250+ words): opinion, discussion, problem-solution, advantages-disadvantages
+
+Target difficulty = current band + 0.5.
+
+Check if Brainstorming is needed:
+
+- band < 5.5 → **force Brainstorming phase** before writing
+- band ≥ 5.5 → direct to prompt
+
+Check if TEEL Drill is appropriate:
+
+- `paragraph_structure_weak` or `topic_sentence_weak` in recent errors → suggest TEEL Drill
+- User callback `ck:writing:teel` → TEEL Drill mode
+
+Vocabulary injection:
 
 ```bash
 node vocab_db.js inject --topic <topic> --limit 3
+node vocab_db.js inject --transfer-level 2 --limit 2
 ```
 
-Get 3 due words to weave into the prompt as optional challenge words.
+---
 
-### [ ] Step 3 — Send Prompt
+## Phase: Brainstorming (band < 5.5, mandatory)
 
-Use `force-reply` to anchor the learner's response:
+> Don't let the learner write before they think.
 
-```bash
-[native] adapter.force-reply \
-  --text "✍️ **Writing Task 2**\n\n<prompt text>\n\n⏱ 目标：250+ 词\n💡 挑战词汇：ubiquitous, resilient, paradigm"
+### [ ] S3a — Brainstorming
+
+```
+tg(type:"force_reply", text:"先不写正文！\n\n用中文或简单英文列出 2 个支持论点：\n题目: <topic>\n\n比如：\n1. 原因/论点1\n2. 原因/论点2")
 ```
 
-**No additional text reply in this turn.** The force-reply IS the output.
+### [ ] S3b — Translate to IELTS Vocabulary
 
-### [ ] Step 4 — Wait for Response
+Anya translates the learner's arguments into IELTS-level vocabulary and collocations:
 
-Learner writes their essay and sends it as a reply. Accept the text.
+```
+你的论点很好！用雅思高分表达：
 
-### [ ] Step 5 — Score (4D IELTS)
+1. "环境污染" → environmental degradation / ecological damage
+   搭配: pose a significant threat to...
+2. "省钱" → cost-effective / financially viable
+   搭配: in the long run, this approach proves to be...
 
-Score the essay on four dimensions (0.5 increments):
+现在带着这些表达开始写 👇
+```
 
-| Criterion | Score |
-|---|---|
-| Task Response | X.0 |
-| Coherence & Cohesion | X.0 |
-| Lexical Resource | X.0 |
-| Grammar Range & Accuracy | X.0 |
-| **Overall** | **X.0** |
+Then proceed to S4.
 
-### [ ] Step 6 — Error Correction
+---
 
-Top 3 errors, each with:
-- ❌ Original phrase
-- ✅ Corrected version
-- 💬 Brief explanation
+## Phase: TEEL Drill (paragraph-level scaffold)
 
-### [ ] Step 7 — Band-Up Example
+> For learners with `paragraph_structure_weak` or `topic_sentence_weak` errors.
 
-Pick 1 sentence, show current vs +1.0 band version.
+### [ ] S3-TEEL — Step-by-Step Paragraph
 
-### [ ] Step 8 — Record to DB
+Present the TEEL structure with step-by-step force_reply:
+
+**T — Topic Sentence:**
+
+```
+tg(type:"force_reply", text:"📝 T (主题句): 用一句话表达你这段的核心观点\n\n题目: <topic>")
+```
+
+→ Evaluate: Is it a clear, arguable statement? Feedback immediately.
+
+**E — Explain:**
+
+```
+tg(type:"force_reply", text:"📝 E (解释): 为什么你这么认为？用1-2句解释")
+```
+
+→ Evaluate: Does it logically support the topic sentence?
+
+**E — Example:**
+
+```
+tg(type:"force_reply", text:"📝 E (举例): 给一个具体的例子来支持你的观点")
+```
+
+→ Evaluate: Is the example specific (not vague "many people think so")?
+
+**L — Link:**
+
+```
+tg(type:"force_reply", text:"📝 L (总结): 用一句话总结这段，呼应主题句")
+```
+
+→ Evaluate: Does it close the paragraph logically?
+
+### [ ] S5-TEEL — Assemble + Score
+
+Combine all 4 parts into a complete paragraph. Score with 4D criteria.
+
+Then proceed to S6 (Focused Feedback) → S8 (Micro Drill) → S9 (Forced Rewrite).
+
+---
+
+## Phase: Full Task (regular training)
+
+### [ ] S3 — Send Prompt
+
+If Task 2:
+
+```
+tg(type:"force_reply", text:"✍️ **Writing Task 2**\n\n<prompt text>\n\n⏱ 目标：250+ 词\n💡 挑战词汇：<injected words>")
+```
+
+If Task 1 — first select chart type:
+
+```
+[KEYBOARD:
+📊 柱状图=ck:writing:bar | 📈 折线图=ck:writing:line | 🥧 饼图=ck:writing:pie
+🗺️ 地图=ck:writing:map | 🔄 流程图=ck:writing:process
+]
+```
+
+Then generate chart description (or `tg(type:"photo")` if image available):
+
+```
+tg(type:"force_reply", text:"✍️ **Writing Task 1**\n\n<chart description>\n\n⏱ 目标：150+ 词\n💡 图表高频词：fluctuate, peak, plateau, account for, respectively")
+```
+
+### [ ] S4 — Wait for Response
+
+Learner writes and submits.
+
+### [ ] S5 — Wait for Response (continued)
+
+Accept the text.
+
+---
+
+## Shared Steps (All Modes)
+
+### [ ] S6 — 4D Scoring + Diff Highlight
+
+| Criterion                | Score   |
+| ------------------------ | ------- |
+| Task Response            | X.0     |
+| Coherence & Cohesion     | X.0     |
+| Lexical Resource         | X.0     |
+| Grammar Range & Accuracy | X.0     |
+| **Overall**              | **X.0** |
+
+Highlight specific issues with diff markers:
+
+```
+❌ "This is ~bad~ for environment"
+✅ "This is **detrimental** to **the** environment"
+```
+
+### [ ] S7 — Focused Feedback (1-2 core bottlenecks only)
+
+Do NOT list 10 errors. Pick the **1-2 most impactful** issues:
+
+- Example: "缺连接词" + "bad 太低级"
+- Show Band-Up: current sentence → +1.0 band version
+
+### [ ] S8 — Micro Drill
+
+Target the #1 bottleneck with a mini-exercise:
+
+```
+tg(type:"force_reply", text:"用 detrimental 替换 bad，造一个新句子")
+```
+
+Verify the micro drill response. If wrong, give one correction and move on.
+
+### [ ] S9 — Forced Rewrite (**不重写完不准下课**)
+
+```
+tg(type:"force_reply", text:"带着新的连接词和高级词汇，把整个段落重写一遍发给我")
+```
+
+**AI Compare**: Initial draft vs rewrite.
+
+If improved (≥ +0.5 band on any dimension):
+
+```
+tg(type:"react", emoji:"🎉")
+```
+
+→ Celebrate + proceed to S10.
+
+If NOT improved:
+
+```
+"再试一次 — 试试在开头加 Consequently，把 good 换成 beneficial"
+```
+
+→ One more rewrite attempt. Max 2 rewrites, then move on with encouragement.
+
+### [ ] S10 — Record + Difficulty Feedback
 
 ```bash
 node tracker_db.js add-sample \
   --skill-type writing \
-  --prompt "..." --raw-content "..." \
-  --band-task X.X --band-coherence X.X --band-lexical X.X --band-grammar X.X --band-overall X.X
+  --mode <full_task|teel_drill|brainstorming> \
+  --question-type <task2_opinion|task1_bar|...> \
+  --redo-count <N> \
+  --support-level <high|medium|low|none> \
+  --response-length-words <N> \
+  --duration-sec <N>
 
 node tracker_db.js add-error \
   --sample-id <id> --recurrence-key <key> --category <cat> \
-  --severity <low|medium|high> --original-phrase "..." --correction "..."
+  --severity <sev> --original-phrase "..." --correction "..."
 ```
 
-### [ ] Step 9 — Next Step
-
-```text
+```
 [KEYBOARD:
+😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
 🔁 再来一题=ck:writing | 🏠 返回菜单=ck:menu
 ]
 ```
 
+---
+
 ## Rules
 
-1. **Never rewrite the entire essay.** Only Top 3 fixes + 1 Band-Up example.
+1. **Never rewrite the entire essay.** Only Top 2 fixes + 1 Band-Up example + Micro Drill.
 2. **Never give a model answer before the learner writes.**
-3. **Task 2 topics**: Avoid technology/software (learner's comfort zone). Push environment, education, health.
-4. **Task 1 topics**: Vary chart types. Don't repeat consecutively.
-5. **Force-reply for input.** Links the answer to the prompt.
-6. **No text reply alongside force-reply.** Avoids race conditions.
+3. **Brainstorming is mandatory for band < 5.5.** No direct writing allowed.
+4. **Forced Rewrite is mandatory.** 不重写完不准下课. Max 2 rewrite attempts.
+5. **Task 2 topics**: Push beyond comfort zone. Vary: environment, education, health, society.
+6. **Task 1 topics**: Vary chart types. Don't repeat consecutively.
+7. **Force-reply for all input.** Links the answer to the prompt.
+8. **No text reply alongside force-reply.** Avoids race conditions.
+9. **Micro Drill + Forced Redo are mandatory.** No session ends without S8+S9.
+10. **Difficulty feedback keyboard at every session end.**
+11. **Challenge words**: Inject recently learned L2+ vocabulary.

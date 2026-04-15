@@ -1,7 +1,7 @@
 ---
 name: start
-description: "First-run wizard: profile setup + IELTS baseline assessment"
-version: "3.2.0"
+description: 'First-run wizard: profile setup + IELTS baseline assessment'
+version: '3.2.0'
 metadatahermes:
   tags: [ielts, onboarding, init, telegram]
   category: anya
@@ -44,6 +44,7 @@ Send warm welcome (normal text reply — casual, friendly):
 > （直接回复就好，留空的话就叫我 Anya）
 
 Send **ForceReply**:
+
 ```bash
 [native] adapter.force-reply --text "你想叫我什么？ 👇"
 ```
@@ -62,6 +63,7 @@ Send **Inline Keyboard** with 6 options across two rows:
 ```
 
 Map taps:
+
 - 🎯 严格教练 → `Tone: strict` — direct, no fluff, pushes hard on errors
 - 😊 轻松伙伴 → `Tone: casual` — warm, encouraging, celebrates small wins
 - ⚖️ 灵活混合 → `Tone: mix of casual and strict` — playful + precise, default Anya mode
@@ -76,11 +78,13 @@ Free-text is also accepted and should be interpreted naturally.
 Use `skill_manage(action="patch")` to update only the `## Character Soul` section in SOUL.md. Based on the chosen tone, generate 3-5 bullets under a `### In Practice` subsection that describes how this specific style shapes responses:
 
 Example for `strict`:
+
 - I do not say "good try". I say "you got a 5.0 on Task Achievement and here's why."
 - Errors are logged. All of them. Recurring ones get drilled until they're gone.
 - No motivational speeches. If you improve, the numbers will show it.
 
 Example for `casual`:
+
 - Let's make grammar feel less terrible. It's just patterns — we'll figure it out together.
 - I'll notice when you're tired and ease up. This is your learning, not a performance.
 - Small wins count. A correct sentence after five wrong ones is worth celebrating.
@@ -105,6 +109,7 @@ Write `Identity.Name`. Use this name from now on in the conversation.
 ### Step 2.2 — Native Language
 
 Send **Inline Keyboard**:
+
 ```
 你的母语是？（也可以直接告诉我）
 
@@ -119,6 +124,7 @@ Write `Identity.Native language`.
 > 直接告诉我，或者点一个：
 
 Send **Inline Keyboard**:
+
 ```
 [🎓 学生]  [💻 软件工程师]  [📐 设计师]  [📊 产品经理]
 [🏥 医疗]  [🏫 教师]  [💼 金融]  [🏗️ 其他]
@@ -133,6 +139,7 @@ Write `Identity.Profession`.
 > 可以点几个，也可以直接说：
 
 Send **Inline Keyboard**:
+
 ```
 [🎮 游戏]  [🤖 AI/科技]  [💻 编程]  [🎬 影视]
 [📚 读书]  [🏃 运动]  [🎵 音乐]  [✈️ 旅行]  [🍳 美食]
@@ -146,6 +153,7 @@ Write `Identity.Hobbies` and `Content Profile.engage`.
 > 你的雅思目标分是多少？
 
 Send **Inline Keyboard**:
+
 ```
 [5.5]  [6.0]  [6.5]  [7.0]  [7.5]  [8.0+]
 ```
@@ -158,6 +166,7 @@ Write `Goals.IELTS target`.
 > 考这个分是准备做什么用？
 
 Send **Inline Keyboard**:
+
 ```
 [🌍 移民]  [📚 留学]  [💼 职业发展]  [🏫 国内升学]  [📋 备考/提升]
 ```
@@ -170,11 +179,13 @@ Write `Goals.Use case`.
 > 大概打算什么时候考？（或者还没想好也没关系）
 
 Send **Inline Keyboard**:
+
 ```
 [⚡ 3个月内]  [📅 半年内]  [🗓️ 一年内]  [🌊 随便学学]
 ```
 
 Map:
+
 - 🌊 随便学学 → `Timeline: no target date, learning at own pace`
 
 Note: learner can type a specific date or month.
@@ -185,6 +196,7 @@ Write `Goals.Timeline`.
 > 你平时学东西比较喜欢怎么学？
 
 Send **Inline Keyboard**:
+
 ```
 [⚡ 碎片时间刷题]  [📅 每天固定学一段]  [🌊 随缘，有空就学]
 ```
@@ -197,6 +209,7 @@ Write `Preferences.Study pattern`.
 > 戳戳符合的，或者直接说：
 
 Send **Inline Keyboard**:
+
 ```
 [🎮 游戏英文]  [💻 技术文档]  [📺 YouTube]  [📰 英文新闻]
 [🎙️ 播客]  [💬 工作英语]  [❌ 基本没有]
@@ -214,6 +227,7 @@ Accumulate taps + any free text. Write `Content Profile.daily_english`.
 ```
 
 Extract:
+
 - `Background.english_strength`
 - `Background.english_weakness`
 
@@ -224,6 +238,7 @@ Extract:
 ### Write USER.md
 
 Use `memory(target="user")`:
+
 - Set `Status.initialized: true`
 - Write all collected values
 - Uncollected optional fields → `(not set)` honestly
@@ -231,6 +246,7 @@ Use `memory(target="user")`:
 ### Update SOUL.md Agent Identity
 
 Use `skill_manage(action="patch")` on `SOUL.md` to update:
+
 - `name:` → learner's chosen agent name
 - `Tone:` → chosen style
 
@@ -238,77 +254,144 @@ Only update these two fields — do not touch any other sections.
 
 ---
 
-## Phase 4 — Baseline Assessment
+## Phase 4 — Baseline Assessment (Two-Phase Adaptive Placement)
 
 No choice. Just run it directly after the profile is set.
 
 Send a casual transition (normal text reply):
 
-> 好了，档案搞完了 ✅ 现在来做个小测，3 分钟左右～
+> 好了，档案搞完了 ✅ 现在来做个小测，5-8 分钟～
 > 帮我摸清楚你的起点，这样后面出的题才准。
 
-### Task 1 — Writing Sample (universal, any level)
+### Phase A: Quick Probe (5-8 minutes)
 
-ForceReply:
+Five independent skill tests, each producing a separate band estimate:
+
+#### Step 1 — Speaking Quick Test (90s)
+
+3 Part 1 simple questions via force_reply:
+
 ```bash
-[native] adapter.force-reply \
-  --text "用英文写 3 句话，随便写什么都行 — 介绍自己、说说你昨天做了什么、或者聊聊你感兴趣的事 👇"
+[native] adapter.force-reply --text "Quick speaking test! Answer in English:\n1. What do you do for work or study?\n2. What do you enjoy doing in your free time?\n3. Describe your hometown in one sentence."
 ```
 
-Evaluate the reply for:
-- **Vocabulary** → CEFR estimation (A1–C1)
-- **Grammar** → error types (tense, agreement, clause structure)
-- **Coherence** → sentence connection and logical flow
-- **Overall fluency** → rough IELTS band
+Optional: If learner sends voice → `pron_assess(audio_path, reference_text)` for pronunciation baseline.
 
-### Task 2 — Grammar Quiz Poll (2 questions, graded difficulty)
+Evaluate: vocabulary range, grammar accuracy, answer completeness.
 
-Send two Telegram quiz polls. Mix difficulty:
-- Q1: moderate (e.g. correct verb tense)
-- Q2: harder (e.g. complex clause / conditional)
+#### Step 2 — Listening Quick Test (90s)
 
-### Task 3 — Vocabulary Quiz Poll (2 questions)
+**2 sentence dictations:**
 
-Send two Telegram quiz polls, one B1-level and one B2-level word meaning or usage.
+```
+tts(text:"<sentence 1, 8-12 words>")
+```
+
+```
+tg(type:"force_reply", text:"写出你听到的句子")
+```
+
+Repeat for sentence 2.
+
+**1 short clip quiz:**
+
+```
+tts(text:"<30s short audio>")
+```
+
+```
+tg(type:"quiz", text:"What was the main point?", options:[...], correct:N)
+```
+
+#### Step 3 — Reading Quick Test (2 min)
+
+150-word passage + 3 mixed questions (T/F/NG + fill-in + MC):
+
+```
+tg(type:"force_reply", text:"<passage + questions>\n\n回复你的答案")
+```
+
+#### Step 4 — Writing Quick Test (2 min)
+
+```bash
+[native] adapter.force-reply --text "用英文写一段话 (60-90 词):\n\n<topic based on USER.md interests>\n\n比如介绍你最喜欢的 <hobby>，或者说说你对 <topic> 的看法"
+```
+
+Evaluate with 4D scoring: Task Response, Coherence, Lexical, Grammar.
+
+#### Step 5 — Grammar Adaptive Quiz (2 min)
+
+6-10 quiz polls with dynamic difficulty:
+
+- Start at B1 level
+- Correct → next question harder (B2/C1)
+- Wrong → next question easier (A2/B1)
+- Mix: verb tense, articles, clause structure, conditionals, modals
+
+```
+tg(type:"quiz", text:"Choose the correct option:\n'The data ___ that...'", options:["shows", "show", "showing", "showed"], correct:1)
+```
 
 ### Scoring & MEMORY Write
 
-After all 3 tasks, derive rough estimates:
+After all 5 steps, derive **independent band estimates per skill**:
 
-| Signal | Band |
-|---|---|
-| All Chinese / fragmented | 3.0–3.5 |
+| Signal                            | Band    |
+| --------------------------------- | ------- |
+| All Chinese / fragmented          | 3.0–3.5 |
 | Simple sentences, frequent errors | 4.0–4.5 |
 | Expresses ideas, moderate control | 5.0–5.5 |
-| Clear expression, minor errors | 6.0–6.5 |
-| Accurate and flexible | 7.0+ |
+| Clear expression, minor errors    | 6.0–6.5 |
+| Accurate and flexible             | 7.0+    |
 
 Write MEMORY using `memory(target="memory")`:
+
 - `Status.initialized: true`
 - `Status.last_active`: today's date
 - `Status.total_sessions: 1`
-- `IELTS Bands.Overall`: rough band estimate
-- `IELTS Bands.Writing`: from Task 1 (most data available)
-- `IELTS Bands.Listening / Reading / Speaking`: same as Overall (rough, will refine later)
+- `IELTS Bands.Speaking`: from Step 1
+- `IELTS Bands.Listening`: from Step 2
+- `IELTS Bands.Reading`: from Step 3
+- `IELTS Bands.Writing`: from Step 4 (most data)
+- `IELTS Bands.Overall`: average of 4 skills
 - `IELTS Bands.updated`: today's date
-- `Vocabulary.cefr`: from Task 1 + Task 3
-- `Grammar Profile.weak`: error types found in Task 1 + Task 2
-- `Focus.primary`: lowest-scoring observed dimension
+- `Vocabulary.cefr`: from Step 4 + Step 5
+- `Grammar Profile.weak`: error types found in Steps 4 + 5
+- `Speaking Profile.pronunciation_weak`: from Step 1 pron_assess (if voice provided)
+- `Focus.primary`: skill with lowest band
 - `Focus.secondary`: (not set)
 - All other fields: `(not set)`
 
 ### Result Message
 
-Send a short summary in Anya's voice. Example tone:
+Output format with **band ranges + confidence**:
 
-> 好，我大概知道你现在的水平了～
-> 📊 初始评估：大概 Band 5.0
-> 词汇：B1 左右 | 语法：时态有点混乱
-> 主要先攻：Writing Task 2 结构
->
-> ⚠️ 这只是初步估计，用多了会越来越准 😄
+```
+📊 初始评估（置信度: 中）
+
+| 技能 | 估计区间 | 置信度 |
+|---|---|---|
+| 🗣️ Speaking | 4.5-5.0 | {{conf}} |
+| 🎧 Listening | 5.0-5.5 | {{conf}} |
+| 📖 Reading | 5.5-6.0 | {{conf}} |
+| ✍️ Writing | 5.0-5.5 | {{conf}} |
+
+⚠️ 前 3-5 次正式训练后会校准到更精确的画像
+```
 
 Set character-appropriate emoji and tone based on SOUL.md.
+
+### Phase B: Calibration (first 3-5 formal sessions)
+
+- Each skill needs ≥2 formal sessions to narrow band to ±0.5
+- Confidence upgrades from "低" → "中" → "高"
+- Every training session during calibration ends with difficulty feedback:
+
+```
+[KEYBOARD:
+😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
+]
+```
 
 ---
 
@@ -316,10 +399,14 @@ Set character-appropriate emoji and tone based on SOUL.md.
 
 Send one message via native adapter with inline keyboard:
 
-```bash
-[native] adapter.inline-keyboard \
-  --text "设置完成 ✅ 从哪里开始？" \
-  --buttons '[["✍️ 写作","🗣️ 口语"],["📖 阅读","🎧 听力"],["📚 单词","📋 我的水平"]]'
+```
+设置完成 ✅ 从哪里开始？
+
+[KEYBOARD:
+✍️ 写作=ck:writing | 🗣️ 口语=ck:speaking
+📖 阅读=ck:reading | 🎧 听力=ck:listening
+📚 单词=ck:flashcard | 📋 我的水平=ck:assessment
+]
 ```
 
 ---
@@ -347,4 +434,3 @@ If a session reveals any `(not set)` slot relevant to the current task, ask natu
 5. Assessment is mandatory — run it after Phase 2, no skipping.
 6. If callback fails → Reply Keyboard fallback immediately.
 7. Never end mid-init without writing what has been captured so far.
-

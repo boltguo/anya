@@ -1,7 +1,7 @@
 ---
 name: data
-description: "CRUD layer for learner.db (samples/errors/plans) and vocab.db (words/SRS)"
-version: "1.0.0"
+description: 'CRUD layer for learner.db (samples/errors/plans) and vocab.db (words/SRS)'
+version: '2.0.0'
 metadatahermes:
   tags: [ielts, data, sqlite, tracker, vocabulary, srs]
   category: anya
@@ -17,19 +17,19 @@ Unified CRUD layer for all persistent learning data. Contains two scripts operat
 - **Word lookup** — learner sends a single word, needs add/query/review
 - **Assessment** queries samples, errors, band history
 - **Planner** reads/writes weekly plans
-- **Flashcard** needs due words, quiz recording
-- **Training flow** step 2 needs injection words, step 9/10 needs recording
+- **Flashcard** needs due words, quiz recording, transfer level tracking
+- **Training flow** S2 needs injection words, S10 needs recording + difficulty feedback
 
 ## Scripts
 
-### `tracker_db.py` — Practice Samples, Errors, Plans
+### `tracker_db.js` — Practice Samples, Errors, Plans
 
-**Script path**: `./hermes/skills/anya/data/scripts/tracker_db.py`
-**Database**: `~/.anya/data/store/learner.db`
+**Script path**: `./data/scripts/tracker_db.js`
+**Database**: `~/.anya/data/ielts/learner.db`
 
-#### Recording a Practice Sample
+#### Recording a Practice Sample (Extended)
 
-After a training session completes (TF9):
+After a training session completes (S10):
 
 ```bash
 node tracker_db.js add-sample \
@@ -40,14 +40,35 @@ node tracker_db.js add-sample \
   --band-overall 5.5 \
   --feedback "难理解" \
   --translation "图表展示了..." \
-  --difficulty-switches 1
+  --mode full_task \
+  --question-type task2_opinion \
+  --duration-sec 1200 \
+  --redo-count 1 \
+  --support-level medium \
+  --difficulty-feedback just_right \
+  --response-length-words 267
 ```
 
 Returns `{ "ok": true, "sample_id": 42 }`.
 
+**Extended `samples` table fields:**
+
+| Field                   | Type    | Description                  | Values                                                                                                                                                                                                                                         |
+| ----------------------- | ------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`                  | TEXT    | Training mode                | `shadowing` / `dictation` / `guided_qa` / `examiner_sim` / `cue_card_build` / `roleplay` / `retell` / `teel_drill` / `full_task` / `sound_drill` / `short_clip` / `question_type` / `lecture` / `flash_skim` / `sentence_anatomy` / `standard` |
+| `question_type`         | TEXT    | Question/task type           | `TFNG` / `form_completion` / `cue_card` / `task1_process` / `task1_bar` / `task1_line` / `task1_pie` / `task2_opinion` / `task2_discussion` / `multiple_choice` / `matching` / `short_answer` / `sentence_completion` / `map_labeling`         |
+| `duration_sec`          | INTEGER | Actual time spent (seconds)  | —                                                                                                                                                                                                                                              |
+| `redo_count`            | INTEGER | Number of redo attempts      | Default 0                                                                                                                                                                                                                                      |
+| `support_level`         | TEXT    | Scaffolding level provided   | `high` / `medium` / `low` / `none`                                                                                                                                                                                                             |
+| `difficulty_feedback`   | TEXT    | User's difficulty perception | `too_hard` / `just_right` / `too_easy`                                                                                                                                                                                                         |
+| `audio_duration_sec`    | INTEGER | Listening audio length       | —                                                                                                                                                                                                                                              |
+| `response_length_words` | INTEGER | User's response word count   | —                                                                                                                                                                                                                                              |
+| `accent`                | TEXT    | Audio accent type            | `standard` / `british` / `australian` / `indian` / `mixed`                                                                                                                                                                                     |
+| `speaker_count`         | INTEGER | Number of speakers in audio  | —                                                                                                                                                                                                                                              |
+
 #### Recording Errors
 
-For each error, use a `recurrence_key` from the taxonomy:
+For each error, use a `recurrence_key` from the taxonomy (`assessment/references/error_taxonomy.md`):
 
 ```bash
 node tracker_db.js add-error \
@@ -73,7 +94,12 @@ node tracker_db.js add-words-batch \
 
 ```bash
 node tracker_db.js list-samples --skill-type writing --limit 10
+node tracker_db.js list-samples --since 7d --limit 50
+node tracker_db.js list-samples --mode examiner_sim --limit 5
 node tracker_db.js get-sample 42
+node tracker_db.js list-errors --limit 10
+node tracker_db.js list-errors --category grammar --limit 10
+node tracker_db.js list-errors --skill speaking --limit 10
 node tracker_db.js error-stats --limit 10
 node tracker_db.js band-history --skill-type writing --limit 20
 node tracker_db.js get-plan
@@ -84,19 +110,23 @@ node tracker_db.js stats
 
 ```bash
 node tracker_db.js add-plan \
-  --week-label "2026-W15" \
-  --goals '["Practice Task 2 essays", "Focus on coherence"]' \
-  --daily-breakdown '{"Mon": "writing", "Tue": "reading"}'
+  --week-label "2026-W16" \
+  --primary-focus "writing" \
+  --secondary-focus "grammar:sv_agreement" \
+  --target-skill "Task 2 opinion essays" \
+  --suggested-exercises '["Write opinion essay on education", "Rewrite 2 previous essays", "Grammar drill: subject-verb agreement"]' \
+  --carry-over-errors "sv_agreement,cohesion_missing" \
+  --difficulty-notes "User reported too_hard on last 2 writing sessions"
 node tracker_db.js get-plan
 node tracker_db.js list-plans
 ```
 
 ---
 
-### `vocab_db.py` — Vocabulary Notebook & SRS
+### `vocab_db.js` — Vocabulary Notebook & SRS
 
-**Script path**: `./hermes/skills/anya/data/scripts/vocab_db.py`
-**Database**: `~/.anya/data/store/vocab.db`
+**Script path**: `./data/scripts/vocab_db.js`
+**Database**: `~/.anya/data/ielts/vocab.db`
 
 #### Word Lookup & Add
 
@@ -124,10 +154,33 @@ node vocab_db.js use <word> --event <exposure|production> --session-type <skill>
 
 #### Injection for Training Skills
 
-Training flow step 2:
+Training flow S2:
+
 ```bash
 node vocab_db.js inject --topic <topic> --limit 3
 ```
+
+Inject recently learned L2+ words as challenge words:
+
+```bash
+node vocab_db.js inject --transfer-level 2 --limit 2
+```
+
+#### Transfer Level Tracking
+
+```bash
+node vocab_db.js set-transfer <word> --level <1|2|3|4>
+node vocab_db.js list --transfer-level <1|2|3|4> --limit 10
+```
+
+Transfer levels:
+
+- **L1 Notice**: Flashcard recognition (known/vague/unknown)
+- **L2 Collocation**: Can identify correct collocations in quiz
+- **L3 Speaking**: Successfully used in speaking practice
+- **L4 Writing**: Successfully used in writing practice
+
+Auto-upgrade: When a word is used in speaking (`--event production --session-type speaking`), upgrade to L3. When used in writing, upgrade to L4.
 
 #### Other Commands
 
@@ -143,15 +196,25 @@ node vocab_db.js dump           # Export all
 
 When a learner sends a single English word (2-25 chars, not a function word):
 
-1. Check if it exists: `vocab_db.py lookup <word>`
-2. **If exists** → render card with mastery info
+1. Check if it exists: `vocab_db.js lookup <word>`
+2. **If exists** → render card with mastery info + SRS status
+   - Show: word, IPA, definition, Chinese, collocations, transfer level, next review date
+   - Keyboard: `[复习|ck:word:review]` `[使用记录|ck:word:history]`
 3. **If not** → generate definition, IPA, Chinese, POS, collocations
-4. Show translation + personalized examples
-5. Present choice: **加入单词本** / **跳过**
-6. If confirmed → `vocab_db.py add --word ... --source "lookup"`
+   - Show translation + personalized examples + TTS
+   - Keyboard: `[加入单词本|ck:word:save]` `[跳过|ck:word:next]`
+4. If confirmed → `vocab_db.js add --word ... --source "lookup"`
 
 Function words that should NOT trigger implicit lookup:
 `the, a, an, is, am, are, was, were, be, been, being, have, has, had, do, does, did, will, would, shall, should, may, might, must, can, could, it, its, i, me, my, we, us, our, you, your, he, him, his, she, her, they, them, their, this, that, these, those, to, of, in, for, on, with, at, by, from, as, into, about, but, or, and, not, no, if, so, than`
+
+## Callback Handling
+
+| Callback          | Action                                                            |
+| ----------------- | ----------------------------------------------------------------- |
+| `ck:word:save`    | `vocab_db.js add` → sync word to DB, react ✅                     |
+| `ck:word:review`  | `vocab_db.js list due --limit 1` → start SRS review for this word |
+| `ck:word:history` | `vocab_db.js get <word>` → show usage history across sessions     |
 
 ## Rules
 
@@ -159,6 +222,8 @@ Function words that should NOT trigger implicit lookup:
 2. **recurrence_key must come from the taxonomy.** See `assessment/references/error_taxonomy.md`.
 3. **Every training session must produce exactly one sample record.** Even if abandoned.
 4. **skill_type values**: `writing`, `speaking`, `reading`, `listening`, `daily`.
-5. **All vocabulary data goes through `vocab_db.py`** — never store word data in MEMORY.md.
+5. **All vocabulary data goes through `vocab_db.js`** — never store word data in MEMORY.md.
 6. **Review sessions**: maximum 5 words per session.
 7. **All output is JSON.** Parse to render mobile-friendly cards.
+8. **Extended fields are optional.** Omit fields you don't have data for; they default to NULL.
+9. **redo_count = 0 samples have lower weight** in assessment calculations.
