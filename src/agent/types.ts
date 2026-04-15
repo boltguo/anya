@@ -214,4 +214,6 @@ export interface ToolContext {
   adapter: Adapter;
   /** The current agent configuration. */
   config: import('../config/defaults.js').AnyaConfig;
+  /** Session ID for log tracing. */
+  sessionId?: string;
 }

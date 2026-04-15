@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto';
 import { GoogleGenAI } from '@google/genai';
 import { register } from './registry.js';
 import { IMAGE_GENERATED_DIR } from '../lib/paths.js';
+import { trackImageGen } from '../lib/usage.js';
 import { agentLogger } from '../lib/logger.js';
 import type { ToolContext } from '../agent/types.js';
 import type { AnyaConfig } from '../config/defaults.js';
@@ -143,6 +144,7 @@ register({
       writeFileSync(filePath, buffer);
 
       agentLogger.info({ msg: 'image_gen_done', filePath, sizeKB: Math.round(buffer.length / 1024) });
+      trackImageGen();
 
       // Also extract any text the model returned alongside the image
       const textParts = parts

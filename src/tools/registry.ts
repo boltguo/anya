@@ -136,21 +136,22 @@ export async function dispatch(
   }
 
   const startTime = Date.now();
+  const sid = context.sessionId;
 
   try {
-    agentLogger.info({ msg: 'tool_call', tool: toolName, args });
+    agentLogger.info({ msg: 'tool_call', tool: toolName, sessionId: sid, args });
 
     const content = await tool.execute(args, context);
 
     const durationMs = Date.now() - startTime;
-    agentLogger.info({ msg: 'tool_result', tool: toolName, duration_ms: durationMs, status: 'ok' });
+    agentLogger.info({ msg: 'tool_result', tool: toolName, sessionId: sid, duration_ms: durationMs, status: 'ok' });
 
     return { content, isError: false };
   } catch (error) {
     const durationMs = Date.now() - startTime;
     const errorMsg = error instanceof Error ? error.message : String(error);
 
-    agentLogger.error({ msg: 'tool_error', tool: toolName, duration_ms: durationMs, error: errorMsg });
+    agentLogger.error({ msg: 'tool_error', tool: toolName, sessionId: sid, duration_ms: durationMs, error: errorMsg });
 
     return { content: `Error executing ${toolName}: ${errorMsg}`, isError: true };
   }

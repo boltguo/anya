@@ -26,6 +26,7 @@ import { getProvider } from '../providers/registry.js';
 import { getToolSchemas, dispatch } from '../tools/registry.js';
 import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle } from '../storage/sessionStore.js';
 import { agentLogger } from '../lib/logger.js';
+import { trackLlm } from '../lib/usage.js';
 import { truncateHistory, sanitizeHistory } from './history.js';
 import { classifyApiError } from './errorClassifier.js';
 import { ContextCompressor, estimateTokens } from './contextCompressor.js';
@@ -198,6 +199,11 @@ export class Agent {
       logEntry.hasContent = !!response.content;
       agentLogger.info(logEntry);
 
+      // Track LLM token usage
+      if (u) {
+        trackLlm(u.promptTokens || 0, u.completionTokens || 0, u.cachedTokens || 0);
+      }
+
       // ── Case 1: Tool calls ──
       if (response.toolCalls && response.toolCalls.length > 0) {
         totalToolCalls += response.toolCalls.length;
@@ -219,6 +225,7 @@ export class Agent {
           const result = await dispatch(toolCall.name, toolCall.args, {
             adapter: this.adapter,
             config: this.config,
+            sessionId,
           });
 
           if (toolCall.name === 'tg' && !result.isError) {

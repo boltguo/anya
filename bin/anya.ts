@@ -74,4 +74,13 @@ registerCron(program);
 registerSessions(program);
 registerDataTransfer(program);
 
+program
+  .command('usage')
+  .description('Show monthly API usage statistics')
+  .option('-m, --month <YYYY-MM>', 'Show a specific month (default: current)')
+  .action(async (options) => {
+    const { runUsage } = await import('../src/commands/usage.js');
+    runUsage(options.month);
+  });
+
 program.parse();

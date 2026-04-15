@@ -17,6 +17,7 @@
 import { readFileSync } from 'node:fs';
 import { register } from './registry.js';
 import { agentLogger } from '../lib/logger.js';
+import { trackPronAssess } from '../lib/usage.js';
 import type { ToolContext } from '../agent/types.js';
 
 // ── Pronunciation Assessment Tool ────────────────────────────────────────────
@@ -121,7 +122,6 @@ register({
 
       const result = await response.json() as any;
       agentLogger.info({ msg: 'pron_assess_done', status: result.RecognitionStatus });
-      agentLogger.info({ msg: 'pron_assess_raw', response: JSON.stringify(result).substring(0, 2000) });
 
       if (result.RecognitionStatus !== 'Success') {
         return `Pronunciation assessment failed: ${result.RecognitionStatus}. Make sure the audio contains clear speech.`;
@@ -154,6 +154,7 @@ register({
       });
 
       // Build structured result
+      const audioDurationSec = (result.Duration || 0) / 10_000_000; // Azure returns in 100ns ticks
       const output = {
         recognized_text: nbest.Display || nbest.Lexical,
         scores: {
@@ -166,6 +167,8 @@ register({
         words,
         reference_text: referenceText || undefined,
       };
+
+      trackPronAssess(audioDurationSec);
 
       return JSON.stringify(output, null, 2);
     } catch (err) {

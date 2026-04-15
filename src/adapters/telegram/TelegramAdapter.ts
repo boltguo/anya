@@ -16,6 +16,7 @@ import { Bot, type Context } from 'grammy';
 import { Agent, type RunResult } from '../../agent/Agent.js';
 import { registerAllTools } from '../../tools/registry.js';
 import { agentLogger } from '../../lib/logger.js';
+import { trackStt } from '../../lib/usage.js';
 import { createSession } from '../../storage/sessionStore.js';
 import { transcribeAudio } from '../../lib/stt.js';
 import { analyzeImage } from '../../lib/vision.js';
@@ -167,6 +168,7 @@ export class TelegramAdapter {
       // Include audio_path so tools (e.g. pron_assess) can reference the file
       const input = `[语音消息 | audio_path: ${audioPath}]\n"${sttResult.transcript}"`;
       agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, text: sttResult.transcript.substring(0, 100) });
+      trackStt(ctx.message.voice.duration || 0);
 
       await this.handleIncoming(ctx, input);
     });

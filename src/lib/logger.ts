@@ -1,16 +1,16 @@
 /**
  * @module lib/logger
- * @description Structured JSON logging via pino with daily log rotation.
+ * @description Structured JSON logging via pino.
  *
  * Creates separate logger instances for each service (agent, gateway, cron),
- * each writing to `~/.anya/logs/<service>.log`. Uses `pino-roll` for
- * automatic daily rotation with a 5-file limit.
+ * each writing to `~/.anya/logs/<service>.log`.
  *
- * Falls back to stderr-only logging if the file transport fails.
+ * Logs are append-only JSON lines. No rotation (daily volume is tiny).
  */
 
 import pino from 'pino';
 import { existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { LOGS_DIR } from './paths.js';
 
 // Ensure logs directory exists before creating loggers
@@ -25,22 +25,12 @@ if (!existsSync(LOGS_DIR)) {
  */
 function createLogger(service: string, level: string = 'info'): pino.Logger {
   try {
-    const transport = pino.transport({
-      targets: [
-        {
-          target: 'pino-roll',
-          options: {
-            file: `${LOGS_DIR}/${service}.log`,
-            frequency: 'daily',
-            size: '10m',
-            limit: { count: 5 },
-          },
-          level,
-        },
-      ],
+    const dest = pino.destination({
+      dest: join(LOGS_DIR, `${service}.log`),
+      append: true,
+      sync: true, // real-time write, volume is tiny
     });
-
-    return pino({ level, name: service }, transport);
+    return pino({ level, name: service }, dest);
   } catch {
     // Fallback: log to stderr only
     return pino({ level, name: service });

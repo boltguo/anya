@@ -13,6 +13,8 @@ import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { tavily } from '@tavily/core';
+import { agentLogger } from '../lib/logger.js';
+import { trackWebSearch } from '../lib/usage.js';
 
 // ── Cache Helpers ────────────────────────────────────────────────────────────
 
@@ -100,7 +102,13 @@ register({
     }
 
     const cached = readCache(query);
-    if (cached) return cached;
+    if (cached) {
+      agentLogger.info({ msg: 'web_search_cache_hit', query: query.substring(0, 80) });
+      return cached;
+    }
+
+    agentLogger.info({ msg: 'web_search_start', query: query.substring(0, 80), maxResults });
+    const t0 = Date.now();
 
     // Use Tavily SDK
     const client = tavily({ apiKey });
@@ -128,6 +136,11 @@ register({
 
     const formatted = lines.join('\n') || 'No results found.';
     writeCache(query, formatted, data);
+
+    const durationMs = Date.now() - t0;
+    agentLogger.info({ msg: 'web_search_done', query: query.substring(0, 80), results: data.results?.length || 0, duration_ms: durationMs });
+    trackWebSearch();
+
     return formatted;
   },
 });

@@ -17,6 +17,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { AnyaConfig } from '../config/defaults.js';
 import { getCredentialPool } from '../providers/credentialPool.js';
 import { agentLogger } from './logger.js';
+import { trackVision } from './usage.js';
 
 // Supported image MIME types
 const MIME_MAP: Record<string, string> = {
@@ -140,6 +141,7 @@ export async function analyzeImage(
     }
 
     agentLogger.info({ msg: 'vision_done', descLength: description.length });
+    trackVision();
 
     return { success: true, description };
   } catch (err) {
