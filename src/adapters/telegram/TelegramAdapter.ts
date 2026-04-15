@@ -19,7 +19,7 @@ import { agentLogger } from '../../lib/logger.js';
 import { createSession } from '../../storage/sessionStore.js';
 import { transcribeAudio } from '../../lib/stt.js';
 import { analyzeImage } from '../../lib/vision.js';
-import { AUDIO_CACHE_DIR, VOICE_DIR } from '../../lib/paths.js';
+import { AUDIO_CACHE_DIR, VOICE_DIR, IMAGE_RECEIVED_DIR } from '../../lib/paths.js';
 import type { AnyaConfig } from '../../config/defaults.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -196,7 +196,7 @@ export class TelegramAdapter {
 
         const buffer = Buffer.from(await response.arrayBuffer());
         const ext = path.extname(file.file_path) || '.jpg';
-        imagePath = path.join(AUDIO_CACHE_DIR, `photo_${Date.now()}${ext}`);
+        imagePath = path.join(IMAGE_RECEIVED_DIR, `photo_${Date.now()}${ext}`);
         fs.writeFileSync(imagePath, buffer);
         agentLogger.info({ msg: 'tg_photo_cached', path: imagePath, bytes: buffer.length });
       } catch (err) {

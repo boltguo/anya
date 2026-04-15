@@ -33,6 +33,7 @@ export async function registerAllTools(): Promise<void> {
     import('../tools/clarifyTools.js'),
     import('../tools/telegramTools.js'),
     import('../tools/tts.js'),
+    import('../tools/imageGen.js'),
   ]);
 }
 

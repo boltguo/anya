@@ -13,7 +13,7 @@ export function getActiveModel(config: AnyaConfig): string {
 }
 
 export function hasVisionKey(config: AnyaConfig): boolean {
-  return !!(config.vision?.gemini_api_key || config.provider?.gemini?.api_key);
+  return !!(config.provider?.gemini?.api_key || (config.provider?.gemini?.api_keys?.length ?? 0) > 0);
 }
 
 export function maskKey(key: string): string {

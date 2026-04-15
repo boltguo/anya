@@ -28,6 +28,17 @@ const ProviderSchema = z.object({
   max_retries: z.number().optional(),
 }).optional();
 
+const VertexSchema = z.object({
+  project: z.string().optional(),
+  location: z.string().optional(),
+}).optional();
+
+const ImageGenSchema = z.object({
+  backend: z.enum(['vertex', 'ai_studio']).optional(),
+  model: z.string().optional(),
+  aspect_ratio: z.string().optional(),
+}).optional();
+
 const ToolsSchema = z.object({
   enabled: z.array(z.string()).optional(),
   shell: z.object({
@@ -59,8 +70,9 @@ const SttSchema = z.object({
 }).optional();
 
 const VisionSchema = z.object({
-  gemini_api_key: z.string().optional(),
   model: z.string().optional(),
+  // Legacy field — ignored but accepted so old configs don't fail validation
+  gemini_api_key: z.string().optional(),
 }).optional();
 
 const TtsSchema = z.object({
@@ -76,6 +88,8 @@ export const PartialAnyaConfigSchema = z.object({
     personality: z.string().optional(),
   }).optional(),
   provider: ProviderSchema,
+  vertex: VertexSchema,
+  image_gen: ImageGenSchema,
   tools: ToolsSchema,
   security: SecuritySchema,
   telegram: TelegramSchema,

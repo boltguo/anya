@@ -37,7 +37,7 @@ export function registerDoctor(program: Command): void {
         const hasSTT = !!config.stt?.groq_api_key;
         console.log(`  STT:       ${hasSTT ? '[ok]' : '[--]'} ${hasSTT ? `Groq Whisper (${config.stt?.model || 'whisper-large-v3-turbo'})` : 'not configured (voice messages unavailable)'}`);
 
-        const hasVision = !!(config.vision?.gemini_api_key || config.provider?.gemini?.api_key);
+        const hasVision = !!(config.provider?.gemini?.api_key || (config.provider?.gemini?.api_keys?.length ?? 0) > 0);
         console.log(`  Vision:    ${hasVision ? '[ok]' : '[--]'} ${hasVision ? `Gemini (${config.vision?.model || 'gemini-3-flash-preview'})` : 'not configured (photo analysis unavailable)'}`);
 
         const ttsVoice = config.tts?.voice || 'en-US-AriaNeural';

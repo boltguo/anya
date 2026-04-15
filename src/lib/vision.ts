@@ -35,17 +35,12 @@ export interface VisionResult {
 }
 
 /**
- * Resolve the Gemini API key for vision tasks via the credential pool.
+ * Resolve the Gemini API key for vision tasks.
  *
- * Priority: vision-specific key → credential pool → main Gemini key → env var
+ * Uses the global Gemini API key from provider config or credential pool.
  */
 function resolveApiKey(config: AnyaConfig): string | undefined {
-  // 1. Dedicated vision key (if user explicitly configured one)
-  if (config.vision?.gemini_api_key) {
-    return config.vision.gemini_api_key;
-  }
-
-  // 2. Credential pool (shares keys with the main provider)
+  // Credential pool (shares keys with the main provider)
   const pool = getCredentialPool();
   const allKeys = config.provider.gemini.api_keys?.length
     ? config.provider.gemini.api_keys
@@ -58,7 +53,7 @@ function resolveApiKey(config: AnyaConfig): string | undefined {
   const cred = pool.current('gemini');
   if (cred) return cred.apiKey;
 
-  // 3. Env var fallback
+  // Env var fallback
   return process.env.GEMINI_API_KEY || undefined;
 }
 
@@ -136,8 +131,8 @@ export async function analyzeImage(
     });
 
     const description = response.candidates?.[0]?.content?.parts
-      ?.filter((p: Record<string, unknown>) => 'text' in p && p.text)
-      .map((p: Record<string, unknown>) => p.text as string)
+      ?.filter((p: any) => p.text)
+      .map((p: any) => p.text as string)
       .join('');
 
     if (!description) {

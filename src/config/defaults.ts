@@ -46,6 +46,24 @@ export interface AnyaConfig {
     max_retries: number;
   };
 
+  /** Google Cloud Vertex AI configuration (for image generation, etc.). */
+  vertex: {
+    /** GCP project ID. If set, enables Vertex AI as a backend option. */
+    project: string;
+    /** GCP region. Use 'global' for best availability. */
+    location: string;
+  };
+
+  /** Image generation settings. */
+  image_gen: {
+    /** Backend: 'vertex' uses Vertex AI (ADC auth), 'ai_studio' uses Gemini API Key. */
+    backend: 'vertex' | 'ai_studio';
+    /** Model to use for image generation. */
+    model: string;
+    /** Default aspect ratio (e.g., '1:1', '16:9', '9:16'). */
+    aspect_ratio: string;
+  };
+
   /** Tool configuration — which tools are enabled and their settings. */
   tools: {
     /** List of enabled tool names (order determines LLM schema order). */
@@ -90,7 +108,7 @@ export interface AnyaConfig {
   };
 
   vision: {
-    gemini_api_key: string;
+    /** Vision model (uses global Gemini API key). */
     model: string;
   };
 
@@ -152,6 +170,17 @@ export const DEFAULT_CONFIG: AnyaConfig = {
     max_retries: 3,
   },
 
+  vertex: {
+    project: '',
+    location: 'global',
+  },
+
+  image_gen: {
+    backend: 'vertex',
+    model: 'gemini-3.1-flash-image-preview',
+    aspect_ratio: '1:1',
+  },
+
   tools: {
     enabled: [
       'read_file',
@@ -165,6 +194,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
       'clarify',
       'tg',
       'tts',
+      'image_gen',
     ],
     shell: {
       require_approval: true,
@@ -199,7 +229,6 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   },
 
   vision: {
-    gemini_api_key: '',
     model: 'gemini-3-flash-preview',
   },
 

@@ -95,6 +95,15 @@ export const VOICE_DIR = join(AUDIO_CACHE_DIR, 'voice');
 /** Generated TTS audio files. */
 export const TTS_DIR = join(AUDIO_CACHE_DIR, 'tts');
 
+/** Image storage root. */
+export const IMAGE_DIR = join(DATA_DIR, 'images');
+
+/** Images received from users (Telegram photos). */
+export const IMAGE_RECEIVED_DIR = join(IMAGE_DIR, 'received');
+
+/** AI-generated images (image_gen tool output). */
+export const IMAGE_GENERATED_DIR = join(IMAGE_DIR, 'generated');
+
 // ── Runtime ──────────────────────────────────────────────────────────────────
 export const LOGS_DIR = join(ANYA_HOME, 'logs');
 export const RUN_DIR = join(ANYA_HOME, 'run');
@@ -120,6 +129,9 @@ export function ensureDirectories(): void {
     SEARCH_CACHE_DIR,
     CACHE_DIR,
     AUDIO_CACHE_DIR,
+    IMAGE_DIR,
+    IMAGE_RECEIVED_DIR,
+    IMAGE_GENERATED_DIR,
     LOGS_DIR,
     RUN_DIR,
   ];

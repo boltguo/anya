@@ -91,8 +91,23 @@ export function buildSystemPrompt(config: AnyaConfig): string {
     caps.push('- **Rich Media**: On Telegram, use the `tg` tool with type "photo" or "audio" to send images/audio with captions. Use `<tg-spoiler>text</tg-spoiler>` in HTML to hide text (tap to reveal — great for learning/quiz scenarios).');
   }
 
-  if (config.vision?.gemini_api_key || config.provider?.gemini?.api_key) {
+  if (config.provider?.gemini?.api_key || config.provider?.gemini?.api_keys?.length) {
     caps.push('- **Vision**: When the user sends a photo, it is automatically analyzed and the description is provided to you as text.');
+  }
+
+  if (enabled.includes('image_gen')) {
+    caps.push('- **Image Generation**: You have the `image_gen` tool. Use it to generate images from text descriptions. After generating, use the `tg` tool with type="photo" and the returned path as `url` to send it to the user.');
+  }
+
+  // Multi-tool combination guidance
+  if (enabled.includes('tg') && (enabled.includes('tts') || enabled.includes('image_gen'))) {
+    caps.push('');
+    caps.push('### Multi-Message Replies');
+    caps.push('You can (and should) send **multiple messages of different types** in a single turn when the user\'s request involves multiple outputs. Call tools sequentially:');
+    caps.push('1. Use `tg` type="text" for text content');
+    caps.push('2. Use `image_gen` to generate an image, then `tg` type="photo" with the returned path to send it');
+    caps.push('3. Use `tts` to generate voice audio (automatically sent as a voice bubble)');
+    caps.push('Example: If the user says "write an article and read it to me with an illustration", you should: (1) send the article text via `tg`, (2) generate an image via `image_gen` then send via `tg` photo, (3) generate audio via `tts`. **Do not just reply with plain text when you have tools to deliver richer output.**');
   }
 
   if (caps.length > 0) {

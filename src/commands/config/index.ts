@@ -17,9 +17,10 @@ import { configSTT } from './stt.js';
 import { configVision } from './vision.js';
 import { configTTS } from './tts.js';
 import { configTelegram } from './telegram.js';
+import { configImageGen } from './imageGen.js';
 import { getActiveModel, hasVisionKey, maskKey } from './helpers.js';
 
-export { configModel, configSTT, configVision, configTTS, configTelegram };
+export { configModel, configSTT, configVision, configTTS, configTelegram, configImageGen };
 
 export async function runConfigMenu(): Promise<void> {
   if (!isInitialized()) {
@@ -49,6 +50,10 @@ export async function runConfigMenu(): Promise<void> {
         value: 'tts',
       },
       {
+        name: `ImageGen ${chalk.dim(`(${config.image_gen?.backend || 'vertex'}${config.vertex?.project ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+        value: 'image_gen',
+      },
+      {
         name: `Telegram ${chalk.dim(`(${config.telegram.enabled ? chalk.green('on') : 'off'})`)}`,
         value: 'telegram',
       },
@@ -75,6 +80,9 @@ export async function runConfigMenu(): Promise<void> {
       break;
     case 'tts':
       await configTTS(config);
+      break;
+    case 'image_gen':
+      await configImageGen(config);
       break;
     case 'telegram':
       await configTelegram(config);
