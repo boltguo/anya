@@ -70,6 +70,17 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+/**
+ * Structured result from {@link dispatch}.
+ *
+ * Replaces the old convention of detecting errors via string prefix
+ * (`startsWith('Error')`) with an explicit boolean flag.
+ */
+export interface ToolDispatchResult {
+  content: string;
+  isError: boolean;
+}
+
 // ── LLM Provider ─────────────────────────────────────────────────────────────
 
 /**
@@ -106,20 +117,6 @@ export interface LLMResponse {
   durationMs?: number;
 }
 
-// ── Agent Options ────────────────────────────────────────────────────────────
-
-/**
- * Options for {@link Agent.run}.
- */
-export interface AgentOptions {
-  /** Session key for history persistence (e.g., 'tg:12345' or 'cli:local'). */
-  sessionKey: string;
-  /** Explicit session ID. If omitted, resolved from sessionKey via the session store. */
-  sessionId?: string;
-  /** Force creation of a new session, discarding previous history. */
-  newSession?: boolean;
-}
-
 // ── Platform Adapter ─────────────────────────────────────────────────────────
 
 /**
@@ -138,6 +135,9 @@ export interface AgentOptions {
  * ```
  */
 export interface Adapter {
+  /** Platform identifier for runtime branching (replaces constructor.name checks). */
+  readonly platform: 'cli' | 'telegram' | 'cron';
+
   /** Send a text response to the user. */
   reply(content: string): Promise<void>;
 

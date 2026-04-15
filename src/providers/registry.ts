@@ -15,9 +15,10 @@ import type { LLMProvider } from './base.js';
 import { GeminiProvider } from './gemini.js';
 import { OpenAIProvider } from './openai.js';
 
+/** Singleton map of registered provider instances. */
 const providers = new Map<string, LLMProvider>();
 
-// Register built-in providers
+// Register built-in providers eagerly at import time
 providers.set('gemini', new GeminiProvider());
 providers.set('openai', new OpenAIProvider());
 

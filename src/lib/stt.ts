@@ -2,18 +2,20 @@
  * @module lib/stt
  * @description Speech-to-Text service using Groq Whisper API (free).
  *
+ * Uses the official `groq-sdk` for type-safe API calls.
+ *
  * Usage:
  *   const result = await transcribeAudio('/path/to/voice.ogg', config);
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
+import Groq from 'groq-sdk';
 import { agentLogger } from './logger.js';
 import type { AnyaConfig } from '../config/defaults.js';
 
-// ── Groq Whisper config ──────────────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────────────────
 
-const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
 const DEFAULT_MODEL = 'whisper-large-v3-turbo';
 
 const SUPPORTED_FORMATS = new Set([
@@ -92,37 +94,17 @@ export async function transcribeAudio(
 
   try {
     const startTime = Date.now();
-
-    // Build multipart form data
-    const fileBuffer = fs.readFileSync(filePath);
-    const fileName = path.basename(filePath);
-
     const model = config.stt.model || DEFAULT_MODEL;
 
-    const formData = new FormData();
-    formData.append('file', new Blob([fileBuffer]), fileName);
-    formData.append('model', model);
-    formData.append('response_format', 'text');
-
-    const response = await fetch(`${GROQ_BASE_URL}/audio/transcriptions`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}` },
-      body: formData,
+    const groq = new Groq({ apiKey });
+    const transcription = await groq.audio.transcriptions.create({
+      file: fs.createReadStream(filePath),
+      model,
+      response_format: 'text',
     });
 
     const durationMs = Date.now() - startTime;
-
-    if (!response.ok) {
-      const errText = await response.text();
-      agentLogger.warn({ msg: 'stt_error', status: response.status, error: errText.substring(0, 200) });
-      return {
-        success: false,
-        transcript: '',
-        error: `Groq API error (${response.status}): ${errText.substring(0, 100)}`,
-      };
-    }
-
-    const transcript = (await response.text()).trim();
+    const transcript = String(transcription).trim();
 
     // Filter hallucinations
     if (isHallucination(transcript)) {
@@ -132,7 +114,7 @@ export async function transcribeAudio(
 
     agentLogger.info({
       msg: 'stt_transcribed',
-      model: DEFAULT_MODEL,
+      model,
       durationMs,
       chars: transcript.length,
     });

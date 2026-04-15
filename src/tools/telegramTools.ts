@@ -85,15 +85,15 @@ register({
       url:        { type: 'string', description: 'For photo/audio: URL or file path of the media to send.' },
       buttons:    { type: 'string', description: 'JSON 2D array. For keyboard: [["label|callback_data",...]], for reply_keyboard: [["label",...]].' },
       options:    { type: 'string', description: 'For quiz: JSON array of option strings.' },
-      correct:    { type: 'string', description: 'For quiz: 0-based index of correct answer.' },
+      correct:    { type: 'integer', description: 'For quiz: 0-based index of correct answer.' },
       explanation:{ type: 'string', description: 'For quiz: explanation shown after answering.' },
       message_id: { type: 'string', description: 'For edit/edit_keyboard/react/pin: target message_id (number) or tag.' },
       reply_to:   { type: 'string', description: 'Reply to a message_id, tag, or "user" for the incoming message.' },
       tag:        { type: 'string', description: 'Tag this message for later reference (edit, pin, reply-to).' },
       emoji:      { type: 'string', description: 'For dice or react: emoji to use.' },
       action:     { type: 'string', description: 'For action type: typing, record_voice, upload_document, etc.' },
-      one_time:   { type: 'string', description: 'For reply_keyboard: "true" to auto-hide after tap.' },
-      silent:     { type: 'string', description: 'For pin: "true" to pin without notification.' },
+      one_time:   { type: 'boolean', description: 'For reply_keyboard: auto-hide after tap.' },
+      silent:     { type: 'boolean', description: 'For pin: pin without notification.' },
       parse_mode: { type: 'string', description: 'Parse mode: HTML (default), Markdown, MarkdownV2, or none.' },
     },
     required: ['type'],
@@ -153,7 +153,7 @@ register({
         const result = await tg.sendQuiz(
           String(args.text || ''),
           options,
-          parseInt(String(args.correct || '0'), 10),
+          Number(args.correct ?? 0),
           args.explanation as string,
         );
         return JSON.stringify({ ok: true, ...result });
@@ -171,7 +171,7 @@ register({
       case 'reply_keyboard': {
         const buttons = parseArray(args.buttons);
         const msgId = await tg.sendReplyKeyboard(String(args.text || ''), buttons, {
-          oneTime: args.one_time === 'true',
+          oneTime: !!args.one_time,
           tag: args.tag as string,
         });
         return JSON.stringify({ ok: true, message_id: msgId });
@@ -215,7 +215,7 @@ register({
 
       case 'pin': {
         const ref = args.message_id as string;
-        await tg.pin(isNaN(Number(ref)) ? ref : Number(ref), args.silent === 'true');
+        await tg.pin(isNaN(Number(ref)) ? ref : Number(ref), !!args.silent);
         return JSON.stringify({ ok: true });
       }
 

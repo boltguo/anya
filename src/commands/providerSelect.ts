@@ -47,7 +47,7 @@ export async function selectProvider(config: AnyaConfig): Promise<void> {
   const { hasCodexAuth } = await import('../lib/auth.js');
   const hasOpenAIAuth = hasCodexAuth();
 
-  const provider = await select({
+  const provider = await select<'gemini' | 'openai'>({
     message: 'Model Provider',
     choices: [
       {

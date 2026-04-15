@@ -11,9 +11,30 @@
  * when not applicable, saving prompt tokens.
  */
 
-import type { ToolDefinition, ToolContext, ToolParameterSchema } from '../agent/types.js';
+import type { ToolDefinition, ToolContext, ToolParameterSchema, ToolDispatchResult } from '../agent/types.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { agentLogger } from '../lib/logger.js';
+
+let toolsLoaded = false;
+
+/**
+ * Ensure all built-in tools are registered exactly once.
+ * Replaces the former side-effect import pattern.
+ */
+export async function registerAllTools(): Promise<void> {
+  if (toolsLoaded) return;
+  toolsLoaded = true;
+  await Promise.all([
+    import('../tools/fileTools.js'),
+    import('../tools/shellTool.js'),
+    import('../tools/webSearch.js'),
+    import('../tools/memoryTools.js'),
+    import('../tools/skillTools.js'),
+    import('../tools/clarifyTools.js'),
+    import('../tools/telegramTools.js'),
+    import('../tools/tts.js'),
+  ]);
+}
 
 /** Internal store of all registered tools, keyed by tool name. */
 const tools = new Map<string, ToolDefinition>();
@@ -92,26 +113,24 @@ export function getToolSchemas(config: AnyaConfig, isTelegram: boolean = false):
 }
 
 /**
- * Dispatch a tool call and return the serialized result.
+ * Dispatch a tool call and return a structured result.
  *
  * Looks up the tool by name, executes it with the provided args and
- * context, and returns the result string. Errors are caught and
- * returned as error strings rather than thrown.
- *
- * @param toolName - Name of the tool to execute.
- * @param args - Arguments from the LLM's function call.
- * @param context - Execution context (adapter + config).
- * @returns Serialized tool result (JSON string on success, error message on failure).
+ * context, and returns a {@link ToolDispatchResult} with an explicit
+ * `isError` flag — no more guessing from string prefixes.
  */
 export async function dispatch(
   toolName: string,
   args: Record<string, unknown>,
   context: ToolContext,
-): Promise<string> {
+): Promise<ToolDispatchResult> {
   const tool = tools.get(toolName);
 
   if (!tool) {
-    return `Error: Unknown tool "${toolName}". Available tools: ${[...tools.keys()].join(', ')}`;
+    return {
+      content: `Error: Unknown tool "${toolName}". Available tools: ${[...tools.keys()].join(', ')}`,
+      isError: true,
+    };
   }
 
   const startTime = Date.now();
@@ -119,19 +138,19 @@ export async function dispatch(
   try {
     agentLogger.info({ msg: 'tool_call', tool: toolName, args });
 
-    const result = await tool.execute(args, context);
+    const content = await tool.execute(args, context);
 
     const durationMs = Date.now() - startTime;
     agentLogger.info({ msg: 'tool_result', tool: toolName, duration_ms: durationMs, status: 'ok' });
 
-    return result;
+    return { content, isError: false };
   } catch (error) {
     const durationMs = Date.now() - startTime;
     const errorMsg = error instanceof Error ? error.message : String(error);
 
     agentLogger.error({ msg: 'tool_error', tool: toolName, duration_ms: durationMs, error: errorMsg });
 
-    return `Error executing ${toolName}: ${errorMsg}`;
+    return { content: `Error executing ${toolName}: ${errorMsg}`, isError: true };
   }
 }
 

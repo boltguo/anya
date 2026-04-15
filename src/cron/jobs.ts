@@ -1,3 +1,12 @@
+/**
+ * @module cron/jobs
+ * @description Cron job definition loader from ~/.anya/cron/jobs.json.
+ *
+ * Each job has an id, name, cron schedule expression, prompt to run,
+ * delivery target (e.g., telegram), and enabled flag. The file is
+ * re-read periodically by the scheduler to pick up changes.
+ */
+
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { CRON_JOBS_PATH } from '../lib/paths.js';
 

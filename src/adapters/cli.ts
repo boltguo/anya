@@ -1,3 +1,13 @@
+/**
+ * @module adapters/cli
+ * @description CLI adapter for terminal REPL interaction.
+ *
+ * Implements the {@link Adapter} interface for command-line usage:
+ * - Outputs colorized responses via `chalk`
+ * - Shows tool call/result feedback inline
+ * - Uses `@inquirer/prompts` for interactive approval dialogs
+ */
+
 import chalk from 'chalk';
 import { select } from '@inquirer/prompts';
 import { BaseAdapter } from './base.js';
@@ -8,6 +18,7 @@ import type { ApprovalResult } from '../lib/approval.js';
  * Handles colorized output and interactive approval prompts.
  */
 export class CliAdapter extends BaseAdapter {
+  readonly platform = 'cli' as const;
   /**
    * Display the agent's response to the user.
    */

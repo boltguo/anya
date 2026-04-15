@@ -1,19 +1,19 @@
-import { execSync } from 'node:child_process';
-import { register } from './registry.js';
-import type { ToolContext } from '../agent/types.js';
-
 /**
- * Check if a command matches the approval allowlist.
- * Matches by prefix: if "git" is in the allowlist, "git status" is allowed.
+ * @module tools/shellTool
+ * @description Shell command execution tool with approval flow.
+ *
+ * Commands are checked against the config allowlist before execution.
+ * Commands not in the allowlist require interactive user approval;
+ * the "always" option adds the command prefix to the permanent allowlist.
+ *
+ * Uses `execFile` (not `exec`) to avoid shell injection vulnerabilities.
  */
-function isInAllowlist(command: string, allowlist: string[]): boolean {
-  const trimmed = command.trim();
-  return allowlist.some(pattern => {
-    if (trimmed === pattern) return true;
-    if (trimmed.startsWith(pattern + ' ')) return true;
-    return false;
-  });
-}
+
+import { execFile } from 'node:child_process';
+import { register } from './registry.js';
+import { isCommandAllowed } from '../lib/approval.js';
+import { persistConfig } from '../config/loader.js';
+import type { ToolContext } from '../agent/types.js';
 
 // --- shell ---
 register({
@@ -44,7 +44,7 @@ register({
 
     // Check if approval is needed
     if (shellConfig.require_approval) {
-      const allowed = isInAllowlist(command, shellConfig.approval_allowlist);
+      const allowed = isCommandAllowed(command, context.config);
 
       if (!allowed) {
         const result = await context.adapter.requestApproval(
@@ -56,10 +56,11 @@ register({
         }
 
         if (result === 'always') {
-          // Add the command prefix to the allowlist
+          // Add the command prefix to the allowlist and persist across restarts.
           const prefix = command.split(' ')[0];
           if (!shellConfig.approval_allowlist.includes(prefix)) {
             shellConfig.approval_allowlist.push(prefix);
+            persistConfig(context.config);
           }
         }
       }
@@ -70,31 +71,37 @@ register({
     cwd = cwd.replace(/^~/, process.env.HOME || '');
 
     try {
-      const output = execSync(command, {
-        cwd,
-        encoding: 'utf-8',
-        timeout: 30_000, // 30 second timeout
-        maxBuffer: 1024 * 1024, // 1MB max output
-        stdio: ['pipe', 'pipe', 'pipe'],
+      const { stdout, stderr } = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        execFile('/bin/sh', ['-c', command], {
+          cwd,
+          encoding: 'utf-8',
+          timeout: 30_000,
+          maxBuffer: 1024 * 1024,
+        }, (err, stdout, stderr) => {
+          if (err) {
+            reject(Object.assign(err, { stdout, stderr }));
+          } else {
+            resolve({ stdout: stdout ?? '', stderr: stderr ?? '' });
+          }
+        });
       });
 
-      const trimmed = output.trim();
-      if (!trimmed) {
+      const output = (stdout + (stderr ? '\n' + stderr : '')).trim();
+      if (!output) {
         return '(command completed with no output)';
       }
 
-      // Truncate very long output
-      if (trimmed.length > 10_000) {
-        return trimmed.substring(0, 10_000) + '\n\n... (output truncated, total ' + trimmed.length + ' chars)';
+      if (output.length > 10_000) {
+        return output.substring(0, 10_000) + '\n\n... (output truncated, total ' + output.length + ' chars)';
       }
 
-      return trimmed;
+      return output;
     } catch (err: unknown) {
-      const error = err as { status?: number; stdout?: string; stderr?: string; message?: string };
+      const error = err as { code?: number; stdout?: string; stderr?: string; message?: string };
       const parts: string[] = [];
 
-      if (error.status !== undefined) {
-        parts.push(`Exit code: ${error.status}`);
+      if (error.code !== undefined) {
+        parts.push(`Exit code: ${error.code}`);
       }
       if (error.stderr) {
         parts.push(`stderr: ${error.stderr.trim()}`);

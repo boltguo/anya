@@ -1,7 +1,21 @@
+/**
+ * @module commands/chat
+ * @description Interactive chat command for the Anya CLI.
+ *
+ * Supports two modes:
+ * - **Single query**: `anya chat -q "What is 2+2?"` — one-shot, exits after response
+ * - **REPL mode**: `anya chat` — interactive loop with readline, supports
+ *   `/new` (new session), `/quit`, `/help` slash commands
+ *
+ * Auto-initializes `~/.anya/` on first run and validates provider credentials
+ * before entering the chat loop.
+ */
+
 import { createInterface } from 'node:readline';
 import chalk from 'chalk';
 import { Agent } from '../agent/Agent.js';
 import { CliAdapter } from '../adapters/cli.js';
+import { registerAllTools } from '../tools/registry.js';
 import { loadConfig } from '../config/loader.js';
 import { isInitialized } from '../lib/paths.js';
 import { setLogLevel } from '../lib/logger.js';
@@ -9,8 +23,11 @@ import { closeDb } from '../storage/db.js';
 import { runInit } from './init.js';
 import { createSession } from '../storage/sessionStore.js';
 
+/** CLI options parsed from commander. */
 interface ChatOptions {
+  /** Single query string (non-interactive mode). */
   query?: string;
+  /** Force a new session, discarding previous history. */
   new?: boolean;
 }
 
@@ -30,7 +47,8 @@ export async function runChat(options: ChatOptions): Promise<void> {
   setLogLevel(config.advanced.log_level);
 
   // Check provider credentials
-  if (config.provider.active === 'gemini' && !config.provider.gemini.api_key) {
+  const hasGeminiKey = config.provider.gemini.api_key || (config.provider.gemini.api_keys?.length ?? 0) > 0;
+  if (config.provider.active === 'gemini' && !hasGeminiKey) {
     console.log(chalk.red('Error: Gemini API key not configured.'));
     console.log(chalk.dim('  Run "anya init" or "anya model" to set it.'));
     process.exit(1);
@@ -44,10 +62,12 @@ export async function runChat(options: ChatOptions): Promise<void> {
     }
   }
 
-  // Create adapter and agent
+  // Bootstrap tools once (imports all tool files, registers them in the global registry)
+  await registerAllTools();
   const adapter = new CliAdapter();
   const agent = new Agent(config, adapter);
 
+  // Session key for CLI interactions — all CLI sessions share this key prefix
   const sessionKey = 'cli:local';
 
   // --- Single query mode ---

@@ -1,8 +1,16 @@
-import { fork } from 'node:child_process';
+/**
+ * @module commands/gateway
+ * @description Telegram bot process manager (start, stop, restart, status, logs).
+ *
+ * The "gateway" is the long-running process that connects to Telegram via
+ * grammy's long-polling. It can run in foreground (for debugging) or be
+ * spawned as a detached background child process with stdout/stderr
+ * redirected to ~/.anya/logs/gateway.log.
+ */
+
 import { createReadStream, existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import chalk from 'chalk';
 import { isServiceRunning, stopService, writePid, removePid } from '../lib/pidfile.js';
 import { LOGS_DIR, ensureDirectories } from '../lib/paths.js';

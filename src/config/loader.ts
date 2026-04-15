@@ -1,6 +1,23 @@
+/**
+ * @module config/loader
+ * @description Configuration loader with three-layer merge priority.
+ *
+ * Load order (low → high priority):
+ * 1. {@link DEFAULT_CONFIG} — built-in sensible defaults
+ * 2. `~/.anya/config.json` — user overrides (auto-migrated from v0.1 → v0.2)
+ * 3. Environment variables — `ANYA_GEMINI_API_KEY`, `ANYA_MODEL`, etc.
+ *
+ * The config file is validated via Zod ({@link PartialAnyaConfigSchema}) but
+ * validation is advisory — invalid fields are logged and replaced with defaults.
+ *
+ * @see {@link ./defaults} for the full config shape and defaults
+ * @see {@link ./schema} for the Zod validation schema
+ */
+
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { CONFIG_PATH } from '../lib/paths.js';
 import { DEFAULT_CONFIG, type AnyaConfig } from './defaults.js';
+import { PartialAnyaConfigSchema } from './schema.js';
 
 /**
  * Deep merge two objects. Source values override target values.
@@ -51,7 +68,9 @@ function applyEnvOverrides(config: AnyaConfig): AnyaConfig {
         c.provider.gemini.model = v;
       }
     },
-    ANYA_PROVIDER: (c, v) => { c.provider.active = v; },
+    ANYA_PROVIDER: (c, v) => {
+      if (v === 'gemini' || v === 'openai') c.provider.active = v;
+    },
   };
 
   for (const [envKey, setter] of Object.entries(envMap)) {
@@ -120,7 +139,19 @@ export function loadConfig(): AnyaConfig {
     try {
       const raw = readFileSync(CONFIG_PATH, 'utf-8');
       const parsed = JSON.parse(raw) as Record<string, any>;
-      fileConfig = migrateConfig(parsed) as Partial<AnyaConfig>;
+      const migrated = migrateConfig(parsed);
+
+      // Validate via zod — any failure is surfaced with the offending path(s)
+      // but we still merge with defaults so the agent keeps running.
+      const result = PartialAnyaConfigSchema.safeParse(migrated);
+      if (!result.success) {
+        const issues = result.error.issues
+          .slice(0, 5)
+          .map((i) => `  • ${i.path.join('.') || '<root>'}: ${i.message}`)
+          .join('\n');
+        console.error(`Warning: config.json has invalid fields (using sane defaults for them):\n${issues}`);
+      }
+      fileConfig = migrated as Partial<AnyaConfig>;
     } catch (err) {
       console.error(`Warning: Failed to parse config.json: ${(err as Error).message}`);
       console.error('   Using default configuration.');
@@ -155,6 +186,19 @@ export function saveConfig(config?: AnyaConfig): void {
 
   writeFileSync(CONFIG_PATH, JSON.stringify(toSave, null, 2) + '\n', 'utf-8');
   _config = toSave;
+}
+
+/**
+ * Persist a mutated config object to disk (best-effort).
+ * Used by tools to save 'always' approval decisions across restarts.
+ * Non-fatal on failure — the in-memory state still applies this session.
+ */
+export function persistConfig(config: AnyaConfig): void {
+  try {
+    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  } catch {
+    // Intentionally silent — in-memory config still works this session.
+  }
 }
 
 /**

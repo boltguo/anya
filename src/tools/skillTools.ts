@@ -1,3 +1,12 @@
+/**
+ * @module tools/skillTools
+ * @description Skill management tools: skill_manage and skill_view.
+ *
+ * Allows the agent to install (create), update, remove, and read skills
+ * from the ~/.anya/skills/ directory. Skills are SKILL.md files with YAML
+ * frontmatter parsed by {@link ../skills/parser}.
+ */
+
 import { writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { register } from './registry.js';

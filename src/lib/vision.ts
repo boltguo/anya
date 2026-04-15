@@ -1,23 +1,22 @@
 /**
  * @module lib/vision
- * @description Image analysis via Gemini Flash API.
+ * @description Image analysis via Gemini SDK.
  *
  * Used for one-off image understanding (Telegram photo messages).
  * The result is a text description injected into the conversation —
  * the base64 image data never enters the chat history.
  *
- * API key resolution:
- *   1. config.vision.gemini_api_key (dedicated vision key)
- *   2. config.provider.gemini.api_key (main Gemini key)
- *   3. GEMINI_API_KEY env var
+ * Now uses the same `@google/genai` SDK and credential pool as the
+ * main Gemini provider, eliminating the old raw `fetch` + query-string
+ * API key pattern.
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { GoogleGenAI } from '@google/genai';
 import type { AnyaConfig } from '../config/defaults.js';
+import { getCredentialPool } from '../providers/credentialPool.js';
 import { agentLogger } from './logger.js';
-
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
 // Supported image MIME types
 const MIME_MAP: Record<string, string> = {
@@ -36,21 +35,37 @@ export interface VisionResult {
 }
 
 /**
- * Resolve the Gemini API key for vision tasks.
+ * Resolve the Gemini API key for vision tasks via the credential pool.
  *
- * Priority: vision-specific key → main Gemini key → env var
+ * Priority: vision-specific key → credential pool → main Gemini key → env var
  */
 function resolveApiKey(config: AnyaConfig): string | undefined {
-  return config.vision?.gemini_api_key
-    || config.provider?.gemini?.api_key
-    || process.env.GEMINI_API_KEY
-    || undefined;
+  // 1. Dedicated vision key (if user explicitly configured one)
+  if (config.vision?.gemini_api_key) {
+    return config.vision.gemini_api_key;
+  }
+
+  // 2. Credential pool (shares keys with the main provider)
+  const pool = getCredentialPool();
+  const allKeys = config.provider.gemini.api_keys?.length
+    ? config.provider.gemini.api_keys
+    : config.provider.gemini.api_key ? [config.provider.gemini.api_key] : [];
+
+  for (const key of allKeys) {
+    pool.register('gemini', key);
+  }
+
+  const cred = pool.current('gemini');
+  if (cred) return cred.apiKey;
+
+  // 3. Env var fallback
+  return process.env.GEMINI_API_KEY || undefined;
 }
 
 /**
  * Analyze an image file and return a text description.
  *
- * Uses Gemini Flash for fast, cheap image understanding.
+ * Uses Gemini Flash via the official SDK for fast, cheap image understanding.
  * The image is read, converted to base64, sent in a one-off API call,
  * and the description is returned as plain text.
  */
@@ -96,48 +111,34 @@ export async function analyzeImage(
     ? `Describe this image in detail, then answer the user's question: "${userCaption}". Include any text, code, data, objects, layout, and notable visual information. Reply in the same language as the user's question.`
     : 'Describe everything visible in this image in thorough detail. Include any text, code, data, objects, people, layout, colors, and any other notable visual information. Reply in Chinese if the image contains Chinese text, otherwise reply in the same language as any text in the image.';
 
-  const requestBody = {
-    contents: [{
-      parts: [
-        { text: prompt },
-        {
-          inline_data: {
-            mime_type: mimeType,
-            data: base64Data,
-          },
-        },
-      ],
-    }],
-    generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 2000,
-    },
-  };
-
-  const url = `${GEMINI_BASE_URL}/models/${model}:generateContent?key=${apiKey}`;
-
   try {
     agentLogger.info({ msg: 'vision_analyze', model, sizeMB: sizeMB.toFixed(1) });
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
+    const genai = new GoogleGenAI({ apiKey });
+    const response = await genai.models.generateContent({
+      model,
+      contents: [{
+        role: 'user',
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType,
+              data: base64Data,
+            },
+          },
+        ],
+      }],
+      config: {
+        temperature: 0.2,
+        maxOutputTokens: 2000,
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      agentLogger.error({ msg: 'vision_error', status: response.status, error: errorText.substring(0, 200) });
-      return { success: false, error: `Gemini API error: ${response.status}` };
-    }
-
-    const data = await response.json() as {
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> };
-      }>;
-    };
-
-    const description = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const description = response.candidates?.[0]?.content?.parts
+      ?.filter((p: Record<string, unknown>) => 'text' in p && p.text)
+      .map((p: Record<string, unknown>) => p.text as string)
+      .join('');
 
     if (!description) {
       return { success: false, error: 'Gemini returned empty response' };

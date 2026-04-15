@@ -1,13 +1,25 @@
+/**
+ * @module storage/db
+ * @description SQLite database singleton using Node.js built-in `node:sqlite`.
+ *
+ * Provides a single shared {@link DatabaseSync} instance for the entire process.
+ * Uses WAL (Write-Ahead Logging) for concurrent read access from CLI, Telegram,
+ * and cron processes, plus a 5-second busy_timeout to handle write contention.
+ *
+ * Schema is auto-created on first access via {@link initializeSchema}.
+ */
+
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DB_PATH } from '../lib/paths.js';
 
+/** Singleton database instance. Lazily initialized on first `getDb()` call. */
 let _db: DatabaseSync | null = null;
 
 /**
  * Initialize SQLite database with required schema.
- * Creates tables if they don't exist, including FTS5 for full-text search.
+ * Creates tables if they don't exist.
  */
 function initializeSchema(db: DatabaseSync): void {
   db.exec(`
@@ -59,6 +71,9 @@ export function getDb(): DatabaseSync {
   // Enable WAL mode for better concurrent read performance
   _db.exec('PRAGMA journal_mode = WAL');
   _db.exec('PRAGMA foreign_keys = ON');
+  // Wait up to 5 s when another connection holds the write lock
+  // (CLI + Telegram + cron may share the same DB file).
+  _db.exec('PRAGMA busy_timeout = 5000');
 
   initializeSchema(_db);
 

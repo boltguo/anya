@@ -21,10 +21,13 @@
  * ```
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { SOUL_PATH, RULES_PATH, USER_MD_PATH, MEMORY_MD_PATH } from '../lib/paths.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { buildSkillIndex } from '../skills/loader.js';
+
+const FILE_CACHE_TTL_MS = 30_000;
+const fileCache = new Map<string, { content: string; mtime: number; cachedAt: number }>();
 
 /**
  * Build the complete system prompt for the Agent.
@@ -77,34 +80,46 @@ export function buildSystemPrompt(config: AnyaConfig): string {
   sections.push('- Never execute destructive commands without explicit user confirmation.');
 
   // ── 7. Platform capabilities ────────────────────────────────────────
+  const enabled = config.tools?.enabled ?? [];
   const caps: string[] = [];
-  caps.push('\n## Platform Capabilities\n');
 
-  // TTS
-  caps.push('- **TTS (Text-to-Speech)**: You have the `tts` tool. Use it to generate speech audio from any text. It sends as a voice bubble on Telegram. Always use the `tts` tool when the user asks you to read, speak, pronounce, or generate audio. You can specify voice (e.g. "zh-CN-XiaoxiaoNeural" for Chinese).');
+  if (enabled.includes('tts')) {
+    caps.push('- **TTS (Text-to-Speech)**: You have the `tts` tool. Use it to generate speech audio from any text. It sends as a voice bubble on Telegram. Always use the `tts` tool when the user asks you to read, speak, pronounce, or generate audio. You can specify voice (e.g. "zh-CN-XiaoxiaoNeural" for Chinese).');
+  }
 
-  // Media sending
-  caps.push('- **Rich Media**: On Telegram, use the `tg` tool with type "photo" or "audio" to send images/audio with captions. Use `<tg-spoiler>text</tg-spoiler>` in HTML to hide text (tap to reveal — great for learning/quiz scenarios).');
+  if (enabled.includes('tg')) {
+    caps.push('- **Rich Media**: On Telegram, use the `tg` tool with type "photo" or "audio" to send images/audio with captions. Use `<tg-spoiler>text</tg-spoiler>` in HTML to hide text (tap to reveal — great for learning/quiz scenarios).');
+  }
 
-  // Vision
   if (config.vision?.gemini_api_key || config.provider?.gemini?.api_key) {
     caps.push('- **Vision**: When the user sends a photo, it is automatically analyzed and the description is provided to you as text.');
   }
 
-  sections.push(caps.join('\n'));
+  if (caps.length > 0) {
+    sections.push('\n## Platform Capabilities\n');
+    sections.push(caps.join('\n'));
+  }
 
   return sections.join('\n');
 }
 
 /**
- * Safely load a file's content, returning empty string if not found.
- * @param path - Absolute path to the file.
+ * Load a file with mtime-aware caching.
+ * Re-reads only when the file's mtime changes or the cache entry expires.
  */
-function loadFile(path: string): string {
-  if (!existsSync(path)) return '';
+function loadFile(filePath: string): string {
+  if (!existsSync(filePath)) return '';
 
   try {
-    const content = readFileSync(path, 'utf-8').trim();
+    const mtime = statSync(filePath).mtimeMs;
+    const cached = fileCache.get(filePath);
+
+    if (cached && cached.mtime === mtime && Date.now() - cached.cachedAt < FILE_CACHE_TTL_MS) {
+      return cached.content;
+    }
+
+    const content = readFileSync(filePath, 'utf-8').trim();
+    fileCache.set(filePath, { content, mtime, cachedAt: Date.now() });
     return content || '';
   } catch {
     return '';

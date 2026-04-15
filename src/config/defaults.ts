@@ -10,22 +10,29 @@
  * - `openai`: OpenAI Codex (OAuth device code)
  */
 
+/** Complete Anya configuration shape. Every field has a default. */
 export interface AnyaConfig {
+  /** JSON Schema reference (optional, for IDE validation). */
   $schema?: string;
+  /** Config format version for migration. */
   version: string;
 
+  /** Agent identity and personality. */
   agent: {
+    /** Display name. */
     name: string;
+    /** System prompt personality (fallback if SOUL.md is missing). */
     personality: string;
   };
 
   provider: {
-    /** Active provider: 'gemini' | 'openai' */
-    active: string;
+    /** Active provider backend. */
+    active: 'gemini' | 'openai';
 
     gemini: {
       model: string;
       api_key: string;
+      api_keys?: string[];
     };
 
     openai: {
@@ -39,22 +46,35 @@ export interface AnyaConfig {
     max_retries: number;
   };
 
+  /** Tool configuration — which tools are enabled and their settings. */
   tools: {
+    /** List of enabled tool names (order determines LLM schema order). */
     enabled: string[];
+    /** Shell tool security settings. */
     shell: {
+      /** Whether shell commands require user approval. */
       require_approval: boolean;
+      /** Commands that skip approval (prefix match). */
       approval_allowlist: string[];
+      /** Default working directory for shell commands. */
       working_directory: string;
     };
+    /** Web search tool settings. */
     web_search: {
+      /** Search backend (currently only 'tavily'). */
       backend: string;
+      /** API key for the search backend. */
       api_key: string;
+      /** Maximum number of results to return. */
       max_results: number;
     };
   };
 
+  /** File system security boundaries. */
   security: {
+    /** Directories the agent can access without approval. */
     allowed_paths: string[];
+    /** Action when accessing paths outside allowed_paths. */
     fence_mode: 'ask' | 'deny' | 'allow';
   };
 
@@ -88,16 +108,24 @@ export interface AnyaConfig {
     show_thinking: boolean;
   };
 
+  /** Advanced tuning parameters. */
   advanced: {
+    /** Maximum context window size in tokens. */
     context_window: number;
+    /** Trigger compression when token usage exceeds this ratio (0-1). */
     compress_threshold: number;
+    /** Maximum sessions to display in session list. */
     session_history_limit: number;
+    /** Maximum messages to load from history per session. */
     max_history_messages: number;
+    /** Logging verbosity: 'debug' | 'info' | 'warn' | 'error'. */
     log_level: string;
+    /** Maximum ReAct loop iterations before forced stop. */
     max_react_loops: number;
   };
 }
 
+/** Built-in default configuration. Merged with user's config.json at load time. */
 export const DEFAULT_CONFIG: AnyaConfig = {
   $schema: './config.schema.json',
   version: '0.2.0',
@@ -190,11 +218,11 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   },
 
   advanced: {
-    context_window: 1000000,
-    compress_threshold: 0.8,
-    session_history_limit: 50,
-    max_history_messages: 50,
-    log_level: 'info',
-    max_react_loops: 20,
+    context_window: 1000000,          // Gemini 2.5 supports 1M context
+    compress_threshold: 0.8,          // Compress when 80% of context used
+    session_history_limit: 50,        // Show last 50 sessions in `anya sessions`
+    max_history_messages: 200,        // Load at most 200 messages from DB
+    log_level: 'info',                // Default log verbosity
+    max_react_loops: 20,              // Safety limit on ReAct iterations
   },
 };

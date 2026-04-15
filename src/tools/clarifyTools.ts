@@ -1,3 +1,12 @@
+/**
+ * @module tools/clarifyTools
+ * @description Clarification tool for multi-step user interaction.
+ *
+ * On Telegram, presents choices as native inline keyboard buttons via
+ * {@link requestChoice}. On CLI, falls back to text-based prompts.
+ * Used when the agent needs the user to pick between options.
+ */
+
 import { register } from './registry.js';
 import type { ToolContext } from '../agent/types.js';
 

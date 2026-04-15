@@ -1,5 +1,19 @@
+/**
+ * @module skills/loader
+ * @description Skill discovery and loading from ~/.anya/skills/.
+ *
+ * Three-level loading strategy:
+ * 1. **Index** — Scan directory names + parse frontmatter for fast skill listing
+ * 2. **Full** — Load complete SKILL.md body for a specific skill
+ * 3. **Files** — List and read auxiliary files in a skill's directory
+ *
+ * Results are cached with a TTL to avoid redundant filesystem reads.
+ * The skill index is injected into the system prompt so the LLM knows
+ * which skills are available.
+ */
+
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
-import { join, basename, dirname } from 'node:path';
+import { join, basename, dirname, resolve, relative, sep } from 'node:path';
 import { SKILLS_DIR } from '../lib/paths.js';
 import { parseSkill, type Skill } from './parser.js';
 
@@ -143,10 +157,11 @@ export function readSkillFile(name: string, filePath: string): string | null {
   if (!skill) return null;
 
   const skillDir = dirname(skill.filePath);
-  const fullPath = join(skillDir, filePath);
+  const fullPath = resolve(skillDir, filePath);
 
   // Security: ensure the resolved path is within the skill directory
-  if (!fullPath.startsWith(skillDir)) return null;
+  const rel = relative(skillDir, fullPath);
+  if (rel.startsWith('..') || rel.startsWith('..' + sep)) return null;
 
   try {
     return readFileSync(fullPath, 'utf-8');

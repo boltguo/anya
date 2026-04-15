@@ -14,6 +14,7 @@
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import which from 'which';
 import { TTS_DIR } from './paths.js';
 import { agentLogger } from './logger.js';
 import type { AnyaConfig } from '../config/defaults.js';
@@ -43,31 +44,12 @@ export interface TtsResult {
   durationSec?: number;
 }
 
-/**
- * Find ffmpeg binary path (homebrew may not be in Node's PATH).
- */
-function findFFmpeg(): string | null {
-  const candidates = [
-    'ffmpeg',
-    '/opt/homebrew/bin/ffmpeg',
-    '/usr/local/bin/ffmpeg',
-    '/usr/bin/ffmpeg',
-  ];
-  for (const bin of candidates) {
-    try {
-      execFileSync(bin, ['-version'], { stdio: 'pipe' });
-      return bin;
-    } catch { /* next */ }
-  }
-  return null;
-}
-
-/** Cached ffmpeg path */
+/** Cached ffmpeg path (null = not found, undefined = not yet checked) */
 let _ffmpegPath: string | null | undefined;
 
 function getFFmpegPath(): string | null {
   if (_ffmpegPath === undefined) {
-    _ffmpegPath = findFFmpeg();
+    _ffmpegPath = which.sync('ffmpeg', { nothrow: true });
   }
   return _ffmpegPath;
 }

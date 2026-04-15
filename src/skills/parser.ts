@@ -1,3 +1,11 @@
+/**
+ * @module skills/parser
+ * @description SKILL.md file parser using gray-matter for YAML frontmatter.
+ *
+ * Extracts structured metadata (name, description, version, tags, category)
+ * from the YAML frontmatter and the full markdown body from a SKILL.md file.
+ */
+
 import matter from 'gray-matter';
 
 /**

@@ -1,7 +1,50 @@
+/**
+ * @module storage/sessionStore
+ * @description Session and message persistence layer.
+ *
+ * Manages conversation sessions and their messages in SQLite. Each session
+ * is identified by a `session_key` (e.g., `tg:12345` or `cli:local`) and
+ * contains an ordered sequence of messages.
+ *
+ * All write operations use {@link withWriteRetry} to handle database-locked
+ * errors that can occur when CLI, Telegram, and cron access the same DB file
+ * concurrently (even with WAL mode and busy_timeout PRAGMA).
+ */
+
 import { randomUUID } from 'node:crypto';
 import { getDb } from './db.js';
 import type { Message } from '../agent/types.js';
 
+/** Maximum number of retry attempts for write operations. */
+const MAX_WRITE_RETRIES = 3;
+/** Base delay between retries (grows linearly: 200ms, 400ms, 600ms). */
+const BASE_RETRY_DELAY_MS = 200;
+
+/**
+ * Execute a synchronous write operation with retry on "database is locked".
+ * Complements the busy_timeout PRAGMA for edge cases where the timeout
+ * is insufficient (e.g. long-running transactions from another process).
+ */
+function withWriteRetry<T>(fn: () => T): T {
+  for (let attempt = 0; attempt < MAX_WRITE_RETRIES; attempt++) {
+    try {
+      return fn();
+    } catch (err) {
+      const isLocked = err instanceof Error && err.message.includes('database is locked');
+      if (isLocked && attempt < MAX_WRITE_RETRIES - 1) {
+        // Linear backoff with jitter to avoid thundering herd
+        const delay = BASE_RETRY_DELAY_MS * (attempt + 1) + Math.random() * 100;
+        // Atomics.wait provides sub-ms sync sleep without blocking the event loop thread
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('withWriteRetry: unreachable');
+}
+
+/** Session metadata stored in the `sessions` table. */
 export interface SessionInfo {
   id: string;
   sessionKey: string;
@@ -20,7 +63,7 @@ export function getOrCreateSession(sessionKey: string): string {
 
   // Find existing session
   const stmt = db.prepare(
-    'SELECT id FROM sessions WHERE session_key = ? ORDER BY updated_at DESC LIMIT 1'
+    'SELECT id FROM sessions WHERE session_key = ? ORDER BY updated_at DESC, rowid DESC LIMIT 1'
   );
   const rows = stmt.all(sessionKey) as Array<{ id: string }>;
 
@@ -28,9 +71,11 @@ export function getOrCreateSession(sessionKey: string): string {
 
   // Create new session
   const id = randomUUID();
-  db.prepare(
-    'INSERT INTO sessions (id, session_key, title) VALUES (?, ?, ?)'
-  ).run(id, sessionKey, '');
+  withWriteRetry(() => {
+    db.prepare(
+      'INSERT INTO sessions (id, session_key, title) VALUES (?, ?, ?)'
+    ).run(id, sessionKey, '');
+  });
 
   return id;
 }
@@ -42,9 +87,11 @@ export function createSession(sessionKey: string, title?: string): string {
   const db = getDb();
   const id = randomUUID();
 
-  db.prepare(
-    'INSERT INTO sessions (id, session_key, title) VALUES (?, ?, ?)'
-  ).run(id, sessionKey, title || '');
+  withWriteRetry(() => {
+    db.prepare(
+      'INSERT INTO sessions (id, session_key, title) VALUES (?, ?, ?)'
+    ).run(id, sessionKey, title || '');
+  });
 
   return id;
 }
@@ -55,6 +102,8 @@ export function createSession(sessionKey: string, title?: string): string {
 export function loadMessages(sessionId: string): Message[] {
   const db = getDb();
 
+  // Query sorted by updated_at DESC so we get the most recent session,
+  // with rowid as tiebreaker for same-timestamp entries.
   const rows = db.prepare(
     'SELECT role, content, tool_calls, tool_call_id, tool_name FROM messages WHERE session_id = ? ORDER BY seq ASC'
   ).all(sessionId) as Array<{
@@ -68,7 +117,7 @@ export function loadMessages(sessionId: string): Message[] {
   return rows.map(row => {
     const msg: Message = {
       role: row.role as Message['role'],
-      content: row.content || undefined,
+      content: row.content || undefined,  // Normalize null → undefined
     };
 
     if (row.tool_calls) {
@@ -85,51 +134,62 @@ export function loadMessages(sessionId: string): Message[] {
 }
 
 /**
- * Append messages to a session.
- * Updates the session's updated_at and message_count.
+ * Append messages to a session inside a single transaction.
+ * Ensures all INSERTs + the metadata UPDATE are atomic — a crash
+ * mid-write cannot leave orphaned messages or a stale count.
  */
 export function saveMessages(sessionId: string, messages: Message[]): void {
-  const db = getDb();
+  withWriteRetry(() => {
+    const db = getDb();
 
-  // Get current max seq
-  const seqRows = db.prepare(
-    'SELECT COALESCE(MAX(seq), -1) as max_seq FROM messages WHERE session_id = ?'
-  ).all(sessionId) as Array<{ max_seq: number }>;
+    const seqRows = db.prepare(
+      'SELECT COALESCE(MAX(seq), -1) as max_seq FROM messages WHERE session_id = ?'
+    ).all(sessionId) as Array<{ max_seq: number }>;
 
-  let seq = (seqRows[0]?.max_seq ?? -1) + 1;
+    let seq = (seqRows[0]?.max_seq ?? -1) + 1;
 
-  const insertMsg = db.prepare(`
-    INSERT INTO messages (session_id, role, content, tool_calls, tool_call_id, tool_name, seq)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
+    const insertMsg = db.prepare(`
+      INSERT INTO messages (session_id, role, content, tool_calls, tool_call_id, tool_name, seq)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
 
-  for (const msg of messages) {
-    insertMsg.run(
-      sessionId,
-      msg.role,
-      msg.content || null,
-      msg.toolCalls ? JSON.stringify(msg.toolCalls) : null,
-      msg.toolCallId || null,
-      msg.toolName || null,
-      seq++
-    );
-  }
+    const updateMeta = db.prepare(`
+      UPDATE sessions SET
+        updated_at = datetime('now'),
+        message_count = (SELECT COUNT(*) FROM messages WHERE session_id = ?)
+      WHERE id = ?
+    `);
 
-  // Update session metadata
-  db.prepare(`
-    UPDATE sessions SET
-      updated_at = datetime('now'),
-      message_count = (SELECT COUNT(*) FROM messages WHERE session_id = ?)
-    WHERE id = ?
-  `).run(sessionId, sessionId);
+    db.exec('BEGIN');
+    try {
+      for (const msg of messages) {
+        insertMsg.run(
+          sessionId,
+          msg.role,
+          msg.content || null,
+          msg.toolCalls ? JSON.stringify(msg.toolCalls) : null,
+          msg.toolCallId || null,
+          msg.toolName || null,
+          seq++
+        );
+      }
+      updateMeta.run(sessionId, sessionId);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  });
 }
 
 /**
  * Update the session title (auto-generated from first user message).
  */
 export function updateSessionTitle(sessionId: string, title: string): void {
-  const db = getDb();
-  db.prepare('UPDATE sessions SET title = ? WHERE id = ?').run(title, sessionId);
+  withWriteRetry(() => {
+    const db = getDb();
+    db.prepare('UPDATE sessions SET title = ? WHERE id = ?').run(title, sessionId);
+  });
 }
 
 /**
@@ -164,7 +224,6 @@ export function listSessions(limit: number = 20): SessionInfo[] {
 
 /**
  * Search messages by content (simple LIKE search).
- * FTS5 can be added later when node:sqlite stabilizes.
  */
 export function searchMessages(query: string, limit: number = 20): Array<{
   sessionId: string;

@@ -1,6 +1,6 @@
 /**
  * @module tools/webSearch
- * @description Web search tool using Tavily API.
+ * @description Web search tool using Tavily SDK.
  *
  * Search results are cached to `~/.anya/data/search/` as JSON files,
  * enabling offline review and deduplication of repeated queries.
@@ -12,6 +12,7 @@ import { SEARCH_CACHE_DIR } from '../lib/paths.js';
 import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { tavily } from '@tavily/core';
 
 // ── Cache Helpers ────────────────────────────────────────────────────────────
 
@@ -63,68 +64,6 @@ function writeCache(query: string, result: string, rawData: unknown): void {
   }, null, 2));
 }
 
-// ── Tavily API ───────────────────────────────────────────────────────────────
-
-/**
- * Search the web using the Tavily API.
- * @see https://docs.tavily.com/
- *
- * @param query - The search query string.
- * @param maxResults - Maximum number of results to return.
- * @param apiKey - Tavily API key.
- * @returns Formatted markdown search results and raw API response.
- */
-async function tavilySearch(
-  query: string,
-  maxResults: number,
-  apiKey: string,
-): Promise<{ formatted: string; raw: unknown }> {
-  const response = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      api_key: apiKey,
-      query,
-      max_results: maxResults,
-      include_answer: true,
-      include_raw_content: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Tavily API error (${response.status}): ${text}`);
-  }
-
-  const data = await response.json() as {
-    answer?: string;
-    results?: Array<{
-      title: string;
-      url: string;
-      content: string;
-    }>;
-  };
-
-  // Format results as clean markdown
-  const lines: string[] = [];
-
-  if (data.answer) {
-    lines.push(`**Summary:** ${data.answer}\n`);
-  }
-
-  if (data.results) {
-    lines.push('**Sources:**\n');
-    for (const [i, result] of data.results.entries()) {
-      lines.push(`${i + 1}. **${result.title}**`);
-      lines.push(`   ${result.url}`);
-      lines.push(`   ${result.content}\n`);
-    }
-  }
-
-  const formatted = lines.join('\n') || 'No results found.';
-  return { formatted, raw: data };
-}
-
 // ── Tool Registration ────────────────────────────────────────────────────────
 
 register({
@@ -160,9 +99,35 @@ register({
       return `Error: Unknown search backend "${backend}". Currently only "tavily" is supported.`;
     }
 
-    // Save result as record
-    const { formatted, raw } = await tavilySearch(query, maxResults, apiKey);
-    writeCache(query, formatted, raw);
+    const cached = readCache(query);
+    if (cached) return cached;
+
+    // Use Tavily SDK
+    const client = tavily({ apiKey });
+    const data = await client.search(query, {
+      maxResults,
+      includeAnswer: true,
+      includeRawContent: false,
+    });
+
+    // Format results as clean markdown
+    const lines: string[] = [];
+
+    if (data.answer) {
+      lines.push(`**Summary:** ${data.answer}\n`);
+    }
+
+    if (data.results) {
+      lines.push('**Sources:**\n');
+      for (const [i, result] of data.results.entries()) {
+        lines.push(`${i + 1}. **${result.title}**`);
+        lines.push(`   ${result.url}`);
+        lines.push(`   ${result.content}\n`);
+      }
+    }
+
+    const formatted = lines.join('\n') || 'No results found.';
+    writeCache(query, formatted, data);
     return formatted;
   },
 });

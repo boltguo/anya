@@ -1,8 +1,19 @@
+/**
+ * @module tools/fileTools
+ * @description File system tools: read_file, write_file, list_dir.
+ *
+ * All file operations are sandboxed by {@link isPathAllowed} — access outside
+ * configured allowed_paths requires user approval via the adapter. The "always"
+ * approval option persists the path to the config for future sessions.
+ */
+
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
 import { join, resolve, dirname, basename } from 'node:path';
 import { register } from './registry.js';
 import { isPathAllowed, type ApprovalResult } from '../lib/approval.js';
+import { persistConfig } from '../config/loader.js';
 import type { ToolContext } from '../agent/types.js';
+import type { AnyaConfig } from '../config/defaults.js';
 
 /**
  * Check file path and request approval if outside fence.
@@ -31,9 +42,12 @@ async function checkFileAccess(
   );
 
   if (result === 'always') {
-    // Add directory to allowed_paths
+    // Add directory to allowed_paths and persist so the decision survives restarts.
     const dir = dirname(resolve(filePath)) + '/';
-    context.config.security.allowed_paths.push(dir);
+    if (!context.config.security.allowed_paths.includes(dir)) {
+      context.config.security.allowed_paths.push(dir);
+      persistConfig(context.config);
+    }
   }
 
   return result !== 'deny';

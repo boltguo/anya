@@ -1,4 +1,14 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+/**
+ * @module tools/memoryTools
+ * @description Long-term memory tools for USER.md and MEMORY.md.
+ *
+ * Allows the agent to persist user profile notes (USER.md) and its own
+ * notes (MEMORY.md) across sessions. These files are injected into the
+ * system prompt on every conversation.
+ */
+
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { register } from './registry.js';
 import { USER_MD_PATH, MEMORY_MD_PATH } from '../lib/paths.js';
 import type { ToolContext } from '../agent/types.js';
@@ -37,6 +47,9 @@ register({
     const fileName = target === 'user' ? 'USER.md' : 'MEMORY.md';
 
     try {
+      const dir = dirname(filePath);
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
       if (action === 'replace') {
         writeFileSync(filePath, content, 'utf-8');
         return `Successfully replaced ${fileName}.`;

@@ -1,3 +1,12 @@
+/**
+ * @module commands/init
+ * @description First-run initialization for ~/.anya/ directory.
+ *
+ * Creates the directory structure, prompts for provider selection and
+ * API key, generates SOUL.md and RULES.md templates, and writes the
+ * initial config.json. Safe to re-run — only creates missing files.
+ */
+
 import { writeFileSync, copyFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +53,7 @@ export async function runInit(): Promise<void> {
   ensureDirectories();
 
   // Build config
-  const config: AnyaConfig = { ...DEFAULT_CONFIG };
+  const config: AnyaConfig = structuredClone(DEFAULT_CONFIG);
 
   // --- 1. Model Provider ---
   console.log();

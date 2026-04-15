@@ -1,4 +1,17 @@
-import { resolve, normalize } from 'node:path';
+/**
+ * @module lib/approval
+ * @description Security helpers for path sandboxing and command approval.
+ *
+ * Two main guards:
+ * - {@link isPathAllowed} — checks if a file path falls within configured
+ *   allowed directories (config.security.allowed_paths). Prevents file
+ *   tools from reading/writing outside the sandbox.
+ * - {@link isCommandAllowed} — checks if a shell command matches the
+ *   approval allowlist (config.tools.shell.approval_allowlist). Prevents
+ *   running unapproved commands without user consent.
+ */
+
+import { resolve, normalize, relative, sep } from 'node:path';
 import { homedir } from 'node:os';
 import type { AnyaConfig } from '../config/defaults.js';
 
@@ -13,6 +26,16 @@ function expandHome(p: string): string {
 }
 
 /**
+ * Check whether `child` is equal to or inside `parent` directory.
+ * Uses relative() to avoid the classic startsWith prefix-collision bug
+ * (e.g. /a/.anya-malicious matching /a/.anya).
+ */
+function isInsideDir(child: string, parent: string): boolean {
+  const rel = relative(parent, child);
+  return rel === '' || (!rel.startsWith('..') && !rel.startsWith('..' + sep));
+}
+
+/**
  * Check if a file path is within the allowed directories.
  * Returns true if the path is inside any of config.security.allowed_paths.
  */
@@ -21,7 +44,7 @@ export function isPathAllowed(filePath: string, config: AnyaConfig): boolean {
 
   for (const allowed of config.security.allowed_paths) {
     const allowedResolved = normalize(resolve(expandHome(allowed)));
-    if (resolved.startsWith(allowedResolved)) {
+    if (isInsideDir(resolved, allowedResolved)) {
       return true;
     }
   }
