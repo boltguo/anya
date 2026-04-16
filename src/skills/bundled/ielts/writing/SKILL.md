@@ -12,7 +12,7 @@ metadatahermes:
 ## When to Use
 
 - Learner says "写作", "writing", "练写作", "学写作", "作文", "写essay"
-- Callback: `ck:writing` or any `ck:writing:*` mode callback
+- Callback: `writing` or any `writing:*` mode callback
 - Reply Keyboard tap: "✍️ 写作"
 
 ## Data
@@ -24,9 +24,9 @@ Synced to `learner.db` via `tracker_db.js`.
 
 | Phase          | Mode                       | When                             | Callback           |
 | -------------- | -------------------------- | -------------------------------- | ------------------ |
-| **Cold start** | Brainstorming              | band < 5.5, brain blank          | `ck:writing:brain` |
-| **Paragraph**  | TEEL Drill                 | Logic scattered, can't structure | `ck:writing:teel`  |
-| **Full task**  | Full Task + Forced Rewrite | Regular training                 | `ck:writing`       |
+| **Cold start** | Brainstorming              | band < 5.5, brain blank          | `writing:brain` |
+| **Paragraph**  | TEEL Drill                 | Logic scattered, can't structure | `writing:teel`  |
+| **Full task**  | Full Task + Forced Rewrite | Regular training                 | `writing`       |
 | **Task 1**     | Chart Description          | Task 1 practice                  | (via S2 decision)  |
 
 ---
@@ -57,7 +57,7 @@ Check if Brainstorming is needed:
 Check if TEEL Drill is appropriate:
 
 - `paragraph_structure_weak` or `topic_sentence_weak` in recent errors → suggest TEEL Drill
-- User callback `ck:writing:teel` → TEEL Drill mode
+- User callback `writing:teel` → TEEL Drill mode
 
 Vocabulary injection:
 
@@ -159,8 +159,8 @@ If Task 1 — first select chart type:
 
 ```
 [KEYBOARD:
-📊 柱状图=ck:writing:bar | 📈 折线图=ck:writing:line | 🥧 饼图=ck:writing:pie
-🗺️ 地图=ck:writing:map | 🔄 流程图=ck:writing:process
+📊 柱状图=writing:bar | 📈 折线图=writing:line | 🥧 饼图=writing:pie
+🗺️ 地图=writing:map | 🔄 流程图=writing:process
 ]
 ```
 
@@ -259,8 +259,8 @@ node tracker_db.js add-error \
 
 ```
 [KEYBOARD:
-😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
-🔁 再来一题=ck:writing | 🏠 返回菜单=ck:menu
+😰 太难了=feedback_too_hard | 👌 刚好=feedback_just_right | 🥱 太简单=feedback_too_easy
+🔁 再来一题=writing | 🏠 返回菜单=menu
 ]
 ```
 

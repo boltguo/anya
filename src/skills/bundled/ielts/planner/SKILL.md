@@ -12,7 +12,7 @@ metadatahermes:
 ## When to Use
 
 - Triggered by `assessment` after Sunday deep evaluation
-- Callback: `ck:report:plan` (user requests plan)
+- Callback: `report_plan` (user requests plan)
 - Learner uses `/focus <area>` to manually override current focus
 
 ## Protocol
@@ -74,7 +74,7 @@ metadatahermes:
 
 7. Old plans are NEVER deleted — they form a historical training path.
 
-### Plan Presentation (ck:report:plan)
+### Plan Presentation (report_plan)
 
 When user requests the plan:
 
@@ -95,7 +95,7 @@ When user requests the plan:
 💡 **难度调整**: 写作降低难度，增加支架
 
 [KEYBOARD:
-✍️ 开始写作=ck:writing | 🗣️ 开始口语=ck:speaking | 🏠 返回=ck:menu
+✍️ 开始写作=writing | 🗣️ 开始口语=speaking | 🏠 返回=menu
 ]
 ```
 

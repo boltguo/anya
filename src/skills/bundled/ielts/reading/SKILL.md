@@ -12,7 +12,7 @@ metadatahermes:
 ## When to Use
 
 - Learner says "阅读", "reading", "练阅读", "学阅读", "看文章"
-- Callback: `ck:reading` or any `ck:reading:*` mode callback
+- Callback: `reading` or any `reading:*` mode callback
 - Reply Keyboard tap: "📖 阅读"
 
 ## Data
@@ -24,9 +24,9 @@ Synced to `learner.db` via `tracker_db.js`.
 
 | Mode                  | Use Case                                      | Core Interaction                      | Callback              |
 | --------------------- | --------------------------------------------- | ------------------------------------- | --------------------- |
-| **Flash-Skimming**    | Reading too slow / word-by-word translation   | Timed display → hide → quiz           | `ck:reading:skim`     |
-| **Sentence Anatomy**  | Long sentence breakdown / T/F/NG logic errors | Socratic questioning → force_reply    | `ck:reading:anatomy`  |
-| **Standard Practice** | Regular training                              | Band-scaled passage + mixed questions | `ck:reading`          |
+| **Flash-Skimming**    | Reading too slow / word-by-word translation   | Timed display → hide → quiz           | `reading_skim`     |
+| **Sentence Anatomy**  | Long sentence breakdown / T/F/NG logic errors | Socratic questioning → force_reply    | `reading_anatomy`  |
+| **Standard Practice** | Regular training                              | Band-scaled passage + mixed questions | `reading`          |
 | **Timed Exam**        | Exam prep                                     | 900 words + 15-min strict cutoff      | (advanced, band 6.5+) |
 
 ---
@@ -113,7 +113,7 @@ Difficulty feedback keyboard.
 
 ## Mode: Sentence Anatomy 长难句解剖
 
-> Triggered after wrong answers in Standard Practice, or via `ck:reading:anatomy`
+> Triggered after wrong answers in Standard Practice, or via `reading_anatomy`
 
 ### [ ] S3 — Extract Problem Sentence
 
@@ -239,7 +239,7 @@ tg(type:"force_reply", text:"回复你的答案")
 | ------- | ------------------------------------------------------- |
 | < 5.5   | Full passage translation in `<tg-spoiler>`              |
 | 5.5-6.0 | Key sentence translations only                          |
-| 6.5+    | Evidence lines only + `[显示翻译\|ck:show_translation]` |
+| 6.5+    | Evidence lines only + `[显示翻译\|show_translation]` |
 
 ### [ ] S8 — Micro Drill: Sentence Anatomy (on wrong answers)
 
@@ -266,8 +266,8 @@ node tracker_db.js add-error \
 
 ```
 [KEYBOARD:
-😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
-🔁 再来一篇=ck:reading | ⬆️ 更难=ck:reading:harder | ⬇️ 更简单=ck:reading:easier | 🏠 返回=ck:menu
+😰 太难了=feedback_too_hard | 👌 刚好=feedback_just_right | 🥱 太简单=feedback_too_easy
+🔁 再来一篇=reading | ⬆️ 更难=reading_harder | ⬇️ 更简单=reading_easier | 🏠 返回=menu
 ]
 ```
 

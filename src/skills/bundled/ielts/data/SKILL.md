@@ -199,10 +199,10 @@ When a learner sends a single English word (2-25 chars, not a function word):
 1. Check if it exists: `vocab_db.js lookup <word>`
 2. **If exists** → render card with mastery info + SRS status
    - Show: word, IPA, definition, Chinese, collocations, transfer level, next review date
-   - Keyboard: `[复习|ck:word:review]` `[使用记录|ck:word:history]`
+   - Keyboard: `[复习|word_review]` `[使用记录|word_history]`
 3. **If not** → generate definition, IPA, Chinese, POS, collocations
    - Show translation + personalized examples + TTS
-   - Keyboard: `[加入单词本|ck:word:save]` `[跳过|ck:word:next]`
+   - Keyboard: `[加入单词本|word_save]` `[跳过|word_next]`
 4. If confirmed → `vocab_db.js add --word ... --source "lookup"`
 
 Function words that should NOT trigger implicit lookup:
@@ -212,9 +212,9 @@ Function words that should NOT trigger implicit lookup:
 
 | Callback          | Action                                                            |
 | ----------------- | ----------------------------------------------------------------- |
-| `ck:word:save`    | `vocab_db.js add` → sync word to DB, react ✅                     |
-| `ck:word:review`  | `vocab_db.js list due --limit 1` → start SRS review for this word |
-| `ck:word:history` | `vocab_db.js get <word>` → show usage history across sessions     |
+| `word_save`    | `vocab_db.js add` → sync word to DB, react ✅                     |
+| `word_review`  | `vocab_db.js list due --limit 1` → start SRS review for this word |
+| `word_history` | `vocab_db.js get <word>` → show usage history across sessions     |
 
 ## Rules
 

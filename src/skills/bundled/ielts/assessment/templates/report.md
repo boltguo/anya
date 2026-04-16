@@ -24,7 +24,7 @@
 3. {{error_3}} ({{cat_3}}) — {{count_3}} 次
 
 [KEYBOARD:
-📋 下周计划=ck:report:plan | 📊 详细数据=ck:report:detail | 🏠 返回=ck:menu
+📋 下周计划=report_plan | 📊 详细数据=report_detail | 🏠 返回=menu
 ]
 ```
 
@@ -60,11 +60,11 @@ Let's go! 💪
 ⚠️ 薄弱点: {{weaknesses}}
 
 [KEYBOARD:
-📊 详细分析=ck:report:detail | 📋 学习计划=ck:report:plan | 🎯 开始练习=ck:menu
+📊 详细分析=report_detail | 📋 学习计划=report_plan | 🎯 开始练习=menu
 ]
 ```
 
-### Detailed Report (ck:report:detail)
+### Detailed Report (report_detail)
 
 ```
 📊 **详细分析**
@@ -92,6 +92,6 @@ Let's go! 💪
 - L1: {{l1_count}} | L2: {{l2_count}} | L3: {{l3_count}} | L4: {{l4_count}}
 
 [KEYBOARD:
-📋 学习计划=ck:report:plan | 🎯 开始练习=ck:menu
+📋 学习计划=report_plan | 🎯 开始练习=menu
 ]
 ```

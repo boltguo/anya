@@ -12,7 +12,7 @@ metadatahermes:
 ## When to Use
 
 - Learner says "听力", "listening", "练听力", "学听力"
-- Callback: `ck:listening` or any `ck:listening:*` mode callback
+- Callback: `listening` or any `listening:*` mode callback
 - Reply Keyboard tap: "🎧 听力"
 
 ## Data
@@ -24,11 +24,11 @@ Synced to `learner.db` via `tracker_db.js`.
 
 | Mode              | Band    | Audio Type          | Core Tools                       | Callback                          |
 | ----------------- | ------- | ------------------- | -------------------------------- | --------------------------------- |
-| **Sound Drill**   | < 5.0   | Word/phrase pairs   | `tts` + `quiz`                   | `ck:listening:sound`              |
-| **Dictation**     | 4.5-6.0 | 8-25 word sentences | `tts` + `force_reply` + diff     | `ck:listening:dictation`          |
-| **Short Clip**    | 5.0-6.0 | 40-80s dialogue     | `tts` + `force_reply` + spoiler  | `ck:listening:clip`               |
-| **Question Type** | All     | Task-specific       | `tts` + `quiz` + `force_reply`   | `ck:listening:type`               |
-| **Lecture**       | 6.0+    | 90-180s academic    | `tts` + `force_reply` + keyboard | `ck:listening` (default for 6.0+) |
+| **Sound Drill**   | < 5.0   | Word/phrase pairs   | `tts` + `quiz`                   | `listening_sound`              |
+| **Dictation**     | 4.5-6.0 | 8-25 word sentences | `tts` + `force_reply` + diff     | `listening:dictation`          |
+| **Short Clip**    | 5.0-6.0 | 40-80s dialogue     | `tts` + `force_reply` + spoiler  | `listening:clip`               |
+| **Question Type** | All     | Task-specific       | `tts` + `quiz` + `force_reply`   | `listening:type`               |
+| **Lecture**       | 6.0+    | 90-180s academic    | `tts` + `force_reply` + keyboard | `listening` (default for 6.0+) |
 
 ---
 
@@ -41,7 +41,7 @@ Synced to `learner.db` via `tracker_db.js`.
 3. Query `tracker_db.js list-samples --skill-type listening --limit 5`
 4. Query `tracker_db.js list-errors --skill listening --limit 10`
 
-**Auto Mode Selection Logic** (if no specific `ck:listening:*` callback):
+**Auto Mode Selection Logic** (if no specific `listening:*` callback):
 
 1. Basic sound discrimination errors frequent → **Sound Drill**
 2. Function word / sentence structure errors → **Dictation**
@@ -53,9 +53,9 @@ Show recommended mode + allow override:
 
 ```
 [KEYBOARD:
-🎯 推荐: 听写=ck:listening:dictation
-🔊 辨音=ck:listening:sound | 🎧 短音频=ck:listening:clip
-📝 题型=ck:listening:type | 🏠 返回=ck:menu
+🎯 推荐: 听写=listening:dictation
+🔊 辨音=listening_sound | 🎧 短音频=listening:clip
+📝 题型=listening:type | 🏠 返回=menu
 ]
 ```
 
@@ -132,8 +132,8 @@ Record errors with `minimal_pair_confusion` or `number_confusion` taxonomy keys.
 
 ```
 [KEYBOARD:
-😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
-🔁 再来一组=ck:listening:sound | ✍️ 试试听写=ck:listening:dictation | 🏠 返回=ck:menu
+😰 太难了=feedback_too_hard | 👌 刚好=feedback_just_right | 🥱 太简单=feedback_too_easy
+🔁 再来一组=listening_sound | ✍️ 试试听写=listening:dictation | 🏠 返回=menu
 ]
 ```
 
@@ -271,7 +271,7 @@ Grade answers. For each wrong answer, classify the error cause:
 | ------- | ------------------------------------------------------------ |
 | < 5.0   | Full transcript + full Chinese translation in `<tg-spoiler>` |
 | 5.0-6.0 | Full transcript + key sentence translations only             |
-| 6.5+    | Evidence line only + `[显示翻译\|ck:show_translation]`       |
+| 6.5+    | Evidence line only + `[显示翻译\|show_translation]`       |
 
 ### [ ] S8 — Micro Drill
 
@@ -293,8 +293,8 @@ Record errors: `paraphrase_miss`, `distractor_trap`, `function_word_miss`, etc.
 
 ```
 [KEYBOARD:
-😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
-🔁 再听一遍=ck:listening:replay | 🔁 下一题=ck:listening:clip | 🏠 返回=ck:menu
+😰 太难了=feedback_too_hard | 👌 刚好=feedback_just_right | 🥱 太简单=feedback_too_easy
+🔁 再听一遍=listening_replay | 🔁 下一题=listening:clip | 🏠 返回=menu
 ]
 ```
 

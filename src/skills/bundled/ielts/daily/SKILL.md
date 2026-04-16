@@ -138,4 +138,4 @@ One sentence improvement task.
 4. **Personalize topics** from USER.md hobbies and engage topics.
 5. **If absent 3+ days**: gentle re-entry, no guilt-tripping. Use Format A (lightest).
 6. **Record responses** via `data` for tracking engagement.
-7. **New words encountered** → offer `[加入单词本|ck:word:save]`.
+7. **New words encountered** → offer `[加入单词本|word_save]`.

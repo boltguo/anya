@@ -22,6 +22,8 @@ export interface Skill {
   tags: string[];
   /** Category (maps to subdirectory under skills/) */
   category: string;
+  /** Whether to register as a Telegram /command */
+  command: boolean;
   /** Full markdown body (Level 1 content) */
   body: string;
   /** Absolute path to the SKILL.md file */
@@ -54,6 +56,7 @@ export function parseSkill(content: string, filePath: string, fallbackName?: str
     version: String(data.version || '1.0.0'),
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
     category: String(data.category || 'general'),
+    command: data.command === true,
     body: body.trim(),
     filePath,
   };

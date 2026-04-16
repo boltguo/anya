@@ -171,84 +171,84 @@ Criteria:
 
 ### 2. Skill Shortcuts (direct, skip menu)
 
-When the message contains a **specific skill keyword** (or a `ck:` callback), go directly to that skill — do NOT show the practice menu:
+When the message contains a **specific skill keyword** (or a callback), go directly to that skill — do NOT show the practice menu:
 
 | Input (keyword match)                                          | Target                 |
 | -------------------------------------------------------------- | ---------------------- |
-| 口语 / speaking / 练口语 / 学口语 / ck:speaking                | `speaking`             |
-| 写作 / writing / 练写作 / 学写作 / 作文 / 写essay / ck:writing | `writing`              |
-| 阅读 / reading / 练阅读 / 学阅读 / 看文章 / ck:reading         | `reading`              |
-| 听力 / listening / 练听力 / 学听力 / ck:listening              | `listening`            |
-| 单词 / flashcard / 背单词 / 复习单词 / 学单词 / ck:flashcard   | `flashcard`            |
-| 测评 / assessment / ck:assessment                              | `assessment`           |
-| ck:menu                                                        | `practice` → show menu |
+| 口语 / speaking / 练口语 / 学口语 / speaking                | `speaking`             |
+| 写作 / writing / 练写作 / 学写作 / 作文 / 写essay / writing | `writing`              |
+| 阅读 / reading / 练阅读 / 学阅读 / 看文章 / reading         | `reading`              |
+| 听力 / listening / 练听力 / 学听力 / listening              | `listening`            |
+| 单词 / flashcard / 背单词 / 复习单词 / 学单词 / flashcard   | `flashcard`            |
+| 测评 / assessment / assessment                              | `assessment`           |
+| menu                                                        | `practice` → show menu |
 
 **Difficulty Feedback Callbacks** (all skills):
 
 | Callback                 | Action                                       |
 | ------------------------ | -------------------------------------------- |
-| `ck:feedback:too_hard`   | Record to tracker_db + lower next difficulty |
-| `ck:feedback:just_right` | Record to tracker_db + maintain difficulty   |
-| `ck:feedback:too_easy`   | Record to tracker_db + raise next difficulty |
+| `feedback_too_hard`   | Record to tracker_db + lower next difficulty |
+| `feedback_just_right` | Record to tracker_db + maintain difficulty   |
+| `feedback_too_easy`   | Record to tracker_db + raise next difficulty |
 
 **Speaking Mode Callbacks**:
 
 | Callback                | Target                           |
 | ----------------------- | -------------------------------- |
-| `ck:speaking:shadowing` | `speaking` → Shadowing mode      |
-| `ck:speaking:qa`        | `speaking` → Guided QA mode      |
-| `ck:speaking:exam`      | `speaking` → Examiner Sim mode   |
-| `ck:speaking:retell`    | `speaking` → Retell mode         |
-| `ck:speaking:roleplay`  | `speaking` → Role-play mode      |
-| `ck:speaking:cuecard`   | `speaking` → Cue Card Build mode |
+| `speaking:shadowing` | `speaking` → Shadowing mode      |
+| `speaking:qa`        | `speaking` → Guided QA mode      |
+| `speaking:exam`      | `speaking` → Examiner Sim mode   |
+| `speaking:retell`    | `speaking` → Retell mode         |
+| `speaking:roleplay`  | `speaking` → Role-play mode      |
+| `speaking:cuecard`   | `speaking` → Cue Card Build mode |
 
 **Listening Mode Callbacks**:
 
 | Callback                                      | Target                                 |
 | --------------------------------------------- | -------------------------------------- |
-| `ck:listening:sound`                          | `listening` → Sound Drill mode         |
-| `ck:listening:dictation`                      | `listening` → Dictation mode           |
-| `ck:listening:clip`                           | `listening` → Short Clip mode          |
-| `ck:listening:type`                           | `listening` → Question Type Drill mode |
-| `ck:listening:replay`                         | `listening` → replay current audio     |
-| `ck:listening:harder` / `ck:listening:easier` | `listening` → adjust difficulty        |
+| `listening_sound`                          | `listening` → Sound Drill mode         |
+| `listening:dictation`                      | `listening` → Dictation mode           |
+| `listening:clip`                           | `listening` → Short Clip mode          |
+| `listening:type`                           | `listening` → Question Type Drill mode |
+| `listening_replay`                         | `listening` → replay current audio     |
+| `listening_harder` / `listening_easier` | `listening` → adjust difficulty        |
 
 **Reading Mode Callbacks**:
 
 | Callback                                  | Target                            |
 | ----------------------------------------- | --------------------------------- |
-| `ck:reading:skim`                         | `reading` → Flash-Skimming mode   |
-| `ck:reading:anatomy`                      | `reading` → Sentence Anatomy mode |
-| `ck:reading:harder` / `ck:reading:easier` | `reading` → adjust difficulty     |
+| `reading_skim`                         | `reading` → Flash-Skimming mode   |
+| `reading_anatomy`                      | `reading` → Sentence Anatomy mode |
+| `reading_harder` / `reading_easier` | `reading` → adjust difficulty     |
 
 **Writing Mode Callbacks**:
 
 | Callback             | Target                                    |
 | -------------------- | ----------------------------------------- |
-| `ck:writing:brain`   | `writing` → Brainstorming mode            |
-| `ck:writing:teel`    | `writing` → TEEL Drill mode               |
-| `ck:writing:topic`   | `writing` → TEEL step T (topic sentence)  |
-| `ck:writing:explain` | `writing` → TEEL step E1 (explain)        |
-| `ck:writing:example` | `writing` → TEEL step E2 (example)        |
-| `ck:writing:link`    | `writing` → TEEL step L (link/conclusion) |
+| `writing:brain`   | `writing` → Brainstorming mode            |
+| `writing:teel`    | `writing` → TEEL Drill mode               |
+| `writing:topic`   | `writing` → TEEL step T (topic sentence)  |
+| `writing:explain` | `writing` → TEEL step E1 (explain)        |
+| `writing:example` | `writing` → TEEL step E2 (example)        |
+| `writing:link`    | `writing` → TEEL step L (link/conclusion) |
 
 **Vocabulary Callbacks**:
 
 | Callback                                              | Target                                 |
 | ----------------------------------------------------- | -------------------------------------- |
-| `ck:word:known` / `ck:word:vague` / `ck:word:unknown` | `flashcard` → response handling        |
-| `ck:word:next`                                        | `flashcard` → next word                |
-| `ck:word:save`                                        | `data` → save word to vocab.db         |
-| `ck:word:review`                                      | `flashcard` → SRS review for this word |
-| `ck:word:history`                                     | `data` → show word usage history       |
+| `word_known` / `word_vague` / `word_unknown` | `flashcard` → response handling        |
+| `word_next`                                        | `flashcard` → next word                |
+| `word_save`                                        | `data` → save word to vocab.db         |
+| `word_review`                                      | `flashcard` → SRS review for this word |
+| `word_history`                                     | `data` → show word usage history       |
 
 **Other Callbacks**:
 
 | Callback              | Target                                           |
 | --------------------- | ------------------------------------------------ |
-| `ck:show_translation` | Show translation for current content (on-demand) |
-| `ck:report:detail`    | `assessment` → detailed report view              |
-| `ck:report:plan`      | `planner` → show/generate weekly plan            |
+| `show_translation` | Show translation for current content (on-demand) |
+| `report_detail`    | `assessment` → detailed report view              |
+| `report_plan`      | `planner` → show/generate weekly plan            |
 
 ### 3. Practice Menu (no specific type)
 
@@ -291,7 +291,7 @@ Mirror rule: learner writes CN → bilingual reply. Learner writes EN → Englis
 - **4D IELTS scoring** on every writing/speaking sample (Task / Coherence / Lexical / Grammar). No vague praise.
 - **Error tracking** to `learner.db` via `data`, keyed by error taxonomy `recurrence_key`. Targeted drills, not generic.
 - **EMA band updates** (α=0.3) after every session. Three modes: Light (daily 22:00, silent), On-demand (user-triggered), Deep (weekly, full report + new plan).
-- **Difficulty feedback** collected after every training session via inline keyboard (`ck:feedback:*`). Drives adaptive difficulty.
+- **Difficulty feedback** collected after every training session via inline keyboard (`feedback_*`). Drives adaptive difficulty.
 - **Redo tracking**: `redo_count` recorded per sample. Samples with `redo_count = 0` have lower weight in assessment.
 - **Mode tracking**: Every sample records its training `mode` for fine-grained analysis.
 
@@ -307,7 +307,7 @@ Mirror rule: learner writes CN → bilingual reply. Learner writes EN → Englis
 6. **Welcome back, no guilt.** 3+ days absent → 10-min warm-up, no commentary on the absence.
 7. **No unsanctioned changes.** Never modify skill files, scripts, schema, or config without explicit user approval via inline keyboard (see Hard Constraints § 1).
 8. **No redo, no teaching.** Every training session MUST include Micro Drill (S8) + Forced Redo (S9). User cannot skip.
-9. **Difficulty is adaptive.** Collect `ck:feedback:*` after every session. Adjust next session accordingly.
+9. **Difficulty is adaptive.** Collect `feedback_*` after every session. Adjust next session accordingly.
 10. **Translation is tiered.** Band <5.0 = full translation; 5.0-6.0 = key sentences; 6.5+ = on-demand only.
 
 ### Practice Calibration (Before Every Drill)

@@ -100,16 +100,16 @@ Every training session MUST end with this inline keyboard:
 
 ```
 [KEYBOARD:
-😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
-🔁 继续练习=ck:<skill> | 🏠 返回菜单=ck:menu
+😰 太难了=feedback_too_hard | 👌 刚好=feedback_just_right | 🥱 太简单=feedback_too_easy
+🔁 继续练习=skill | 🏠 返回菜单=menu
 ]
 ```
 
 Callback handling:
 
-- `ck:feedback:too_hard` → next session: lower difficulty, increase scaffolding
-- `ck:feedback:just_right` → maintain current difficulty
-- `ck:feedback:too_easy` → next session: raise difficulty, reduce scaffolding
+- `feedback_too_hard` → next session: lower difficulty, increase scaffolding
+- `feedback_just_right` → maintain current difficulty
+- `feedback_too_easy` → next session: raise difficulty, reduce scaffolding
 
 ## Scoring Dimensions
 
@@ -128,43 +128,43 @@ Reading and Listening use accuracy-based scoring (% correct → estimated band).
 | ------- | ------------------ | ------------------------------- | ------------------------------------------- |
 | 4.0-5.0 | Full text          | Full Chinese translation        | `<tg-spoiler>全文+翻译</tg-spoiler>`        |
 | 5.5-6.0 | Full text          | Key sentences + vocabulary only | Key sentences in `<tg-spoiler>`             |
-| 6.5+    | Evidence line only | No default translation          | `[显示翻译\|ck:show_translation]` on-demand |
+| 6.5+    | Evidence line only | No default translation          | `[显示翻译\|show_translation]` on-demand |
 
 ## Callback Routing
 
-All next-step buttons use `ck:` prefix:
+All next-step buttons use callback prefix:
 
 | Callback                                                                   | Action                        |
 | -------------------------------------------------------------------------- | ----------------------------- |
-| `ck:writing`                                                               | Start new writing exercise    |
-| `ck:speaking`                                                              | Start new speaking exercise   |
-| `ck:reading`                                                               | Start new reading exercise    |
-| `ck:listening`                                                             | Start new listening exercise  |
-| `ck:speaking:shadowing`                                                    | Speaking shadowing mode       |
-| `ck:speaking:qa`                                                           | Speaking guided QA mode       |
-| `ck:speaking:exam`                                                         | Speaking examiner sim mode    |
-| `ck:speaking:retell`                                                       | Speaking retell mode          |
-| `ck:speaking:roleplay`                                                     | Speaking role-play mode       |
-| `ck:speaking:cuecard`                                                      | Speaking cue card build mode  |
-| `ck:listening:sound`                                                       | Listening sound drill mode    |
-| `ck:listening:dictation`                                                   | Listening dictation mode      |
-| `ck:listening:clip`                                                        | Listening short clip mode     |
-| `ck:listening:type`                                                        | Listening question type drill |
-| `ck:reading:skim`                                                          | Reading flash-skimming mode   |
-| `ck:reading:anatomy`                                                       | Reading sentence anatomy mode |
-| `ck:writing:brain`                                                         | Writing brainstorming mode    |
-| `ck:writing:teel`                                                          | Writing TEEL drill mode       |
-| `ck:reading:harder` / `ck:reading:easier`                                  | Adjust reading difficulty     |
-| `ck:listening:harder` / `ck:listening:easier`                              | Adjust listening difficulty   |
-| `ck:listening:replay`                                                      | Replay audio                  |
-| `ck:feedback:too_hard` / `ck:feedback:just_right` / `ck:feedback:too_easy` | Difficulty feedback           |
-| `ck:show_translation`                                                      | Show translation on demand    |
-| `ck:word:save`                                                             | Save word to vocab.db         |
-| `ck:word:review`                                                           | Trigger SRS review            |
-| `ck:word:history`                                                          | Show word usage history       |
-| `ck:report:detail`                                                         | Detailed assessment report    |
-| `ck:report:plan`                                                           | Show/generate weekly plan     |
-| `ck:menu`                                                                  | Return to practice menu       |
+| `writing`                                                               | Start new writing exercise    |
+| `speaking`                                                              | Start new speaking exercise   |
+| `reading`                                                               | Start new reading exercise    |
+| `listening`                                                             | Start new listening exercise  |
+| `speaking:shadowing`                                                    | Speaking shadowing mode       |
+| `speaking:qa`                                                           | Speaking guided QA mode       |
+| `speaking:exam`                                                         | Speaking examiner sim mode    |
+| `speaking:retell`                                                       | Speaking retell mode          |
+| `speaking:roleplay`                                                     | Speaking role-play mode       |
+| `speaking:cuecard`                                                      | Speaking cue card build mode  |
+| `listening_sound`                                                       | Listening sound drill mode    |
+| `listening:dictation`                                                   | Listening dictation mode      |
+| `listening:clip`                                                        | Listening short clip mode     |
+| `listening:type`                                                        | Listening question type drill |
+| `reading_skim`                                                          | Reading flash-skimming mode   |
+| `reading_anatomy`                                                       | Reading sentence anatomy mode |
+| `writing:brain`                                                         | Writing brainstorming mode    |
+| `writing:teel`                                                          | Writing TEEL drill mode       |
+| `reading_harder` / `reading_easier`                                  | Adjust reading difficulty     |
+| `listening_harder` / `listening_easier`                              | Adjust listening difficulty   |
+| `listening_replay`                                                      | Replay audio                  |
+| `feedback_too_hard` / `feedback_just_right` / `feedback_too_easy` | Difficulty feedback           |
+| `show_translation`                                                      | Show translation on demand    |
+| `word_save`                                                             | Save word to vocab.db         |
+| `word_review`                                                           | Trigger SRS review            |
+| `word_history`                                                          | Show word usage history       |
+| `report_detail`                                                         | Detailed assessment report    |
+| `report_plan`                                                           | Show/generate weekly plan     |
+| `menu`                                                                  | Return to practice menu       |
 
 ## Error Recording
 

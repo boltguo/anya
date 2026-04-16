@@ -15,7 +15,7 @@
  */
 
 import { isAbsolute } from 'node:path';
-import { Bot, InlineKeyboard, InputFile, Context } from 'grammy';
+import { Bot, InlineKeyboard, Keyboard, InputFile, Context } from 'grammy';
 import PQueue from 'p-queue';
 import type { Adapter } from '../../agent/types.js';
 import type { AnyaConfig } from '../../config/defaults.js';
@@ -82,9 +82,9 @@ export class TelegramSessionAdapter implements Adapter {
   }
 
   /**
-   * Smart reply-to: resolves the reply target.
-   * First content message in a turn auto-replies to the user's incoming message.
-   * Subsequent messages in the same turn don't auto-reply (avoids reply-chain spam).
+   * 智能回复：解析回复目标。
+   * 本轮对话中的第一条内容消息会自动回复用户的原始消息。
+   * 同一轮中的后续消息不会自动回复（避免回复链刷屏）。
    */
   private autoReplyTo(explicitReplyTo?: number | string): number | undefined {
     const resolved = this.resolveMessageId(explicitReplyTo);
@@ -153,25 +153,32 @@ export class TelegramSessionAdapter implements Adapter {
 
   // ── Status window (compact single-line, enqueued) ─────────────────────────
 
-  private static TOOL_EMOJI: Record<string, string> = {
-    read_file: '📄', write_file: '✏️', list_dir: '📁',
-    shell: '💻', web_search: '🔍', memory_update: '🧠',
-    skill_manage: '🧩', skill_view: '🧩', clarify: '💬',
-    tg: '💬',
+  /** User-friendly tool display labels */
+  private static TOOL_LABEL: Record<string, string> = {
+    read_file: '📄 Reading file',
+    write_file: '✏️ Writing file',
+    list_dir: '📁 Browsing directory',
+    shell: '💻 Running command',
+    web_search: '🔍 Searching',
+    memory_update: '🧠 Updating memory',
+    skill_manage: '🧩 Managing skill',
+    skill_view: '🧩 Loading skill',
+    clarify: '💬 Asking question',
+    tg: '💬 Sending message',
+    tts: '🔊 Generating audio',
+    image_gen: '🖼️ Generating image',
+    pron_assess: '🗣️ Assessing pronunciation',
   };
 
   showToolCall(toolName: string, _args: Record<string, unknown>): void {
-    const emoji = TelegramSessionAdapter.TOOL_EMOJI[toolName] || '⚙️';
-    this.statusLines = [`${emoji} ${toolName}...`];
+    const label = TelegramSessionAdapter.TOOL_LABEL[toolName] || `⚙️ ${toolName}`;
+    this.statusLines = [`${label}...`];
     this.enqueue(() => this.flushStatus());
   }
 
   showToolResult(toolName: string, _result: string, isError: boolean): void {
-    if (isError) {
-      this.statusLines = [`❌ ${toolName} failed`];
-    } else {
-      this.statusLines = [`✅ ${toolName}`];
-    }
+    // Clear status on completion — the actual result is sent via reply
+    this.statusLines = [];
     this.enqueue(() => this.flushStatus());
   }
 
@@ -198,25 +205,28 @@ export class TelegramSessionAdapter implements Adapter {
   }
 
   /**
-   * Present an approval prompt with Allow/Deny/Always buttons.
+   * Present an approval prompt with a one-time reply keyboard.
+   * User taps a button → sends text → intercepted by message handler → resolves promise.
    * Times out after 5 minutes, defaulting to 'deny'.
    */
   async requestApproval(description: string): Promise<'allow' | 'deny' | 'always'> {
     const approvalId = `approval_${Date.now()}`;
-    const keyboard = new InlineKeyboard()
-      .text('Allow', `${approvalId}:allow`)
-      .text('Deny', `${approvalId}:deny`)
-      .text('Always Allow', `${approvalId}:always`);
 
-    const sent = await this.ctx.reply(`Approval Required\n\n${description}`, { reply_markup: keyboard });
+    const keyboard = new Keyboard()
+      .text('✅ Allow').text('❌ Deny').text('🔓 Always Allow')
+      .oneTime()
+      .resized();
+
+    await this.ctx.reply(
+      `🔐 Approval Required\n\n${description}`,
+      { reply_markup: keyboard },
+    );
 
     return new Promise<'allow' | 'deny' | 'always'>((resolve) => {
       this.pendingApprovals.set(approvalId, { resolve });
       setTimeout(() => {
         if (this.pendingApprovals.has(approvalId)) {
           this.pendingApprovals.delete(approvalId);
-          this.bot.api.editMessageReplyMarkup(this.chatId, sent.message_id, { reply_markup: undefined }).catch(() => {});
-          this.bot.api.editMessageText(this.chatId, sent.message_id, `Approval Required\n\n${description}\n\n⏱ 已超时`).catch(() => {});
           resolve('deny');
         }
       }, 5 * 60 * 1000);
@@ -244,7 +254,7 @@ export class TelegramSessionAdapter implements Adapter {
         if (this.pendingChoices.has(choiceKey)) {
           this.pendingChoices.delete(choiceKey);
           this.bot.api.editMessageReplyMarkup(this.chatId, sent.message_id, { reply_markup: undefined }).catch(() => {});
-          this.bot.api.editMessageText(this.chatId, sent.message_id, `${description}\n\n⏱ 已超时`).catch(() => {});
+          this.bot.api.editMessageText(this.chatId, sent.message_id, `${description}\n\n⏱ Timed out`).catch(() => {});
           resolve('');
         }
       }, 10 * 60 * 1000);

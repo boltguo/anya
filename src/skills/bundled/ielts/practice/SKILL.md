@@ -47,18 +47,18 @@ When the learner taps a button, Telegram sends the button text as a normal messa
 
 No callback routing needed — Reply Keyboard sends plain text, which flows through the standard message handler.
 
-### `ck:` Callback Reference
+### callback Callback Reference
 
-Other skills (e.g. `start` Phase 5, `[KEYBOARD:]` tags) may send Inline Keyboards with `ck:` callbacks that also route here:
+Other skills (e.g. `start` Phase 5, `[KEYBOARD:]` tags) may send Inline Keyboards with callback callbacks that also route here:
 
-- `ck:writing` → `writing`
-- `ck:speaking` → `speaking`
-- `ck:reading` → `reading`
-- `ck:listening` → `listening`
-- `ck:flashcard` → `flashcard`
-- `ck:assessment` → `assessment`
+- `writing` → `writing`
+- `speaking` → `speaking`
+- `reading` → `reading`
+- `listening` → `listening`
+- `flashcard` → `flashcard`
+- `assessment` → `assessment`
 
-These are handled by the gateway's `_handle_custom_keyboard_callback` which re-injects the `ck:xxx` string as a virtual text message, then matched by SOUL.md's Skill Shortcuts table.
+These are handled by the gateway's `_handle_custom_keyboard_callback` which re-injects the `callback data` string as a virtual text message, then matched by SOUL.md's Skill Shortcuts table.
 
 ## Rules
 

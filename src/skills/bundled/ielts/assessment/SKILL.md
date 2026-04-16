@@ -13,7 +13,7 @@ metadatahermes:
 
 - **Light**: cron 22:00 daily
 - **Deep**: cron Sunday 20:00
-- **On-demand**: `ck:assessment` callback or "测评" keyword
+- **On-demand**: `assessment` callback or "测评" keyword
 - Never from individual training sessions (that's `data`'s job)
 
 ## Resources
@@ -95,7 +95,7 @@ Full weekly analysis. Produces a visible report.
 🔄 **重做完成率**: {{redo_rate}}%
 
 [KEYBOARD:
-📋 下周计划=ck:report:plan | 📊 详细数据=ck:report:detail | 🏠 返回=ck:menu
+📋 下周计划=report_plan | 📊 详细数据=report_detail | 🏠 返回=menu
 ]
 ```
 
@@ -129,13 +129,13 @@ Interactive level check. ~10-15 minutes.
 ⚠️ 薄弱点: {{weaknesses}}
 
 [KEYBOARD:
-📊 详细分析=ck:report:detail | 📋 学习计划=ck:report:plan | 🎯 开始练习=ck:menu
+📊 详细分析=report_detail | 📋 学习计划=report_plan | 🎯 开始练习=menu
 ]
 ```
 
 6. Record samples via `data`
 
-### Detailed Report (ck:report:detail)
+### Detailed Report (report_detail)
 
 When user taps "详细数据":
 

@@ -17,6 +17,7 @@ import { Agent, type RunResult } from '../../agent/Agent.js';
 import { registerAllTools } from '../../tools/registry.js';
 import { agentLogger } from '../../lib/logger.js';
 import { trackStt } from '../../lib/usage.js';
+import { loadSkills } from '../../skills/loader.js';
 import { createSession } from '../../storage/sessionStore.js';
 import { transcribeAudio } from '../../lib/stt.js';
 import { analyzeImage } from '../../lib/vision.js';
@@ -54,6 +55,48 @@ export class TelegramAdapter {
   }
 
   /**
+   * Cancel all pending approvals and choices.
+   * Resolves approvals as 'deny', choices as empty string.
+   * @returns number of cancelled items.
+   */
+  private cancelPending(): number {
+    let count = 0;
+    for (const [id, pending] of this.pendingApprovals) {
+      pending.resolve('deny');
+      count++;
+    }
+    this.pendingApprovals.clear();
+    for (const [id, pending] of this.pendingChoices) {
+      pending.resolve('');
+      count++;
+    }
+    this.pendingChoices.clear();
+    return count;
+  }
+
+  /**
+   * Try to resolve a pending approval from a reply keyboard text.
+   * @returns true if the text was an approval response and was handled.
+   */
+  private tryResolveApproval(text: string): boolean {
+    const trimmed = text.trim();
+    let action: 'allow' | 'deny' | 'always' | null = null;
+
+    if (trimmed === '✅ Allow') action = 'allow';
+    else if (trimmed === '❌ Deny') action = 'deny';
+    else if (trimmed === '🔓 Always Allow') action = 'always';
+
+    if (!action || this.pendingApprovals.size === 0) return false;
+
+    // Resolve the most recent pending approval
+    const entries = [...this.pendingApprovals.entries()];
+    const [id, pending] = entries[entries.length - 1];
+    this.pendingApprovals.delete(id);
+    pending.resolve(action);
+    return true;
+  }
+
+  /**
    * Common message-handling pipeline shared by text, voice, and photo handlers.
    * Extracts: auth → typing → adapter + agent → run → reply → error handling.
    */
@@ -66,7 +109,7 @@ export class TelegramAdapter {
     const allowedUsers = this.config.telegram.allowed_user_ids;
 
     if (allowedUsers.length > 0 && userId && !allowedUsers.includes(userId)) {
-      await ctx.reply('Unauthorized. Your user ID is not in the allowed list.');
+      await ctx.reply('⛔ Unauthorized. Your user ID is not in the allowed list.');
       agentLogger.warn({ msg: 'unauthorized_user', userId, chatId: ctx.chat!.id });
       return;
     }
@@ -107,26 +150,85 @@ export class TelegramAdapter {
   async start(): Promise<void> {
     await registerAllTools();
 
-    // ── Bot commands (registered BEFORE message:text so they take priority) ──
+    // ── Build command list from installed skills ──
+    const skills = loadSkills();
+    const botCommands: Array<{ command: string; description: string }> = [
+      { command: 'new', description: '🔄 New conversation' },
+      { command: 'kill', description: '💀 Force stop & clear' },
+    ];
+
+    // Map skill names to short command names — only for skills with command: true
+    const skillCommandMap = new Map<string, string>();
+    for (const skill of skills) {
+      if (!skill.command) continue; // skip internal skills
+      const cmd = skill.name.replace(/[^a-z0-9_]/g, '_').substring(0, 32);
+      const desc = (skill.description || skill.name).substring(0, 256);
+      botCommands.push({ command: cmd, description: desc });
+      skillCommandMap.set(cmd, skill.name);
+    }
+
+    // Register commands with Telegram (shows menu when user types '/')
+    await this.bot.api.setMyCommands(botCommands);
+
+    // ── Bot commands ──
 
     this.bot.command('start', async (ctx) => {
-      await ctx.reply(`Hi! I'm ${this.config.agent.name}, your personal AI assistant.\n\nSend me any message and I'll help you with it.\n\nCommands:\n/new - Start a new conversation`);
+      const name = this.config.agent.name;
+      const cmdList = [...skillCommandMap.entries()]
+        .map(([cmd]) => `/${cmd}`)
+        .join('  ');
+
+      await ctx.reply(
+        `Hey! I'm ${name} 🌟\n\n` +
+        `Just send me a message, or jump right in:\n\n` +
+        `${cmdList}\n\n` +
+        `/new start fresh  ·  /kill force stop`,
+      );
     });
 
     this.bot.command('new', async (ctx) => {
       const sessionKey = `tg:${ctx.chat.id}`;
+      this.cancelPending();
       createSession(sessionKey);
-      await ctx.reply('🔄 New session started.');
+      await ctx.reply('🔄 Fresh start! What\'s on your mind?');
       agentLogger.info({ msg: 'tg_new_session', chatId: ctx.chat.id });
-      console.log(`[gateway] new session: chat ${ctx.chat.id}`);
     });
+
+    this.bot.command('kill', async (ctx) => {
+      const sessionKey = `tg:${ctx.chat.id}`;
+      const cancelled = this.cancelPending();
+      createSession(sessionKey);
+      const extra = cancelled > 0 ? ` Cancelled ${cancelled} pending task(s).` : '';
+      await ctx.reply(`💀 Stopped.${extra}\nSession cleared — send a message to start over.`);
+      agentLogger.info({ msg: 'tg_kill', chatId: ctx.chat.id, cancelled });
+    });
+
+    // Dynamic skill commands — route to agent as "Run skill: <name>"
+    for (const [cmd, skillName] of skillCommandMap) {
+      this.bot.command(cmd, async (ctx) => {
+        agentLogger.info({ msg: 'tg_skill_command', chatId: ctx.chat.id, skill: skillName });
+        const sessionKey = `tg:${ctx.chat.id}`;
+        createSession(sessionKey);
+        const input = `[/command: ${skillName}] Run the "${skillName}" skill now.`;
+        // Fire-and-forget so bot stays responsive
+        this.handleIncoming(ctx, input).catch(() => {});
+      });
+    }
 
     // ── Message handler ──
 
     this.bot.on('message:text', async (ctx) => {
       const input = ctx.message.text;
+
+      // ── Intercept approval reply keyboard responses ──
+      if (this.tryResolveApproval(input)) {
+        agentLogger.info({ msg: 'tg_approval_reply', chatId: ctx.chat.id, action: input });
+        return;
+      }
+
       agentLogger.info({ msg: 'tg_message', chatId: ctx.chat.id, userId: ctx.from?.id, text: input.substring(0, 100) });
-      await this.handleIncoming(ctx, input);
+      // Fire-and-forget so bot stays responsive to /new and callbacks
+      this.handleIncoming(ctx, input).catch(() => {});
     });
 
     // ── Voice message handler (download → Groq Whisper STT → agent) ──
@@ -149,7 +251,7 @@ export class TelegramAdapter {
         agentLogger.info({ msg: 'tg_voice_cached', path: audioPath, bytes: buffer.length });
       } catch (err) {
         agentLogger.error({ msg: 'tg_voice_download_error', error: (err as Error).message });
-        await ctx.reply('❌ 语音下载失败，请重试。');
+        await ctx.reply('❌ Voice download failed, please try again.');
         return;
       }
 
@@ -157,7 +259,7 @@ export class TelegramAdapter {
       const sttResult = await transcribeAudio(audioPath, this.config);
 
       if (!sttResult.success || !sttResult.transcript) {
-        const errMsg = sttResult.error || '无法识别语音内容';
+        const errMsg = sttResult.error || 'Could not recognize speech';
         agentLogger.warn({ msg: 'tg_stt_failed', error: errMsg });
         await ctx.reply(`🎤 ${errMsg}`);
         fs.unlink(audioPath, () => {});
@@ -166,11 +268,12 @@ export class TelegramAdapter {
 
       // Step 3: Wrap transcript and feed into the agent
       // Include audio_path so tools (e.g. pron_assess) can reference the file
-      const input = `[语音消息 | audio_path: ${audioPath}]\n"${sttResult.transcript}"`;
+      const input = `[Voice message | audio_path: ${audioPath}]\n"${sttResult.transcript}"`;
       agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, text: sttResult.transcript.substring(0, 100) });
       trackStt(ctx.message.voice.duration || 0);
 
-      await this.handleIncoming(ctx, input);
+      // Fire-and-forget so bot stays responsive
+      this.handleIncoming(ctx, input).catch(() => {});
     });
 
     // ── Photo message handler (download → Gemini Vision → agent) ──
@@ -186,7 +289,7 @@ export class TelegramAdapter {
       try {
         const file = await ctx.api.getFile(photo.file_id);
         if (!file.file_path) {
-          await ctx.reply('❌ 无法获取图片文件。');
+          await ctx.reply('❌ Failed to download image.');
           return;
         }
 
@@ -212,7 +315,7 @@ export class TelegramAdapter {
       const visionResult = await analyzeImage(imagePath, this.config, caption || undefined);
 
       if (!visionResult.success || !visionResult.description) {
-        const errMsg = visionResult.error || '无法分析图片内容';
+        const errMsg = visionResult.error || 'Could not analyze image';
         agentLogger.warn({ msg: 'tg_vision_failed', error: errMsg });
         await ctx.reply(`🖼️ ${errMsg}`);
         fs.unlink(imagePath, () => {});
@@ -221,17 +324,21 @@ export class TelegramAdapter {
 
       // Build agent input with vision description injected as context
       const input = caption
-        ? `[用户发送了一张图片，附带说明: "${caption}"]\n[图片分析: ${visionResult.description}]`
-        : `[用户发送了一张图片]\n[图片分析: ${visionResult.description}]`;
+        ? `[User sent a photo with caption: "${caption}"]\n[Vision analysis: ${visionResult.description}]`
+        : `[User sent a photo]\n[Vision analysis: ${visionResult.description}]`;
 
       agentLogger.info({ msg: 'tg_vision_done', chatId: ctx.chat.id, descLength: visionResult.description.length });
 
-      await this.handleIncoming(ctx, input, () => fs.unlink(imagePath, () => {}));
+      // Fire-and-forget so bot stays responsive
+      this.handleIncoming(ctx, input, () => fs.unlink(imagePath, () => {})).catch(() => {});
     });
 
     // ── Callback query dispatcher (approvals + choices + custom) ──
     this.bot.on('callback_query:data', async (ctx) => {
       const data = ctx.callbackQuery.data;
+
+      // Always answer callback query FIRST to dismiss Telegram loading spinner
+      await ctx.answerCallbackQuery().catch(() => {});
 
       if (data.startsWith('approval_')) {
         const sepIdx = data.indexOf(':');
@@ -322,8 +429,6 @@ export class TelegramAdapter {
           }
         }
       }
-
-      await ctx.answerCallbackQuery();
     });
 
     agentLogger.info({ msg: 'tg_bot_starting' });

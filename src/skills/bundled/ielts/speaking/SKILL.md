@@ -12,7 +12,7 @@ metadatahermes:
 ## When to Use
 
 - Learner says "口语", "speaking", "练口语", "学口语"
-- Callback: `ck:speaking` or any `ck:speaking:*` mode callback
+- Callback: `speaking` or any `speaking:*` mode callback
 - Reply Keyboard tap: "🗣️ 口语"
 
 ## Data
@@ -24,12 +24,12 @@ Synced to `learner.db` via `tracker_db.js`.
 
 | Mode               | Band    | Scaffolding | Core Tools                       | Callback                |
 | ------------------ | ------- | ----------- | -------------------------------- | ----------------------- |
-| **Shadowing**      | < 5.0   | Extreme     | `tts` + `pron_assess`            | `ck:speaking:shadowing` |
-| **Guided QA**      | 4.5-5.5 | High        | `tts` + `force_reply`            | `ck:speaking:qa`        |
-| **Cue Card Build** | 5.0-6.0 | Medium      | `tts` + `force_reply`            | `ck:speaking:cuecard`   |
-| **Role-play**      | 4.5-6.0 | Medium      | `tts` + multi-turn `force_reply` | `ck:speaking:roleplay`  |
-| **Retell**         | All     | Variable    | `tts` + `pron_assess`            | `ck:speaking:retell`    |
-| **Examiner Sim**   | 5.5+    | Low/None    | `tts` + `pron_assess`            | `ck:speaking:exam`      |
+| **Shadowing**      | < 5.0   | Extreme     | `tts` + `pron_assess`            | `speaking:shadowing` |
+| **Guided QA**      | 4.5-5.5 | High        | `tts` + `force_reply`            | `speaking:qa`        |
+| **Cue Card Build** | 5.0-6.0 | Medium      | `tts` + `force_reply`            | `speaking:cuecard`   |
+| **Role-play**      | 4.5-6.0 | Medium      | `tts` + multi-turn `force_reply` | `speaking:roleplay`  |
+| **Retell**         | All     | Variable    | `tts` + `pron_assess`            | `speaking:retell`    |
+| **Examiner Sim**   | 5.5+    | Low/None    | `tts` + `pron_assess`            | `speaking:exam`      |
 
 ---
 
@@ -42,7 +42,7 @@ Synced to `learner.db` via `tracker_db.js`.
 3. Query `tracker_db.js list-samples --skill-type speaking --limit 5` → recent modes + scores
 4. Query `tracker_db.js list-errors --skill speaking --limit 10` → recent error patterns
 
-**Auto Mode Selection Logic** (if no specific `ck:speaking:*` callback):
+**Auto Mode Selection Logic** (if no specific `speaking:*` callback):
 
 1. `fluency < 4.0` AND `pronunciation_weak` has multiple entries → **Shadowing**
 2. `answer_length` consistently below target in recent sessions → **Guided QA**
@@ -54,10 +54,10 @@ Show recommended mode + allow user override:
 
 ```
 [KEYBOARD:
-🎯 推荐: 跟读=ck:speaking:shadowing
-🗣️ 问答=ck:speaking:qa | 🎤 考官=ck:speaking:exam
-📋 提纲=ck:speaking:cuecard | 🎭 对话=ck:speaking:roleplay
-🔄 复述=ck:speaking:retell
+🎯 推荐: 跟读=speaking:shadowing
+🗣️ 问答=speaking:qa | 🎤 考官=speaking:exam
+📋 提纲=speaking:cuecard | 🎭 对话=speaking:roleplay
+🔄 复述=speaking:retell
 ]
 ```
 
@@ -148,8 +148,8 @@ Repeat S3-S10 for 3-5 sentences, then show:
 
 ```
 [KEYBOARD:
-😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
-🔁 再来一组=ck:speaking:shadowing | 🗣️ 试试问答=ck:speaking:qa | 🏠 返回=ck:menu
+😰 太难了=feedback_too_hard | 👌 刚好=feedback_just_right | 🥱 太简单=feedback_too_easy
+🔁 再来一组=speaking:shadowing | 🗣️ 试试问答=speaking:qa | 🏠 返回=menu
 ]
 ```
 
@@ -214,8 +214,8 @@ node tracker_db.js add-sample \
 
 ```
 [KEYBOARD:
-😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
-🔁 再来一题=ck:speaking:qa | ⬆️ 试试考官=ck:speaking:exam | 🏠 返回=ck:menu
+😰 太难了=feedback_too_hard | 👌 刚好=feedback_just_right | 🥱 太简单=feedback_too_easy
+🔁 再来一题=speaking:qa | ⬆️ 试试考官=speaking:exam | 🏠 返回=menu
 ]
 ```
 
@@ -505,8 +505,8 @@ node tracker_db.js add-error \
 
 ```
 [KEYBOARD:
-😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
-🔁 继续=ck:speaking | 📊 看报告=ck:assessment | 🏠 返回=ck:menu
+😰 太难了=feedback_too_hard | 👌 刚好=feedback_just_right | 🥱 太简单=feedback_too_easy
+🔁 继续=speaking | 📊 看报告=assessment | 🏠 返回=menu
 ]
 ```
 

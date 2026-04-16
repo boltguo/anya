@@ -389,7 +389,7 @@ Set character-appropriate emoji and tone based on SOUL.md.
 
 ```
 [KEYBOARD:
-😰 太难了=ck:feedback:too_hard | 👌 刚好=ck:feedback:just_right | 🥱 太简单=ck:feedback:too_easy
+😰 太难了=feedback_too_hard | 👌 刚好=feedback_just_right | 🥱 太简单=feedback_too_easy
 ]
 ```
 
@@ -403,9 +403,9 @@ Send one message via native adapter with inline keyboard:
 设置完成 ✅ 从哪里开始？
 
 [KEYBOARD:
-✍️ 写作=ck:writing | 🗣️ 口语=ck:speaking
-📖 阅读=ck:reading | 🎧 听力=ck:listening
-📚 单词=ck:flashcard | 📋 我的水平=ck:assessment
+✍️ 写作=writing | 🗣️ 口语=speaking
+📖 阅读=reading | 🎧 听力=listening
+📚 单词=flashcard | 📋 我的水平=assessment
 ]
 ```
 

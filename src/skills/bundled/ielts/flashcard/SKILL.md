@@ -12,7 +12,7 @@ metadatahermes:
 ## When to Use
 
 - Learner says "背单词", "单词", "学单词", "复习单词", "flashcard"
-- Callback: `ck:flashcard`, `ck:word:review`
+- Callback: `flashcard`, `word_review`
 - Reply Keyboard tap: "📚 单词"
 
 ## 4-Level Transfer Model
@@ -105,8 +105,8 @@ She is meticulous about keeping accurate records.
 她对保持准确的记录一丝不苟。</tg-spoiler>
 
 [KEYBOARD:
-✅ 认识=ck:word:known | 🤔 模糊=ck:word:vague | ❌ 不认识=ck:word:unknown
-💾 加入单词本=ck:word:save | 🔄 再来一个=ck:word:next
+✅ 认识=word_known | 🤔 模糊=word_vague | ❌ 不认识=word_unknown
+💾 加入单词本=word_save | 🔄 再来一个=word_next
 ]
 ```
 
@@ -116,11 +116,11 @@ Also send the TTS audio as a voice message.
 
 | Button                         | Action                                                                                         |
 | ------------------------------ | ---------------------------------------------------------------------------------------------- |
-| ✅ 认识 (`ck:word:known`)      | → **Directly enter L2 Collocation Quiz**                                                       |
-| 🤔 模糊 (`ck:word:vague`)      | → Show full meaning + TTS re-read → then **L2 Collocation Quiz**                               |
-| ❌ 不认识 (`ck:word:unknown`)  | → **Deep teaching**: word root + synonyms + antonyms + TTS slow → then **L2 Collocation Quiz** |
-| 💾 加入单词本 (`ck:word:save`) | → Sync to vocab.db immediately, react ✅, continue current flow                                |
-| 🔄 再来一个 (`ck:word:next`)   | → Skip (no sync) → start Step 1 for new word                                                   |
+| ✅ 认识 (`word_known`)      | → **Directly enter L2 Collocation Quiz**                                                       |
+| 🤔 模糊 (`word_vague`)      | → Show full meaning + TTS re-read → then **L2 Collocation Quiz**                               |
+| ❌ 不认识 (`word_unknown`)  | → **Deep teaching**: word root + synonyms + antonyms + TTS slow → then **L2 Collocation Quiz** |
+| 💾 加入单词本 (`word_save`) | → Sync to vocab.db immediately, react ✅, continue current flow                                |
+| 🔄 再来一个 (`word_next`)   | → Skip (no sync) → start Step 1 for new word                                                   |
 
 **L2 Collocation Quiz** (after known/vague/unknown):
 
@@ -167,14 +167,14 @@ node vocab_db.js use <word> --event production --session-type writing --context 
 node vocab_db.js set-transfer <word> --level 4
 ```
 
-## Anytime Word Add (ck:word:save)
+## Anytime Word Add (word_save)
 
 From any conversation context, user can save a word:
 
-- `ck:word:save` callback → `vocab_db.js add` → react ✅
+- `word_save` callback → `vocab_db.js add` → react ✅
 - Word is added at L1, enters SRS rotation
 
-## SRS Review (ck:word:review)
+## SRS Review (word_review)
 
 When triggered:
 
