@@ -49,8 +49,8 @@ This determines word difficulty (A2/B1/B2/C1 range).
 Think of a word appropriate for the learner's level and USER.md interests.
 The word must NOT already be in vocab.db. Verify:
 
-```bash
-node vocab_db.js lookup <word>
+```
+db name=vocab sql="SELECT * FROM words WHERE word = ?" params='["<word>"]'
 ```
 
 If the word exists (returns data), pick a different word. Repeat until you find one that returns "not found".
@@ -134,71 +134,68 @@ Record quiz result to vocab.db.
 
 After collecting response + completing L2 quiz:
 
-```bash
-node vocab_db.js add --word <word> --definition "..." --chinese "..." \
-  --ipa "..." --pos "..." --collocations "..." --topics "..." \
-  --source "flashcard" --example "..."
-node vocab_db.js quiz <word> --type collocation --result <correct|wrong|partial>
-node vocab_db.js set-transfer <word> --level 2
+```
+db name=vocab sql="INSERT INTO words (word, definition, chinese, ipa, pos, collocations, topics, source, example, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'flashcard', ?, datetime('now'), datetime('now'))" params='["<word>", "...", "...", "...", "...", "...", "...", "..."]'
+
+db name=vocab sql="INSERT INTO word_events (word, event_type, session_type, created_at) VALUES (?, 'quiz_correct', 'flashcard', datetime('now'))" params='["<word>"]'
+
+db name=vocab sql="UPDATE words SET mastery='learning', updated_at=datetime('now') WHERE word=?" params='["<word>"]'
 ```
 
 If "再来一个" was tapped, go back to Step 1.
 
 ## Cross-Skill Transfer (L3/L4)
 
-Words at L2+ are automatically injected into speaking/writing sessions:
-
-```bash
-# Speaking/Writing S2 step:
-node vocab_db.js inject --transfer-level 2 --limit 2
+```
+# Speaking/Writing S2 step — get L2+ words for injection:
+db name=vocab sql="SELECT word, definition FROM words WHERE mastery IN ('learning','known') ORDER BY srs_due LIMIT 2"
 ```
 
 When a word is successfully used in speaking:
 
-```bash
-node vocab_db.js use <word> --event production --session-type speaking --context "..."
-node vocab_db.js set-transfer <word> --level 3
+```
+db name=vocab sql="INSERT INTO word_events (word, event_type, session_type, context, created_at) VALUES (?, 'production', 'speaking', ?, datetime('now'))" params='["<word>", "..."]'
+db name=vocab sql="UPDATE words SET mastery='known', updated_at=datetime('now') WHERE word=?" params='["<word>"]'
 ```
 
 When successfully used in writing:
 
-```bash
-node vocab_db.js use <word> --event production --session-type writing --context "..."
-node vocab_db.js set-transfer <word> --level 4
+```
+db name=vocab sql="INSERT INTO word_events (word, event_type, session_type, context, created_at) VALUES (?, 'production', 'writing', ?, datetime('now'))" params='["<word>", "..."]'
+db name=vocab sql="UPDATE words SET mastery='mastered', updated_at=datetime('now') WHERE word=?" params='["<word>"]'
 ```
 
 ## Anytime Word Add (word_save)
 
 From any conversation context, user can save a word:
 
-- `word_save` callback → `vocab_db.js add` → react ✅
+- `word_save` callback → `db name=vocab sql="INSERT INTO words ..."` → react ✅
 - Word is added at L1, enters SRS rotation
 
 ## SRS Review (word_review)
 
 When triggered:
 
-1. `vocab_db.js list due --limit 5` → get due words
+1. `db name=vocab sql="SELECT * FROM words WHERE mastery != 'mastered' AND (srs_due IS NULL OR srs_due <= datetime('now')) ORDER BY srs_due LIMIT 5"` → get due words
 2. For each word, present based on transfer_level:
    - L1: Flashcard recognition (show word → known/vague/unknown)
    - L2: Collocation quiz
    - L3: "下次口语练习时必须用上这个词"
    - L4: "下次写作中将此词作为挑战词汇"
 
-## Scripts
+## DB Operations
 
-| Script                                  | Purpose                                   |
-| --------------------------------------- | ----------------------------------------- |
-| `data/scripts/vocab_db.js lookup`       | Check if word exists in DB                |
-| `data/scripts/vocab_db.js add`          | Add word to vocab.db                      |
-| `data/scripts/vocab_db.js quiz`         | Record quiz result                        |
-| `data/scripts/vocab_db.js set-transfer` | Update transfer level                     |
-| `flashcard/scripts/sync_word.js`        | Sync single word JSON → vocab.db (legacy) |
+| Query | Purpose |
+|-------|--------|
+| `db name=vocab sql="SELECT * FROM words WHERE word=?"` | Check if word exists |
+| `db name=vocab sql="INSERT INTO words ..."` | Add word |
+| `db name=vocab sql="INSERT INTO word_events ..."` | Record quiz/usage event |
+| `db name=vocab sql="UPDATE words SET mastery=? WHERE word=?"` | Update mastery level |
 
 ## Rules
 
 1. **One word at a time.** Never batch. The learner controls the pace via "再来一个".
-2. **Word must not exist in DB.** Always verify with `vocab_db.js lookup` before presenting.
+2. **Word must not exist in DB.** Always verify with `db name=vocab sql="SELECT * FROM words WHERE word=?"` before presenting.
 3. **Spoiler for meaning.** Use `<tg-spoiler>` so the learner can self-test before revealing.
 4. **TTS reads 3 times.** Spaced repetition in audio form.
 5. **L2 Collocation Quiz is mandatory** after known/vague/unknown response.

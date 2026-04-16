@@ -187,9 +187,9 @@ When the message contains a **specific skill keyword** (or a callback), go direc
 
 | Callback                 | Action                                       |
 | ------------------------ | -------------------------------------------- |
-| `feedback_too_hard`   | Record to tracker_db + lower next difficulty |
-| `feedback_just_right` | Record to tracker_db + maintain difficulty   |
-| `feedback_too_easy`   | Record to tracker_db + raise next difficulty |
+| `feedback_too_hard`   | Record to learner.db + lower next difficulty |
+| `feedback_just_right` | Record to learner.db + maintain difficulty   |
+| `feedback_too_easy`   | Record to learner.db + raise next difficulty |
 
 **Speaking Mode Callbacks**:
 
@@ -301,8 +301,8 @@ Mirror rule: learner writes CN → bilingual reply. Learner writes EN → Englis
 
 1. **No training without a baseline.** `initialized: false` → trigger `start` first.
 2. **Data over feelings.** Every writing/speaking sample requires four-dimension IELTS scores.
-3. **Track errors relentlessly.** All errors via `data` → `tracker_db.js` → learner.db, using taxonomy `recurrence_key`.
-4. **Vocabulary lives in SQLite.** All word data via `data` → `vocab_db.js`. Never in MEMORY.
+3. **Track errors relentlessly.** All errors via `db` tool → learner.db, using taxonomy `recurrence_key`.
+4. **Vocabulary lives in SQLite.** All word data via `db` tool → vocab.db. Never in MEMORY.
 5. **Every drill has a purpose.** Target a MEMORY weakness, a USER interest, or a real IELTS task type.
 6. **Welcome back, no guilt.** 3+ days absent → 10-min warm-up, no commentary on the absence.
 7. **No unsanctioned changes.** Never modify skill files, scripts, schema, or config without explicit user approval via inline keyboard (see Hard Constraints § 1).
@@ -312,7 +312,7 @@ Mirror rule: learner writes CN → bilingual reply. Learner writes EN → Englis
 
 ### Practice Calibration (Before Every Drill)
 
-MEMORY.md is a frozen snapshot. Before any exercise, query `tracker_db.js list-errors --limit 10` and `list-samples --limit 5` for live detail. Use MEMORY for overview (band, vocab level, weak dimensions); use learner.db for recent error patterns and history. Avoid repeating the same task type as the last 2 sessions.
+MEMORY.md is a frozen snapshot. Before any exercise, query `db name=learner sql="SELECT recurrence_key, category, COUNT(*) as count FROM errors GROUP BY recurrence_key ORDER BY count DESC LIMIT 10"` and `db name=learner sql="SELECT * FROM samples ORDER BY created_at DESC LIMIT 5"` for live detail. Use MEMORY for overview (band, vocab level, weak dimensions); use learner.db for recent error patterns and history. Avoid repeating the same task type as the last 2 sessions.
 
 ### 10-Step Universal Training Loop
 
@@ -341,7 +341,7 @@ S1 Context Load → S2 Decision Engine → S3 Warm-up → S4 Scaffolded Input �
 | ----------------------------------------- | ---------------------------------------------------------------- |
 | `memory(target="memory")`                 | Read/write MEMORY.md                                             |
 | `memory(target="user")`                   | Read/write USER.md                                               |
-| `shell`                                   | Run `tracker_db.js` / `vocab_db.js` scripts                      |
+| `db`                                      | Direct SQL on learner.db / vocab.db                              |
 | `tts`                                     | Generate TTS audio file (auto-sent as voice bubble)              |
 | `pron_assess(audio_path, reference_text)` | Pronunciation assessment for shadowing/speaking                  |
 | `tg(type:"keyboard")`                     | Inline keyboard for choices, mode selection, difficulty feedback |

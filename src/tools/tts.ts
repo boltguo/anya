@@ -2,13 +2,14 @@
  * @module tools/tts
  * @description Text-to-Speech tool for the agent.
  *
- * Allows the LLM to generate speech audio from text and send it
- * as a Telegram voice message. Uses Edge TTS (free, no API key).
+ * Supports two modes:
+ *   1. Simple: text + voice + rate → single voice audio
+ *   2. Segments: array of {voice, text, rate, break} → multi-voice dialogue
  *
  * Usage by the model:
- *   tts({ text: "Hello world" })                    → generate + send as voice
- *   tts({ text: "你好", voice: "zh-CN-XiaoxiaoNeural" }) → Chinese voice
- *   tts({ text: "slow read", rate: "-30%" })         → slow speech
+ *   tts({ text: "Hello world" })                          → simple
+ *   tts({ text: "slow read", rate: "-30%" })              → slow speech
+ *   tts({ segments: '[...]' })                            → multi-voice dialogue
  */
 
 import { register } from './registry.js';
@@ -17,21 +18,87 @@ import { textToSpeech } from '../lib/tts.js';
 
 register({
   name: 'tts',
-  description: 'Generate speech audio from text using Edge TTS (free). On Telegram, sends as a voice bubble. Supports 100+ voices in 40+ languages. Use <tg-spoiler> and tts together for learning scenarios (hidden text + audio).',
+  description: `Generate speech audio via Azure TTS. On Telegram, sends as a voice bubble.
+
+**Simple mode**: pass \`text\` + optional \`voice\`/\`rate\`.
+**Dialogue mode**: pass \`segments\` JSON array for multi-voice audio with pauses.
+
+Segments format: [{"voice":"en-GB-RyanNeural","text":"How are you?","rate":"-5%"},{"break":"800ms"},{"voice":"en-US-AriaNeural","text":"I'm fine."}]
+
+Each segment is either a speech segment (voice+text) or a pause (break only, e.g. "500ms", "1s").`,
   parameters: {
     type: 'object',
     properties: {
-      text:   { type: 'string', description: 'Text to speak. Required.' },
-      voice:  { type: 'string', description: 'Voice name. Examples: en-US-AriaNeural (default), en-US-GuyNeural, zh-CN-XiaoxiaoNeural, ja-JP-NanamiNeural.' },
-      rate:   { type: 'string', description: 'Speaking rate. Examples: "+20%", "-30%".' },
+      text:     { type: 'string', description: 'Text to speak (simple mode).' },
+      voice:    { type: 'string', description: 'Voice name. Examples: en-US-AriaNeural, en-GB-RyanNeural, en-GB-SoniaNeural, zh-CN-XiaoxiaoNeural.' },
+      rate:     { type: 'string', description: 'Speaking rate. Examples: "+20%", "-30%".' },
+      segments: { type: 'string', description: 'JSON array of segments for multi-voice dialogue. Each segment: {"voice":"...","text":"...","rate":"..."} or {"break":"500ms"}.' },
     },
-    required: ['text'],
   },
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<string> {
+    const segmentsRaw = args.segments as string | undefined;
+
+    // ── Dialogue mode: segments array → build multi-voice SSML ──
+    if (segmentsRaw) {
+      let segments: Array<{ voice?: string; text?: string; rate?: string; break?: string }>;
+      try {
+        segments = typeof segmentsRaw === 'string' ? JSON.parse(segmentsRaw) : segmentsRaw as any;
+        if (!Array.isArray(segments) || segments.length === 0) {
+          return JSON.stringify({ success: false, error: 'segments must be a non-empty array' });
+        }
+      } catch {
+        return JSON.stringify({ success: false, error: 'Invalid segments JSON' });
+      }
+
+      // Build multi-voice SSML
+      const ssmlParts: string[] = [];
+      const textParts: string[] = [];
+
+      for (const seg of segments) {
+        if (seg.break) {
+          ssmlParts.push(`  <break time="${seg.break}"/>`);
+        } else if (seg.text) {
+          const v = seg.voice || 'en-US-AriaNeural';
+          const escaped = seg.text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+
+          if (seg.rate) {
+            ssmlParts.push(`  <voice name="${v}"><prosody rate="${seg.rate}">${escaped}</prosody></voice>`);
+          } else {
+            ssmlParts.push(`  <voice name="${v}">${escaped}</voice>`);
+          }
+          textParts.push(seg.text);
+        }
+      }
+
+      const fullSsml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">\n${ssmlParts.join('\n')}\n</speak>`;
+      const combinedText = textParts.join(' ');
+
+      const result = await textToSpeech(combinedText, context.config, {
+        ssml: fullSsml,
+        format: 'opus',
+      });
+
+      if (!result.success || !result.filePath) {
+        return JSON.stringify({ success: false, error: result.error });
+      }
+
+      const adapter = context.adapter as any;
+      if (typeof adapter.sendVoice === 'function') {
+        await adapter.sendVoice(result.filePath);
+        return JSON.stringify({ success: true, sent: true, durationSec: result.durationSec });
+      }
+      return JSON.stringify({ success: true, filePath: result.filePath, durationSec: result.durationSec });
+    }
+
+    // ── Simple mode: text + voice + rate ──
     const text = String(args.text || '').trim();
     if (!text) {
-      return JSON.stringify({ success: false, error: 'text is required' });
+      return JSON.stringify({ success: false, error: 'text or segments is required' });
     }
 
     const result = await textToSpeech(text, context.config, {
@@ -44,22 +111,11 @@ register({
       return JSON.stringify({ success: false, error: result.error });
     }
 
-    // If we have a Telegram adapter, send as voice message
     const adapter = context.adapter as any;
     if (typeof adapter.sendVoice === 'function') {
       await adapter.sendVoice(result.filePath);
-      return JSON.stringify({
-        success: true,
-        sent: true,
-        durationSec: result.durationSec,
-      });
+      return JSON.stringify({ success: true, sent: true, durationSec: result.durationSec });
     }
-
-    // Non-Telegram: just return the file path
-    return JSON.stringify({
-      success: true,
-      filePath: result.filePath,
-      durationSec: result.durationSec,
-    });
+    return JSON.stringify({ success: true, filePath: result.filePath, durationSec: result.durationSec });
   },
 });

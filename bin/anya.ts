@@ -58,12 +58,11 @@ program
 
 program
   .command('chat')
-  .description('Start an interactive chat session with the agent')
-  .option('-q, --query <message>', 'Single query mode (ask and exit)')
-  .option('--new', 'Start a new session (ignore history)')
-  .action(async (options) => {
+  .description('Send a single message to the agent and print the response')
+  .argument('[message]', 'Message to send', 'Hello, who are you?')
+  .action(async (message: string) => {
     const { runChat } = await import('../src/commands/chat.js');
-    await runChat(options);
+    await runChat(message);
   });
 
 registerConfig(program);

@@ -4,17 +4,6 @@
  */
 
 import chalk from 'chalk';
-import type { AnyaConfig } from '../../config/defaults.js';
-
-export function getActiveModel(config: AnyaConfig): string {
-  return config.provider.active === 'openai'
-    ? config.provider.openai.model
-    : config.provider.gemini.model;
-}
-
-export function hasVisionKey(config: AnyaConfig): boolean {
-  return !!(config.provider?.gemini?.api_key || (config.provider?.gemini?.api_keys?.length ?? 0) > 0);
-}
 
 export function maskKey(key: string): string {
   if (key.length <= 8) return '****';
@@ -22,8 +11,7 @@ export function maskKey(key: string): string {
 }
 
 /**
- * Restart the Telegram gateway only if it is already running. Silent failure
- * is intentional — the user may be configuring without the gateway up.
+ * Restart the Telegram gateway only if it is already running.
  */
 export async function autoRestartGateway(): Promise<void> {
   try {

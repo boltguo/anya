@@ -21,7 +21,7 @@ metadatahermes:
 ## Protocol
 
 1. **Gather context**:
-   - Read plan: `tracker_db.js get-plan` → this week's focus + carry-over errors
+   - Read plan: `db name=learner sql="SELECT * FROM plan ORDER BY created_at DESC LIMIT 1"` → this week's focus + carry-over errors
    - Read MEMORY: focus, top errors, band levels
    - Read USER.md: hobbies, engage topics
    - Check last daily format used (avoid repeating)

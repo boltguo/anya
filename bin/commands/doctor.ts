@@ -21,31 +21,27 @@ export function registerDoctor(program: Command): void {
         const { loadConfig } = await import('../../src/config/loader.js');
         const config = loadConfig();
 
-        const active = config.provider.active;
-        if (active === 'gemini') {
-          const hasKey = !!config.provider.gemini.api_key;
-          console.log(`  Auth:      ${hasKey ? '[ok]' : '[!!]'} Gemini API key ${hasKey ? 'configured' : 'not configured'}`);
-        } else {
-          const { hasCodexAuth } = await import('../../src/lib/auth.js');
-          const hasAuth = hasCodexAuth();
-          console.log(`  Auth:      ${hasAuth ? '[ok]' : '[!!]'} OpenAI Codex ${hasAuth ? 'authenticated' : 'not authenticated'}`);
-        }
+        // LLM — OpenAI Codex
+        const { hasCodexAuth } = await import('../../src/lib/auth.js');
+        const hasAuth = hasCodexAuth();
+        console.log(`  LLM:       ${hasAuth ? '[ok]' : '[!!]'} OpenAI Codex (${config.provider.model}) ${hasAuth ? '✓' : 'not authenticated'}`);
+
+        // Gemini — vision + image gen
+        const hasGemini = !!config.gemini?.api_key;
+        console.log(`  Gemini:    ${hasGemini ? '[ok]' : '[--]'} ${hasGemini ? 'API key configured (Vision + ImageGen)' : 'not configured'}`);
+
+        // Azure — TTS + pron assessment
+        const hasAzure = !!config.azure?.speech_key;
+        console.log(`  Azure:     ${hasAzure ? '[ok]' : '[--]'} ${hasAzure ? `Speech (${config.azure.speech_region})` : 'not configured (TTS + pron unavailable)'}`);
 
         const hasTavily = !!config.tools.web_search.api_key;
         console.log(`  Tavily:    ${hasTavily ? '[ok]' : '[--]'} ${hasTavily ? 'configured' : 'not configured (web_search unavailable)'}`);
 
         const hasSTT = !!config.stt?.groq_api_key;
-        console.log(`  STT:       ${hasSTT ? '[ok]' : '[--]'} ${hasSTT ? `Groq Whisper (${config.stt?.model || 'whisper-large-v3-turbo'})` : 'not configured (voice messages unavailable)'}`);
+        console.log(`  STT:       ${hasSTT ? '[ok]' : '[--]'} ${hasSTT ? 'Groq Whisper' : 'not configured (voice messages unavailable)'}`);
 
-        const hasVision = !!(config.provider?.gemini?.api_key || (config.provider?.gemini?.api_keys?.length ?? 0) > 0);
-        console.log(`  Vision:    ${hasVision ? '[ok]' : '[--]'} ${hasVision ? `Gemini (${config.vision?.model || 'gemini-3-flash-preview'})` : 'not configured (photo analysis unavailable)'}`);
-
-        const ttsVoice = config.tts?.voice || 'en-US-AriaNeural';
-        console.log(`  TTS:       [ok] Edge TTS (${ttsVoice})`);
-
-        const model = active === 'openai' ? config.provider.openai.model : config.provider.gemini.model;
-        console.log(`  Provider:  [..] ${active}`);
-        console.log(`  Model:     [..] ${model}`);
+        const hasTelegram = config.telegram?.enabled;
+        console.log(`  Telegram:  ${hasTelegram ? '[ok]' : '[--]'} ${hasTelegram ? 'enabled' : 'not configured'}`);
 
         const { loadSkills } = await import('../../src/skills/loader.js');
         const skills = loadSkills();

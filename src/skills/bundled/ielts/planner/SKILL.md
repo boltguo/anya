@@ -21,12 +21,12 @@ metadatahermes:
 
 1. Read full learner history:
 
-   ```bash
-   node tracker_db.js stats
-   node tracker_db.js band-history --limit 30
-   node tracker_db.js error-stats --limit 10
-   node tracker_db.js list-samples --since 7d --limit 50
-   node tracker_db.js list-plans
+   ```
+   db name=learner sql="SELECT skill_type, COUNT(*) as count, ROUND(AVG(band_overall),1) as avg_band FROM samples WHERE band_overall IS NOT NULL GROUP BY skill_type"
+   db name=learner sql="SELECT created_at, skill_type, band_overall FROM samples WHERE band_overall IS NOT NULL ORDER BY created_at DESC LIMIT 30"
+   db name=learner sql="SELECT recurrence_key, category, COUNT(*) as count FROM errors GROUP BY recurrence_key ORDER BY count DESC LIMIT 10"
+   db name=learner sql="SELECT * FROM samples WHERE created_at >= date('now', '-7 days') ORDER BY created_at DESC"
+   db name=learner sql="SELECT * FROM plan ORDER BY created_at DESC LIMIT 5"
    ```
 
 2. Read MEMORY.md for current band estimates, top errors, weak dimensions.
@@ -61,15 +61,8 @@ metadatahermes:
 
 6. Write the plan:
 
-   ```bash
-   node tracker_db.js add-plan \
-     --week-label "2026-W16" \
-     --primary-focus "writing" \
-     --secondary-focus "speaking" \
-     --target-skill "Task 2 coherence + TEEL structure" \
-     --suggested-exercises '["TEEL drill on opinion essay", "Full Task 2 with forced rewrite", "Guided QA on Part 1 expansion", "Examiner Sim Part 3", "Dictation session"]' \
-     --carry-over-errors "sv_agreement,cohesion_missing" \
-     --difficulty-notes "Lower writing difficulty, increase scaffolding"
+   ```
+   db name=learner sql="INSERT INTO plan (week_start, primary_focus, secondary_focus, target_skill, suggested_exercises, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))" params='["2026-W16", "writing", "speaking", "Task 2 coherence + TEEL structure", "TEEL drill, Full Task 2, Guided QA, Examiner Sim, Dictation"]'
    ```
 
 7. Old plans are NEVER deleted — they form a historical training path.

@@ -22,9 +22,10 @@
  */
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { SOUL_PATH, RULES_PATH, USER_MD_PATH, MEMORY_MD_PATH } from '../lib/paths.js';
+import { SOUL_PATH, RULES_PATH } from '../lib/paths.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { buildSkillIndex } from '../skills/loader.js';
+import { buildMemorySummary } from '../lib/memory.js';
 
 const FILE_CACHE_TTL_MS = 30_000;
 const fileCache = new Map<string, { content: string; mtime: number; cachedAt: number }>();
@@ -51,20 +52,10 @@ export function buildSystemPrompt(config: AnyaConfig): string {
   // ── 3. Current timestamp ───────────────────────────────────────────
   sections.push(`\nCurrent date and time: ${new Date().toISOString()}`);
 
-  // ── 4. Memory (user profile + agent notes) ─────────────────────────
-  const userMemory = loadFile(USER_MD_PATH);
-  const agentMemory = loadFile(MEMORY_MD_PATH);
-
-  if (userMemory || agentMemory) {
-    sections.push('\n## Memory\n');
-    if (userMemory) {
-      sections.push('### About the User');
-      sections.push(userMemory);
-    }
-    if (agentMemory) {
-      sections.push('### Agent Notes');
-      sections.push(agentMemory);
-    }
+  // ── 4. Memory (structured) ─────────────────────────────────────────
+  const memorySummary = buildMemorySummary();
+  if (memorySummary) {
+    sections.push('\n' + memorySummary);
   }
 
   // ── 5. Skills index ────────────────────────────────────────────────
@@ -91,7 +82,7 @@ export function buildSystemPrompt(config: AnyaConfig): string {
     caps.push('- **Rich Media**: On Telegram, use the `tg` tool with type "photo" or "audio" to send images/audio with captions. Use `<tg-spoiler>text</tg-spoiler>` in HTML to hide text (tap to reveal — great for learning/quiz scenarios).');
   }
 
-  if (config.provider?.gemini?.api_key || config.provider?.gemini?.api_keys?.length) {
+  if (config.gemini?.api_key) {
     caps.push('- **Vision**: When the user sends a photo, it is automatically analyzed and the description is provided to you as text.');
   }
 

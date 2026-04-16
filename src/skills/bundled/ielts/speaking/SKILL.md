@@ -18,7 +18,7 @@ metadatahermes:
 ## Data
 
 Session saved to `~/.anya/data/ielts/learn/{timestamp}_speaking.json` after completion.
-Synced to `learner.db` via `tracker_db.js`.
+Synced to `learner.db` via `db` tool.
 
 ## Mode Matrix
 
@@ -39,8 +39,8 @@ Synced to `learner.db` via `tracker_db.js`.
 
 1. Read MEMORY.md → current speaking band, fluency, pronunciation_weak
 2. Read USER.md → interests (engage topics)
-3. Query `tracker_db.js list-samples --skill-type speaking --limit 5` → recent modes + scores
-4. Query `tracker_db.js list-errors --skill speaking --limit 10` → recent error patterns
+3. Query `db name=learner sql="SELECT id, created_at, band_overall FROM samples WHERE skill_type='speaking' ORDER BY created_at DESC LIMIT 5"`
+4. Query `db name=learner sql="SELECT recurrence_key, category, COUNT(*) as count FROM errors e JOIN samples s ON e.sample_id=s.id WHERE s.skill_type='speaking' GROUP BY recurrence_key ORDER BY count DESC LIMIT 10"`
 
 **Auto Mode Selection Logic** (if no specific `speaking:*` callback):
 
@@ -63,9 +63,8 @@ Show recommended mode + allow user override:
 
 ### [ ] S2 — Vocabulary Injection
 
-```bash
-node vocab_db.js inject --topic <topic> --limit 3
-node vocab_db.js inject --transfer-level 2 --limit 2
+```
+db name=vocab sql="SELECT word, definition FROM words WHERE topics LIKE ? AND mastery != 'mastered' ORDER BY srs_due LIMIT 3" params='["%<topic>%"]'
 ```
 
 Merge into challenge words for the session.
@@ -136,10 +135,8 @@ Wait for voice → `pron_assess` second assessment → compare with first attemp
 
 ### [ ] S10 — Record + Next
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type speaking --mode shadowing \
-  --redo-count 1 --support-level high
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id) VALUES (datetime('now'), 'speaking', 'shadowing', ?, ?)" params='[null, "<session_id>"]'
 ```
 
 Record pronunciation error with taxonomy key.
@@ -205,11 +202,8 @@ tg(type:"force_reply", text:"现在把整个回答重说一遍，注意用上 <c
 
 ### [ ] S10 — Record + Feedback
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type speaking --mode guided_qa \
-  --redo-count 1 --support-level high \
-  --response-length-words <N>
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id) VALUES (datetime('now'), 'speaking', 'guided_qa', ?, ?)" params='[null, "<session_id>"]'
 ```
 
 ```
@@ -270,10 +264,8 @@ tg(type:"force_reply", text:"重说你最弱的那个部分，用上 <connector>
 
 ### [ ] S10 — Record
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type speaking --mode cue_card_build \
-  --redo-count 1 --support-level medium
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id) VALUES (datetime('now'), 'speaking', 'cue_card_build', ?, ?)" params='[null, "<session_id>"]'
 ```
 
 Difficulty feedback keyboard.
@@ -332,10 +324,8 @@ tg(type:"force_reply", text:"重说你第3轮的回答，用更自然的表达")
 
 ### [ ] S10 — Record
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type speaking --mode roleplay \
-  --redo-count 1 --support-level medium
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id) VALUES (datetime('now'), 'speaking', 'roleplay', ?, ?)" params='[null, "<session_id>"]'
 ```
 
 Difficulty feedback keyboard.
@@ -391,10 +381,8 @@ tg(type:"force_reply", text:"补充你遗漏的部分，用自己的话说")
 
 ### [ ] S10 — Record
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type speaking --mode retell \
-  --redo-count 1 --support-level <varies>
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id) VALUES (datetime('now'), 'speaking', 'retell', ?, ?)" params='[null, "<session_id>"]'
 ```
 
 Difficulty feedback keyboard.
@@ -492,15 +480,10 @@ Wait for voice → `pron_assess(audio_path, reference_text)` → compare.
 
 ### [ ] S10 — Record
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type speaking --mode examiner_sim \
-  --redo-count 1 --support-level none \
-  --duration-sec <N> --response-length-words <N>
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id) VALUES (datetime('now'), 'speaking', 'examiner_sim', ?, ?)" params='[null, "<session_id>"]'
 
-node tracker_db.js add-error \
-  --sample-id <id> --recurrence-key <key> --category <cat> \
-  --severity <sev> --original-phrase "..." --correction "..."
+db name=learner sql="INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction) VALUES (?, ?, ?, ?, ?, ?)" params='[<sample_id>, "<key>", "<cat>", "<sev>", "...", "..."]'
 ```
 
 ```
@@ -545,3 +528,29 @@ node tracker_db.js add-error \
 7. **No text reply alongside force-reply prompts.** Avoids race conditions.
 8. **Mode variety**: Don't run the same mode 3+ times consecutively.
 9. **Challenge words**: Inject recently learned L2+ vocabulary as challenge words.
+
+---
+
+## TTS Reference
+
+### Simple mode (corrections, target sentences)
+```
+tts text="While it is true that technology has benefits, we cannot overlook the drawbacks." voice="en-GB-SoniaNeural"
+```
+
+### Dialogue mode (role-play, examiner sim)
+```
+tts segments='[
+  {"voice":"en-GB-RyanNeural","text":"Can you tell me about your hometown?"},
+  {"break":"800ms"},
+  {"voice":"en-US-AriaNeural","text":"Sure. I come from a small city in the south of China."}
+]'
+```
+
+### Voice choices
+| Voice | Accent | Use for |
+|-------|--------|--------|
+| `en-GB-RyanNeural` | British male | Examiner |
+| `en-GB-SoniaNeural` | British female | Model answers |
+| `en-US-AriaNeural` | American female | Candidate demos |
+| `en-US-GuyNeural` | American male | Second speaker |

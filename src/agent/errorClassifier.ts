@@ -170,7 +170,7 @@ export function classifyApiError(error: unknown): ClassifiedError {
 
 function extractStatus(err: Error): number | null {
   // 1. SDK error objects (Gemini ApiError, etc.) have a .status property
-  const anyErr = err as Record<string, unknown>;
+  const anyErr = err as unknown as Record<string, unknown>;
   if (typeof anyErr.status === 'number') return anyErr.status;
   if (typeof anyErr.statusCode === 'number') return anyErr.statusCode;
   if (typeof anyErr.httpStatus === 'number') return anyErr.httpStatus;

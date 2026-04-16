@@ -1,15 +1,14 @@
 /**
  * @module commands/config
- * @description Public entry for `anya config` — implementation split by section
- * under `src/commands/config/`.
+ * @description Public entry for `anya config`.
  */
 
 export {
   runConfigMenu,
   runConfigShow,
-  configModel,
+  configGemini,
+  configAzure,
   configSTT,
-  configVision,
-  configTTS,
+  configTavily,
   configTelegram,
 } from './config/index.js';

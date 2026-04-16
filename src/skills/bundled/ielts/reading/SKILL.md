@@ -18,7 +18,7 @@ metadatahermes:
 ## Data
 
 Session saved to `~/.anya/data/ielts/learn/{timestamp}_reading.json` after completion.
-Synced to `learner.db` via `tracker_db.js`.
+Synced to `learner.db` via `db` tool.
 
 ## Mode Matrix
 
@@ -37,8 +37,8 @@ Synced to `learner.db` via `tracker_db.js`.
 
 1. Read MEMORY.md → current reading band, reading pace
 2. Read USER.md → interests
-3. Query `tracker_db.js list-samples --skill-type reading --limit 5`
-4. Query `tracker_db.js list-errors --skill reading --limit 10`
+3. Query `db name=learner sql="SELECT id, created_at, band_overall FROM samples WHERE skill_type='reading' ORDER BY created_at DESC LIMIT 5"`
+4. Query `db name=learner sql="SELECT recurrence_key, category, COUNT(*) as count FROM errors e JOIN samples s ON e.sample_id=s.id WHERE s.skill_type='reading' GROUP BY recurrence_key ORDER BY count DESC LIMIT 10"`
 
 **Auto Mode Selection**:
 
@@ -48,8 +48,8 @@ Synced to `learner.db` via `tracker_db.js`.
 
 ### [ ] S2 — Vocabulary Injection
 
-```bash
-node vocab_db.js inject --topic <topic> --limit 3
+```
+db name=vocab sql="SELECT word, definition FROM words WHERE topics LIKE ? AND mastery != 'mastered' ORDER BY srs_due LIMIT 3" params='["%<topic>%"]'
 ```
 
 ---
@@ -101,10 +101,8 @@ If wrong: show another paragraph → timed display → quiz again (redo).
 
 ### [ ] S10 — Record
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type reading --mode flash_skim \
-  --redo-count <N> --support-level medium
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id) VALUES (datetime('now'), 'reading', 'flash_skim', ?, ?)" params='[null, "<session_id>"]'
 ```
 
 Difficulty feedback keyboard.
@@ -252,16 +250,10 @@ User re-answers the wrong question(s) after sentence anatomy drill.
 
 ### [ ] S10 — Record
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type reading --mode standard \
-  --question-type <types_comma_separated> \
-  --redo-count <N> --support-level <level> \
-  --duration-sec <N> --response-length-words <N>
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id) VALUES (datetime('now'), 'reading', 'standard', ?, ?)" params='[null, "<session_id>"]'
 
-node tracker_db.js add-error \
-  --sample-id <id> --recurrence-key <key> --category reading \
-  --severity <sev> --original-phrase "..." --correction "..."
+db name=learner sql="INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction) VALUES (?, ?, 'reading', ?, ?, ?)" params='[<sample_id>, "<key>", "<sev>", "...", "..."]'
 ```
 
 ```

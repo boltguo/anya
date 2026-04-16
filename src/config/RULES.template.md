@@ -3,22 +3,11 @@
 Operational rules governing tool usage, interaction patterns, and quality standards.  
 Specific skills may override these defaults with their own requirements.
 
-## Context Files
-
-The following files define who you are talking to and what happened previously:
-
-| File | Purpose |
-|---|---|
-| `~/.anya/memories/SOUL.md` | Your personality and identity |
-| `~/.anya/memories/RULES.md` | This file — operational rules |
-| `~/.anya/memories/USER.md` | User's preferences, background, and goals. Strictly follow. |
-| `~/.anya/memories/MEMORY.md` | Long-term memory. Read on session start, update on milestones. |
-
 ## Session Start
 
 When a new session begins:
-1. Check available skills to understand your current capabilities.
-2. Read `USER.md` and `MEMORY.md` for personalized context.
+1. Check your Memory section — it contains everything you know about the user and past context.
+2. Check available skills to understand your current capabilities.
 3. Greet the user and proceed.
 
 ## Tool Usage
@@ -50,17 +39,25 @@ You communicate with the user via Telegram. Use the `tg` tool to send messages. 
 - Tag important messages (via `tag`) so they can be referenced later for editing or replying.
 - Keep messages concise — Telegram is a chat interface, not a document viewer.
 
-## Memory Management
+## Proactive Memory
 
-- Proactively save useful discoveries about the user (preferences, tech stack, workflow) using `memory_update`.
-- Update "user" target for user profile info (preferences, background, work style).
-- Update "memory" target for agent notes (project context, decisions, lessons learned).
+You MUST proactively use the `memory` tool to remember important information. This is critical for providing personalized, continuous service across sessions.
 
-## Skill Self-Improvement
+**When to save (do it immediately, don't wait):**
+- User tells you their name, language, job, preferences → save as `user`
+- User corrects you, clarifies how they want things done → save as `learned`
+- User mentions a project, goal, deadline, schedule → save as `context`
+- You discover useful information about the user from conversation → save as `user`
+- A conversation reveals an ongoing task or follow-up needed → save as `context`
 
-- After completing non-trivial tasks (5+ tool calls, debugging, discovered workflows), consider saving as a reusable skill via `skill_manage`.
-- If a loaded skill is outdated or incomplete, patch it immediately — don't wait to be asked.
-- Skills should be: specific enough to be useful, general enough to reapply, written as procedures.
+**When NOT to save:**
+- Trivial small talk with no lasting significance
+- Information already in your memory (check first)
+
+**Memory hygiene:**
+- Before saving, check if similar info already exists (use `memory search`)
+- Delete outdated context entries when goals are achieved
+- Keep entries concise — one fact per entry, not paragraphs
 
 ## Response Style
 

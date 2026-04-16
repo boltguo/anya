@@ -120,15 +120,42 @@ function saveUsage(usage: MonthlyUsage): void {
 
 /**
  * Count billable characters for Azure TTS.
- * Azure charges for text content only — SSML tags are excluded.
- * If input is plain text (no SSML), returns text.length directly.
+ *
+ * Azure billing rules:
+ *  - Everything inside the SSML is counted (text + tags + attributes)
+ *  - EXCEPT: <speak> and <voice> tags (and their attributes) are excluded
+ *  - CJK characters (Chinese, Japanese Kanji, Korean Hanja) count as 2 each
+ *
+ * If input is plain text (no SSML wrapper yet), we count the text that will
+ * be wrapped by buildSsml — the <speak> and <voice> tags are free, but
+ * <prosody rate="..."> and the text itself are billable.
  */
 export function countBillableChars(text: string, ssml?: string): number {
-  if (ssml) {
-    // Strip all XML tags, count remaining text
-    return ssml.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().length;
+  const source = ssml || text;
+
+  // Strip only <speak> and <voice> tags (the two exceptions Azure doesn't charge)
+  const billable = source
+    .replace(/<\/?speak[^>]*>/gi, '')
+    .replace(/<\/?voice[^>]*>/gi, '');
+
+  // CJK chars count as 2 (Unicode ranges for CJK Unified Ideographs)
+  let count = 0;
+  for (const char of billable) {
+    const code = char.codePointAt(0)!;
+    // CJK Unified Ideographs + extensions
+    if (
+      (code >= 0x4E00 && code <= 0x9FFF) ||   // CJK Unified
+      (code >= 0x3400 && code <= 0x4DBF) ||   // CJK Extension A
+      (code >= 0x20000 && code <= 0x2A6DF) || // CJK Extension B
+      (code >= 0xF900 && code <= 0xFAFF)      // CJK Compatibility
+    ) {
+      count += 2;
+    } else {
+      count += 1;
+    }
   }
-  return text.length;
+
+  return count;
 }
 
 // ── Track Functions ──────────────────────────────────────────────────────────

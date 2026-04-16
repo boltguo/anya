@@ -8,14 +8,14 @@ Each skill's SKILL.md contains the complete step-by-step checklist; this file do
 ## Session Data
 
 All session data saved to `~/.anya/data/ielts/learn/{timestamp}_{type}.json`.
-Synced to `learner.db` via `tracker_db.js` after completion.
+Synced to `learner.db` via `db` tool after completion.
 
 ## 10-Step Universal Training Loop
 
 | Step | Name                  | Action                                                                                       | Required |
 | ---- | --------------------- | -------------------------------------------------------------------------------------------- | -------- |
-| S1   | **Context Load**      | Read MEMORY.md + USER.md + `tracker_db.js list-errors --limit 10` + `list-samples --limit 5` | ✅       |
-| S2   | **Decision Engine**   | Decide mode + difficulty + vocab injection (`vocab_db.js inject`)                            | ✅       |
+| S1   | **Context Load**      | Read MEMORY.md + USER.md + `db name=learner` for errors + samples                            | ✅       |
+| S2   | **Decision Engine**   | Decide mode + difficulty + vocab injection (`db name=vocab`)                                 | ✅       |
 | S3   | **Warm-up**           | Optional 30s warm-up (shadowing sentence, quick vocab recall, etc.)                          | ⚪       |
 | S4   | **Scaffolded Input**  | Send prompt with appropriate scaffolding (骨架/提示/挑战词) based on band                    | ✅       |
 | S5   | **Main Task**         | User completes the main task (write/speak/answer/listen)                                     | ✅       |
@@ -23,7 +23,7 @@ Synced to `learner.db` via `tracker_db.js` after completion.
 | S7   | **Focused Feedback**  | 1-2 core bottlenecks only (not 10 errors). Band-Up example for writing/speaking              | ✅       |
 | S8   | **Micro Drill**       | Targeted mini-exercise on the #1 bottleneck (quiz/造句/听写/替换)                            | ✅       |
 | S9   | **Forced Redo**       | User must redo the weak part (rewrite paragraph / re-speak sentence / re-listen)             | ✅       |
-| S10  | **Memory Sync**       | Record to tracker_db + vocab_db + difficulty feedback keyboard                               | ✅       |
+| S10  | **Memory Sync**       | Record to learner.db + vocab.db via `db` tool + difficulty feedback keyboard                  | ✅       |
 
 ### Step Details
 
@@ -31,15 +31,15 @@ Synced to `learner.db` via `tracker_db.js` after completion.
 
 - Read MEMORY.md for band overview, weak dimensions, pronunciation risks
 - Read USER.md for interests (engage topics), goals, preferences
-- Query `tracker_db.js list-errors --limit 10` for recent error patterns
-- Query `tracker_db.js list-samples --limit 5` for recent session history
+- Query `db name=learner sql="SELECT recurrence_key, category, COUNT(*) as count FROM errors GROUP BY recurrence_key ORDER BY count DESC LIMIT 10"` for recent error patterns
+- Query `db name=learner sql="SELECT * FROM samples ORDER BY created_at DESC LIMIT 5"` for recent session history
 - Avoid repeating the same task type as the last 2 sessions
 
 #### S2 Decision Engine
 
 - Select training mode based on learner data (each skill has its own mode selection logic)
 - Set difficulty = current band + 0.5 (adjustable by difficulty_feedback history)
-- Inject vocabulary: `vocab_db.js inject --topic <topic> --limit 3`
+- Inject vocabulary: `db name=vocab sql="SELECT word, definition FROM words WHERE topics LIKE ? AND mastery != 'mastered' ORDER BY srs_due LIMIT 3" params='["%<topic>%"]'`
 - For speaking/listening: also inject recently learned L2+ words as challenge words
 
 #### S3 Warm-up (Optional)
@@ -71,27 +71,15 @@ Synced to `learner.db` via `tracker_db.js` after completion.
 
 #### S10 Memory Sync — Recording Template
 
-```bash
-# Record sample with extended fields
-node tracker_db.js add-sample \
-  --skill-type <writing|speaking|reading|listening> \
-  --prompt "..." --raw-content "..." \
-  --band-task X.X --band-coherence X.X --band-lexical X.X --band-grammar X.X \
-  --band-overall X.X \
-  --mode <training_mode> \
-  --question-type <question_type> \
-  --duration-sec <seconds> \
-  --redo-count <N> \
-  --support-level <high|medium|low|none> \
-  --difficulty-feedback <too_hard|just_right|too_easy>
+```
+# Record sample
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_task, band_coherence, band_lexical, band_grammar, band_overall, session_id, feedback) VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?)" params='["<skill>", "<prompt>", null, null, null, null, null, "<session_id>", null]'
 
 # Record errors
-node tracker_db.js add-error \
-  --sample-id <id> --recurrence-key <key> --category <cat> \
-  --severity <low|medium|high> --original-phrase "..." --correction "..."
+db name=learner sql="INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction) VALUES (?, ?, ?, ?, ?, ?)" params='[<id>, "<key>", "<cat>", "<sev>", "...", "..."]'
 
 # Track vocabulary usage
-node vocab_db.js use <word> --event <exposure|production> --session-type <skill> --context "..."
+db name=vocab sql="INSERT INTO word_events (word, event_type, session_type, context, created_at) VALUES (?, ?, ?, ?, datetime('now'))" params='["<word>", "<exposure|production>", "<skill>", "..."]'
 ```
 
 #### S10 Difficulty Feedback Keyboard (Mandatory)
@@ -170,16 +158,14 @@ All next-step buttons use callback prefix:
 
 All errors use taxonomy keys from `assessment/references/error_taxonomy.md`:
 
-```bash
-node tracker_db.js add-error \
-  --sample-id <id> --recurrence-key <key> --category <cat> \
-  --severity <low|medium|high> --original-phrase "..." --correction "..."
+```
+db name=learner sql="INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction) VALUES (?, ?, ?, ?, ?, ?)" params='[<id>, "<key>", "<cat>", "<sev>", "...", "..."]'
 ```
 
 ## Vocabulary Usage Tracking
 
 When injected words are used (or encountered) in a session:
 
-```bash
-node vocab_db.js use <word> --event <exposure|production> --session-type <skill> --context "..."
+```
+db name=vocab sql="INSERT INTO word_events (word, event_type, session_type, context, created_at) VALUES (?, ?, ?, ?, datetime('now'))" params='["<word>", "<exposure|production>", "<skill>", "..."]'
 ```

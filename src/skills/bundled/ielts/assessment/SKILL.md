@@ -46,7 +46,7 @@ How each MEMORY.md field is computed from learner.db:
 
 Silent background update. No message to learner.
 
-1. Query today's samples: `tracker_db.js list-samples --since today --limit 50`
+1. Query today's samples: `db name=learner sql="SELECT * FROM samples WHERE created_at >= date('now') ORDER BY created_at DESC"`
 2. If no samples → update `streak_days: 0`, skip all other fields
 3. Compute from today's data:
    - EMA-smoothed band per skill (α=0.3). Samples with `redo_count=0` weighted at 0.7×.

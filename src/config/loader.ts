@@ -54,68 +54,69 @@ function deepMerge(target: Record<string, any>, source: Record<string, any>): Re
  */
 function applyEnvOverrides(config: AnyaConfig): AnyaConfig {
   const envMap: Record<string, (c: AnyaConfig, v: string) => void> = {
-    ANYA_GEMINI_API_KEY: (c, v) => { c.provider.gemini.api_key = v; },
+    ANYA_GEMINI_API_KEY: (c, v) => { c.gemini.api_key = v; },
     ANYA_TAVILY_API_KEY: (c, v) => { c.tools.web_search.api_key = v; },
     ANYA_TELEGRAM_BOT_TOKEN: (c, v) => { c.telegram.bot_token = v; },
     ANYA_LOG_LEVEL: (c, v) => { c.advanced.log_level = v; },
-    ANYA_MODEL: (c, v) => {
-      // Detect provider from model name
-      if (v.startsWith('gpt') || v.startsWith('o1') || v.startsWith('o3')) {
-        c.provider.active = 'openai';
-        c.provider.openai.model = v;
-      } else {
-        c.provider.active = 'gemini';
-        c.provider.gemini.model = v;
-      }
-    },
-    ANYA_PROVIDER: (c, v) => {
-      if (v === 'gemini' || v === 'openai') c.provider.active = v;
-    },
+    ANYA_MODEL: (c, v) => { c.provider.model = v; },
   };
 
   for (const [envKey, setter] of Object.entries(envMap)) {
     const value = process.env[envKey];
-    if (value) {
-      setter(config, value);
-    }
+    if (value) setter(config, value);
   }
 
   return config;
 }
 
 /**
- * Migrate v0.1 config (flat provider) to v0.2 (nested provider).
- * Handles existing configs that have provider.api_key and provider.primary.
+ * Migrate old config formats to v0.4.
  */
 function migrateConfig(raw: Record<string, any>): Record<string, any> {
-  const provider = raw.provider;
-  if (!provider || typeof provider !== 'object') return raw;
+  // Already v0.4+ — has gemini section (not google)
+  if (raw.gemini && typeof raw.gemini === 'object') return raw;
 
-  // Already v0.2+ format — has nested gemini/openai objects
-  if (provider.gemini && typeof provider.gemini === 'object') return raw;
-
-  // Migrate flat → nested
   const migrated = { ...raw };
-  migrated.provider = {
-    active: 'gemini',
-    gemini: {
-      model: provider.primary || 'gemini-3-flash-preview',
-      api_key: provider.api_key || '',
-    },
-    openai: {
-      model: 'gpt-5.4',
-    },
-    max_tokens: provider.max_tokens || 8192,
-    temperature: provider.temperature ?? 0.7,
-    max_retries: provider.max_retries || 3,
-  };
 
-  // Auto-save migrated config
+  // v0.3 (google) → v0.4 (gemini)
+  if (raw.google && typeof raw.google === 'object') {
+    migrated.gemini = {
+      api_key: raw.google.api_key || '',
+      vision_model: raw.google.vision_model || 'gemini-3-flash-preview',
+      image_model: raw.google.image_model || 'gemini-3.1-flash-image-preview',
+      aspect_ratio: raw.google.aspect_ratio || '1:1',
+    };
+    delete migrated.google;
+  }
+
+  // v0.2 (provider.gemini/openai) → v0.4
+  const provider = raw.provider;
+  if (provider && (provider.gemini || provider.openai || provider.active)) {
+    migrated.provider = {
+      model: provider.openai?.model || provider.gemini?.model || 'gpt-5.4',
+      max_tokens: provider.max_tokens || 8192,
+      temperature: provider.temperature ?? 0.7,
+      max_retries: provider.max_retries || 3,
+    };
+
+    if (!migrated.gemini) {
+      migrated.gemini = {
+        api_key: provider.gemini?.api_key || '',
+        vision_model: raw.vision?.model || 'gemini-3-flash-preview',
+        image_model: raw.image_gen?.model || 'gemini-3.1-flash-image-preview',
+        aspect_ratio: raw.image_gen?.aspect_ratio || '1:1',
+      };
+    }
+  }
+
+  // Clean up old sections
+  delete migrated.vertex;
+  delete migrated.image_gen;
+  delete migrated.vision;
+
   try {
     writeFileSync(CONFIG_PATH, JSON.stringify(migrated, null, 2) + '\n', 'utf-8');
-  } catch {
-    // Non-critical
-  }
+  } catch { /* non-critical */ }
 
   return migrated;
 }

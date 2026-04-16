@@ -18,7 +18,7 @@ metadatahermes:
 ## Data
 
 Session saved to `~/.anya/data/ielts/learn/{timestamp}_listening.json` after completion.
-Synced to `learner.db` via `tracker_db.js`.
+Synced to `learner.db` via `db` tool.
 
 ## Mode Matrix
 
@@ -38,8 +38,8 @@ Synced to `learner.db` via `tracker_db.js`.
 
 1. Read MEMORY.md → current listening band, listening_risk
 2. Read USER.md → interests
-3. Query `tracker_db.js list-samples --skill-type listening --limit 5`
-4. Query `tracker_db.js list-errors --skill listening --limit 10`
+3. Query `db name=learner sql="SELECT id, created_at, band_overall FROM samples WHERE skill_type='listening' ORDER BY created_at DESC LIMIT 5"`
+4. Query `db name=learner sql="SELECT recurrence_key, category, COUNT(*) as count FROM errors e JOIN samples s ON e.sample_id=s.id WHERE s.skill_type='listening' GROUP BY recurrence_key ORDER BY count DESC LIMIT 10"`
 
 **Auto Mode Selection Logic** (if no specific `listening:*` callback):
 
@@ -61,8 +61,8 @@ Show recommended mode + allow override:
 
 ### [ ] S2 — Vocabulary Injection
 
-```bash
-node vocab_db.js inject --topic <topic> --limit 3
+```
+db name=vocab sql="SELECT word, definition FROM words WHERE topics LIKE ? AND mastery != 'mastered' ORDER BY srs_due LIMIT 3" params='["%<topic>%"]'
 ```
 
 ---
@@ -122,10 +122,8 @@ If wrong on micro drill: one more attempt with hint.
 
 After 5-8 groups:
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type listening --mode sound_drill \
-  --redo-count <N> --support-level high
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id, feedback) VALUES (datetime('now'), 'listening', 'sound_drill', ?, ?, ?)" params='[null, "<session_id>", "<feedback>"]'
 ```
 
 Record errors with `minimal_pair_confusion` or `number_confusion` taxonomy keys.
@@ -212,10 +210,8 @@ User re-transcribes the sentence one final time.
 
 After 3-5 sentences:
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type listening --mode dictation \
-  --redo-count <N> --support-level medium
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id, feedback) VALUES (datetime('now'), 'listening', 'dictation', ?, ?, ?)" params='[null, "<session_id>", "<feedback>"]'
 ```
 
 Record errors: `function_word_miss`, `spelling_error`, `connected_speech_fail`, etc.
@@ -231,7 +227,7 @@ Difficulty feedback keyboard.
 ### [ ] S3 — Generate Audio Script
 
 Write a 40-80s script (conversation/monologue/interview) with injected vocab.
-Generate TTS audio.
+For dialogues use `tts segments` with different voices; for monologues use simple `tts text`.
 
 ### [ ] S4 — First Listen: Gist
 
@@ -283,10 +279,8 @@ User re-answers the wrong question after hearing the key sentence.
 
 ### [ ] S10 — Record
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type listening --mode short_clip \
-  --audio-duration-sec <N> --redo-count <N> --support-level medium
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id, feedback) VALUES (datetime('now'), 'listening', 'short_clip', ?, ?, ?)" params='[null, "<session_id>", "<feedback>"]'
 ```
 
 Record errors: `paraphrase_miss`, `distractor_trap`, `function_word_miss`, etc.
@@ -334,10 +328,8 @@ Drill on the type-specific skill (e.g., spelling for form completion, eliminatio
 
 ### [ ] S10 — Record
 
-```bash
-node tracker_db.js add-sample \
-  --skill-type listening --mode question_type \
-  --question-type <type> --redo-count <N>
+```
+db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_overall, session_id, feedback) VALUES (datetime('now'), 'listening', 'question_type', ?, ?, ?)" params='[null, "<session_id>", "<feedback>"]'
 ```
 
 Difficulty feedback keyboard.
@@ -382,3 +374,32 @@ Additional fields:
 9. **Vary audio types**: conversation, monologue, lecture, interview.
 10. **Progressive accent exposure**: Standard first, then British/Australian for 6.5+.
 11. **Do NOT echo MEDIA: tags or [[audio_as_voice]] in text.** Audio is sent separately.
+
+---
+
+## TTS Reference
+
+### Single speaker (monologue, dictation)
+```
+tts text="The library closes at six o'clock every day." voice="en-GB-SoniaNeural" rate="-10%"
+```
+
+### Multi-speaker dialogue (Short Clip, Lecture)
+```
+tts segments='[
+  {"voice":"en-GB-RyanNeural","text":"Good morning. How can I help you today?"},
+  {"break":"600ms"},
+  {"voice":"en-US-AriaNeural","text":"Hi, I would like to register for the advanced course."},
+  {"break":"500ms"},
+  {"voice":"en-GB-RyanNeural","text":"Of course. Could I have your student ID, please?"}
+]'
+```
+
+### Voice choices
+| Voice | Accent | Use for |
+|-------|--------|--------|
+| `en-GB-SoniaNeural` | British female | Standard monologue |
+| `en-GB-RyanNeural` | British male | Examiner, interviewer |
+| `en-US-AriaNeural` | American female | Candidate, narrator |
+| `en-US-GuyNeural` | American male | Second speaker |
+| `en-AU-NatashaNeural` | Australian female | Band 6.5+ accent exposure |
