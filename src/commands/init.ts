@@ -36,6 +36,9 @@ export async function runInit(): Promise<void> {
     console.log(chalk.dim('  ~/.anya/ already exists. Skipping existing files.\n'));
   }
 
+  // Resolve __dirname once for all template lookups
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+
   // 1. Create directory structure
   ensureDirectories();
   console.log(chalk.dim('  [ok] directories'));
@@ -50,7 +53,6 @@ export async function runInit(): Promise<void> {
 
   // 3. Copy config schema
   try {
-    const __dirname = dirname(fileURLToPath(import.meta.url));
     for (const rel of ['../src/config/schema.json', '../config/schema.json']) {
       const src = join(__dirname, rel);
       if (existsSync(src)) {
@@ -62,18 +64,49 @@ export async function runInit(): Promise<void> {
   } catch { /* non-critical */ }
 
   // 4. Memory files
-  if (!existsSync(USER_MD_PATH)) {
-    writeFileSync(USER_MD_PATH, '# User Profile\n\n_Anya will learn about you over time._\n', 'utf-8');
+  for (const { label, dest, template, fallback } of [
+    {
+      label: 'USER.md',
+      dest: USER_MD_PATH,
+      template: 'USER.template.md',
+      fallback: '# User Profile\n\n_Anya will learn about you over time._\n',
+    },
+    {
+      label: 'MEMORY.md',
+      dest: MEMORY_MD_PATH,
+      template: 'MEMORY.template.md',
+      fallback: '# Agent Notes\n\n_Compressed notes and current context._\n',
+    },
+  ]) {
+    if (!existsSync(dest)) {
+      let copied = false;
+      try {
+        for (const rel of [
+          `../src/config/${template}`,
+          `../config/${template}`,
+        ]) {
+          const src = join(__dirname, rel);
+          if (existsSync(src)) {
+            copyFileSync(src, dest);
+            copied = true;
+            break;
+          }
+        }
+      } catch {
+        copied = false;
+      }
+      if (!copied) {
+        writeFileSync(dest, fallback, 'utf-8');
+      }
+    }
+    console.log(chalk.dim(`  [ok] ${label}`));
   }
-  if (!existsSync(MEMORY_MD_PATH)) {
-    writeFileSync(MEMORY_MD_PATH, '# Agent Notes\n\n_Anya will save notes here as it learns._\n', 'utf-8');
-  }
-  console.log(chalk.dim('  [ok] memory/'));
+  console.log(chalk.dim('  [ok] memories/'));
 
   // 5. Cron jobs
   if (!existsSync(CRON_JOBS_PATH)) {
     try {
-      const __dirname = dirname(fileURLToPath(import.meta.url));
+
       let written = false;
       for (const rel of ['../src/cron/default_jobs.json', '../cron/default_jobs.json']) {
         const src = join(__dirname, rel);
@@ -86,15 +119,13 @@ export async function runInit(): Promise<void> {
   }
   console.log(chalk.dim('  [ok] cron/'));
 
-  // 6. SOUL & RULES persona files
-  const { SOUL_PATH, RULES_PATH } = await import('../lib/paths.js');
+  // 6. RULES file
+  const { RULES_PATH } = await import('../lib/paths.js');
   for (const { label, dest, template } of [
-    { label: 'SOUL.md', dest: SOUL_PATH, template: 'SOUL.template.md' },
     { label: 'RULES.md', dest: RULES_PATH, template: 'RULES.template.md' },
   ]) {
     if (!existsSync(dest)) {
       try {
-        const __dirname = dirname(fileURLToPath(import.meta.url));
         for (const rel of [`../src/config/${template}`, `../config/${template}`]) {
           const src = join(__dirname, rel);
           if (existsSync(src)) { copyFileSync(src, dest); break; }

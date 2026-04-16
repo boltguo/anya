@@ -138,11 +138,17 @@ export async function dispatch(
 
   const startTime = Date.now();
   const sid = context.sessionId;
+  const TOOL_TIMEOUT_MS = 30_000;
 
   try {
     agentLogger.info({ msg: 'tool_call', tool: toolName, sessionId: sid, args });
 
-    const content = await tool.execute(args, context);
+    const content = await Promise.race([
+      tool.execute(args, context),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Tool "${toolName}" timed out after ${TOOL_TIMEOUT_MS / 1000}s`)), TOOL_TIMEOUT_MS)
+      ),
+    ]);
 
     const durationMs = Date.now() - startTime;
     agentLogger.info({ msg: 'tool_result', tool: toolName, sessionId: sid, duration_ms: durationMs, status: 'ok' });

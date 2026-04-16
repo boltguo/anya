@@ -41,7 +41,6 @@ export class TelegramSessionAdapter implements Adapter {
 
   // A single message that gets created then edited in-place during tool exec.
   private statusMessageId?: number;
-  private statusLines: string[] = [];
 
   // Set when any tg tool sends content. reply() checks this to skip duplicates.
   private hasSentContent = false;
@@ -71,7 +70,7 @@ export class TelegramSessionAdapter implements Adapter {
 
   /** Enqueue a TG API call to guarantee strict ordering of outbound messages. */
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
-    return this.outboundQueue.add(fn, { throwOnTimeout: false }) as Promise<T>;
+    return this.outboundQueue.add(fn, { priority: 0 }) as Promise<T>;
   }
 
   /** Resolve a message reference (numeric ID or string tag) to a Telegram message_id. */
@@ -144,14 +143,9 @@ export class TelegramSessionAdapter implements Adapter {
         if (msg) this.trackMessage(msg.message_id);
       }
     }
-
-    if (this.statusMessageId) {
-      await this.bot.api.deleteMessage(this.chatId, this.statusMessageId).catch(() => {});
-      this.statusMessageId = undefined;
-    }
   }
 
-  // ── Status window (compact single-line, enqueued) ─────────────────────────
+  // ── Status window (single-line, edited in-place) ──────────────────────────
 
   /** User-friendly tool display labels */
   private static TOOL_LABEL: Record<string, string> = {
@@ -160,47 +154,63 @@ export class TelegramSessionAdapter implements Adapter {
     list_dir: '📁 Browsing directory',
     shell: '💻 Running command',
     web_search: '🔍 Searching',
-    memory_update: '🧠 Updating memory',
-    skill_manage: '🧩 Managing skill',
+    memory: '🧠 Updating memory',
     skill_view: '🧩 Loading skill',
     clarify: '💬 Asking question',
     tg: '💬 Sending message',
     tts: '🔊 Generating audio',
     image_gen: '🖼️ Generating image',
     pron_assess: '🗣️ Assessing pronunciation',
+    db: '🗄️ Querying database',
   };
+
+  /** Current status text */
+  private statusText = '🤔 Thinking...';
+
+  /**
+   * Send the initial "thinking" status immediately.
+   * Called right after construction, before agent.run().
+   */
+  async sendThinking(): Promise<void> {
+    this.statusText = '🤔 Thinking...';
+    const msg = await this.ctx.reply(this.statusText, { parse_mode: undefined }).catch(() => null);
+    if (msg) this.statusMessageId = msg.message_id;
+  }
 
   showToolCall(toolName: string, _args: Record<string, unknown>): void {
     const label = TelegramSessionAdapter.TOOL_LABEL[toolName] || `⚙️ ${toolName}`;
-    this.statusLines = [`${label}...`];
+    this.statusText = `⏳ ${label}...`;
     this.enqueue(() => this.flushStatus());
   }
 
-  showToolResult(toolName: string, _result: string, isError: boolean): void {
-    // Clear status on completion — the actual result is sent via reply
-    this.statusLines = [];
+  showToolResult(_toolName: string, _result: string, _isError: boolean): void {
+    // Reset to thinking — next tool call or end-of-turn will update
+    this.statusText = '🤔 Thinking...';
     this.enqueue(() => this.flushStatus());
   }
 
   /**
-   * Flush the status indicator to Telegram.
-   * Creates a new status message on first call, edits in-place on subsequent calls.
-   * Deletes the message if text is empty.
+   * Flush the current status line to Telegram.
+   * Always edits the same message — never creates new ones.
    */
   private async flushStatus(): Promise<void> {
-    const text = this.statusLines.join('\n');
-    if (!text && this.statusMessageId) {
-      await this.bot.api.deleteMessage(this.chatId, this.statusMessageId).catch(() => {});
-      this.statusMessageId = undefined;
-      return;
-    }
-    if (!text) return;
+    const text = this.statusText;
 
     if (!this.statusMessageId) {
       const msg = await this.ctx.reply(text, { parse_mode: undefined }).catch(() => null);
       if (msg) this.statusMessageId = msg.message_id;
     } else {
       await this.bot.api.editMessageText(this.chatId, this.statusMessageId, text).catch(() => {});
+    }
+  }
+
+  /**
+   * Delete the status message. Called at end of turn (after reply).
+   */
+  async cleanupStatus(): Promise<void> {
+    if (this.statusMessageId) {
+      await this.bot.api.deleteMessage(this.chatId, this.statusMessageId).catch(() => {});
+      this.statusMessageId = undefined;
     }
   }
 
@@ -391,7 +401,7 @@ export class TelegramSessionAdapter implements Adapter {
         is_anonymous: false,
         explanation: explanation || undefined,
         open_period: openPeriod || undefined,
-      });
+      } as Record<string, unknown>);
 
       this.trackMessage(msg.message_id);
       this.hasSentContent = true;

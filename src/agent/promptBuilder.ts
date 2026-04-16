@@ -6,28 +6,29 @@
  *
  * ```
  * ┌─────────────────────────────────────┐
- * │  1. SOUL.md — Identity & Personality │  "Who Anya is"
+ * │  1. Config Personality               │  "Who the agent is"
  * ├─────────────────────────────────────┤
  * │  2. RULES.md — Operational Rules     │  "How Anya operates"
  * ├─────────────────────────────────────┤
- * │  3. Memory — USER.md + MEMORY.md     │  "Who the user is & what happened"
+ * │  3. Timestamp — Current date/time      │  "When it is now"
  * ├─────────────────────────────────────┤
- * │  4. Skills Index — Available skills  │  "What Anya can do"
+ * │  4. User Profile — USER.md + MEMORY.md   │  "Who the user is & adaptive context"
  * ├─────────────────────────────────────┤
- * │  5. Security — Path & shell rules    │  "What Anya must not do"
+ * │  5. Skills Index — Available skills  │  "What Anya can do"
  * ├─────────────────────────────────────┤
- * │  6. Timestamp — Current date/time    │  "When it is now"
+ * │  6. Security — Path & shell rules    │  "What Anya must not do"
+ * ├─────────────────────────────────────┤
+ * │  7. Platform Capabilities            │  "What tools/media are available"
  * └─────────────────────────────────────┘
  * ```
  */
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { SOUL_PATH, RULES_PATH } from '../lib/paths.js';
+import { RULES_PATH, USER_MD_PATH, MEMORY_MD_PATH } from '../lib/paths.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { buildSkillIndex } from '../skills/loader.js';
-import { buildMemorySummary } from '../lib/memory.js';
 
-const FILE_CACHE_TTL_MS = 30_000;
+const FILE_CACHE_TTL_MS = 300_000;
 const fileCache = new Map<string, { content: string; mtime: number; cachedAt: number }>();
 
 /**
@@ -39,9 +40,11 @@ const fileCache = new Map<string, { content: string; mtime: number; cachedAt: nu
 export function buildSystemPrompt(config: AnyaConfig): string {
   const sections: string[] = [];
 
-  // ── 1. Identity & Personality (SOUL) ───────────────────────────────
-  const soul = loadFile(SOUL_PATH);
-  sections.push(soul || config.agent.personality);
+  // ── 1. Identity & Personality (config) ─────────────────────────────
+  sections.push(config.agent.personality);
+  if (config.user.native_language.trim()) {
+    sections.push(`Configured user context: native language = ${config.user.native_language.trim()}`);
+  }
 
   // ── 2. Operational Rules (RULES) ───────────────────────────────────
   const rules = loadFile(RULES_PATH);
@@ -49,13 +52,20 @@ export function buildSystemPrompt(config: AnyaConfig): string {
     sections.push(rules);
   }
 
-  // ── 3. Current timestamp ───────────────────────────────────────────
-  sections.push(`\nCurrent date and time: ${new Date().toISOString()}`);
-
-  // ── 4. Memory (structured) ─────────────────────────────────────────
-  const memorySummary = buildMemorySummary();
-  if (memorySummary) {
-    sections.push('\n' + memorySummary);
+  // ── 3. Memory (USER.md + MEMORY.md) ────────────────────────────────
+  // NOTE: Timestamp moved to user message to preserve prompt cache prefix.
+  const userMemory = loadFile(USER_MD_PATH);
+  const agentMemory = loadFile(MEMORY_MD_PATH);
+  if (userMemory || agentMemory) {
+    sections.push('\n## Memory\n');
+    if (userMemory) {
+      sections.push('### User Profile');
+      sections.push(userMemory);
+    }
+    if (agentMemory) {
+      sections.push('\n### Agent Notes');
+      sections.push(agentMemory);
+    }
   }
 
   // ── 5. Skills index ────────────────────────────────────────────────

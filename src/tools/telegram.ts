@@ -6,11 +6,12 @@
  * a `type` parameter, reducing LLM function declaration overhead from
  * ~13 separate tool schemas to just 1 (~1300 prompt tokens saved per call).
  *
- * Available types: text, keyboard, quiz, force_reply, reply_keyboard,
- * remove_keyboard, edit, edit_keyboard, dice, react, pin, action.
+ * Available types: text, photo, audio, voice, keyboard, quiz, force_reply,
+ * reply_keyboard, remove_keyboard, edit, edit_keyboard, dice, react, pin, action.
  *
- * Interaction conventions are documented in SOUL.md. Specific skills
- * can override these defaults with their own requirements.
+ * Interaction conventions are documented in the active prompt layer
+ * (`config.agent.personality`, `RULES.md`, `USER.md`, `MEMORY.md`).
+ * Specific skills can override these defaults with their own requirements.
  */
 
 import { register } from './registry.js';
@@ -60,6 +61,9 @@ function parseStringArray(raw: unknown): string[] {
 // The `type` field determines the message format:
 //
 //   text           → Plain text message
+//   photo          → Photo with optional caption
+//   audio          → Audio file with optional caption
+//   voice          → Voice-bubble audio from a local OGG/Opus path
 //   keyboard       → Message with inline buttons (callback-based)
 //   quiz           → Native poll with auto-scoring
 //   force_reply    → Forces user's keyboard open for free-text input
@@ -72,15 +76,15 @@ function parseStringArray(raw: unknown): string[] {
 //   pin            → Pin a message to the top of the chat
 //   action         → Show typing/recording indicator
 //
-// Interaction conventions are documented in SOUL.md.
+// Interaction conventions are documented in the active prompt layer.
 
 register({
   name: 'tg',
-  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, keyboard (inline buttons), quiz (auto-scored poll), force_reply, reply_keyboard (bottom menu), edit, dice, react, pin, action. Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). See SOUL.md for usage patterns.',
+  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, photo, audio, voice, keyboard (inline buttons), quiz (auto-scored poll), force_reply, reply_keyboard (bottom menu), edit, dice, react, pin, action. Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
   parameters: {
     type: 'object',
     properties: {
-      type:       { type: 'string', description: 'Message type: text | photo | audio | keyboard | quiz | force_reply | reply_keyboard | remove_keyboard | edit | edit_keyboard | dice | react | pin | action' },
+      type:       { type: 'string', description: 'Message type: text | photo | audio | voice | keyboard | quiz | force_reply | reply_keyboard | remove_keyboard | edit | edit_keyboard | dice | react | pin | action' },
       text:       { type: 'string', description: 'Message text/caption (HTML format). Use <b>bold</b>, <i>italic</i>, <code>code</code>, <pre>block</pre>, <tg-spoiler>hidden</tg-spoiler>.' },
       url:        { type: 'string', description: 'For photo/audio: URL or file path of the media to send.' },
       buttons:    { type: 'string', description: 'JSON 2D array. For keyboard: [["label|callback_data",...]], for reply_keyboard: [["label",...]].' },
@@ -134,6 +138,17 @@ register({
         const msgId = await tg.sendAudio(url, String(args.text || ''), {
           replyTo, tag: args.tag as string,
           parseMode: (args.parse_mode as any) || 'HTML',
+        });
+        return JSON.stringify({ ok: true, message_id: msgId });
+      }
+
+      case 'voice': {
+        const url = String(args.url || '');
+        if (!url) return JSON.stringify({ ok: false, error: 'url is required for voice type' });
+        let replyTo: number | string | undefined = args.reply_to as string | undefined;
+        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const msgId = await tg.sendVoice(url, {
+          replyTo, tag: args.tag as string,
         });
         return JSON.stringify({ ok: true, message_id: msgId });
       }
@@ -225,7 +240,7 @@ register({
       }
 
       default:
-        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, keyboard, quiz, force_reply, reply_keyboard, remove_keyboard, edit, edit_keyboard, dice, react, pin, action.` });
+        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, photo, audio, voice, keyboard, quiz, force_reply, reply_keyboard, remove_keyboard, edit, edit_keyboard, dice, react, pin, action.` });
     }
   },
 });

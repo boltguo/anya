@@ -9,7 +9,11 @@ export const PartialAnyaConfigSchema = z.object({
   version: z.string().optional(),
   agent: z.object({
     name: z.string().optional(),
+    // Injected directly into the system prompt. This replaces legacy file-based personality loading.
     personality: z.string().optional(),
+  }).optional(),
+  user: z.object({
+    native_language: z.string().optional(),
   }).optional(),
   provider: z.object({
     model: z.string().optional(),

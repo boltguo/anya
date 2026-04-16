@@ -6,20 +6,12 @@
  * ```
  * ~/.anya/                         (ANYA_HOME)
  * ├── config.json                  Configuration
- * ├── SOUL.md                      Agent personality
- * ├── memories/                     Identity, rules & memory
- * │   ├── SOUL.md                   Agent personality
- * │   ├── RULES.md                  Operational directives
- * │   ├── USER.md                   User profile
- * │   └── MEMORY.md                 Agent long-term notes
+ * ├── memories/                    Global rule memory
+ * │   └── RULES.md                 Operational directives
  * ├── skills/                      Installed skills
  * ├── data/                        All persistent data
  * │   ├── store/                   SQLite databases
- * │   │   ├── state.db             Session & message history
- * │   │   ├── vocab.db             IELTS vocabulary (skill)
- * │   │   └── learner.db           IELTS learner progress (skill)
- * │   ├── words/                   Word card JSON files (skill)
- * │   ├── learn/                   Learning session logs (skill)
+ * │   │   └── state.db             Session & message history
  * │   ├── search/                  Web search cache
  * │   └── cache/                   General cache
  * ├── logs/                        Log files
@@ -49,7 +41,6 @@ export const AUTH_PATH = join(ANYA_HOME, 'auth.json');
 
 // ── Identity & Memory ────────────────────────────────────────────────────────
 export const MEMORY_DIR = join(ANYA_HOME, 'memories');
-export const SOUL_PATH = join(MEMORY_DIR, 'SOUL.md');
 export const RULES_PATH = join(MEMORY_DIR, 'RULES.md');
 export const USER_MD_PATH = join(MEMORY_DIR, 'USER.md');
 export const MEMORY_MD_PATH = join(MEMORY_DIR, 'MEMORY.md');
@@ -72,13 +63,6 @@ export const STORE_DIR = join(DATA_DIR, 'store');
 
 /** Agent session & message history database. */
 export const DB_PATH = join(STORE_DIR, 'state.db');
-
-/** IELTS skill data directories (used by bundled IELTS skills). */
-export const IELTS_DATA_DIR = join(DATA_DIR, 'ielts');
-export const IELTS_WORDS_DIR = join(IELTS_DATA_DIR, 'words');
-export const IELTS_LEARN_DIR = join(IELTS_DATA_DIR, 'learn');
-export const IELTS_VOCAB_DB = join(STORE_DIR, 'vocab.db');
-export const IELTS_LEARNER_DB = join(STORE_DIR, 'learner.db');
 
 /** Web search response cache. */
 export const SEARCH_CACHE_DIR = join(DATA_DIR, 'search');
@@ -123,9 +107,6 @@ export function ensureDirectories(): void {
     CRON_HISTORY_DIR,
     DATA_DIR,
     STORE_DIR,
-    IELTS_DATA_DIR,
-    IELTS_WORDS_DIR,
-    IELTS_LEARN_DIR,
     SEARCH_CACHE_DIR,
     CACHE_DIR,
     AUDIO_CACHE_DIR,

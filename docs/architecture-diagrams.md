@@ -1,328 +1,547 @@
 # Architecture Diagrams
 
-本文档包含 Anya 的架构图和流程图，配合 [architecture.md](./architecture.md) 阅读。
+本文档按当前源码实现更新，展示真实的数据流、模块关系和关键运行流程。
+
+配合 [`architecture.md`](./architecture.md) 阅读。
+
+阅读建议：
+
+- 每张图上方先看「这张图在讲什么」
+- 再看图里的英文节点名，它们基本都对应源码里的模块/函数名
+- 如果英文不直观，我已经在每张图下面补了中文解释，按“输入 → 处理 → 输出”去看就行
 
 ---
 
-## 1. 系统总体架构
+## 1. 当前总体架构
+
+**这张图在讲什么：**
+
+- 最上层是进程/命令入口
+- 中间是运行时核心：Agent、Telegram、Cron
+- 再下面是核心服务：Prompt、Provider、Tools、Skills
+- 最下面是 `~/.anya/` 运行时数据
+
+```text
+一句话理解：不同入口最终都会汇聚到 Agent，再去调用工具、技能和本地数据。
+```
 
 ```mermaid
 graph TB
-  subgraph Entry["Entry Layer"]
-    CLI["CLI (bin/anya.ts)"]
-    TG["Telegram Bot"]
-    CRON["Cron Scheduler"]
+  subgraph Entry["入口层 / Entry Layer"]
+    BIN["bin/anya.ts\nCLI 总入口"]
+    CLI["CLI Commands\n命令入口"]
+    GWCMD["gateway command\n网关命令"]
+    CRONCMD["cron command\n定时任务命令"]
   end
 
-  subgraph Commands["Command Layer"]
-    CHAT["chat"]
-    INIT["init"]
-    GW["gateway"]
-    CONFIG["config"]
-    MODEL["model"]
+  subgraph Runtime["运行时层 / Runtime Layer"]
+    AGENT["Agent.run()\n统一执行核心"]
+    TGADAPTER["TelegramAdapter\nTelegram 顶层网关"]
+    TGSESSION["TelegramSessionAdapter\n单轮会话适配器"]
+    CRONADAPTER["CronAdapter\n定时任务适配器"]
+    SCHED["CronScheduler\n调度器"]
   end
 
-  subgraph AgentCore["Agent Core"]
-    AGENT["Agent.run()"]
-    PROMPT["promptBuilder"]
-    HISTORY["history sanitize/truncate"]
-    COMPRESS["contextCompressor"]
-    ERRCLASS["errorClassifier"]
+  subgraph Core["核心服务 / Core Services"]
+    PROMPT["promptBuilder\n系统提示词组装"]
+    HISTORY["history\n历史清洗与截断"]
+    COMPRESS["contextCompressor\n长上下文压缩"]
+    ERR["errorClassifier\n错误分类"]
+    PROVIDER["OpenAIProvider\n唯一主 LLM Provider"]
+    TOOLS["Tool Registry\n工具注册与调度"]
+    SKILLS["Skill Loader\n技能加载器"]
   end
 
-  subgraph Providers["Provider Layer"]
-    REGISTRY["Provider Registry"]
-    GEMINI["GeminiProvider"]
-    OPENAI["OpenAIProvider"]
-    POOL["CredentialPool"]
+  subgraph RuntimeData["运行时数据 / ANYA_HOME"]
+    CONFIG["config.json\n主配置"]
+    MEM["memories/*.md\n记忆文件"]
+    SKDIR["skills/\n技能目录"]
+    STATE["data/store/state.db\n会话数据库"]
+    DBS["vocab.db / learner.db / others\n业务数据库"]
+    CACHE["audio / images / search cache\n缓存与媒体"]
+    LOGS["logs/\n日志"]
+    CRONJOBS["cron/jobs.json\n定时任务定义"]
   end
 
-  subgraph Tools["Tool Layer"]
-    TOOLREG["Tool Registry"]
-    FILE["read/write/list_dir"]
-    SHELL["shell"]
-    SEARCH["web_search"]
-    MEM["memory_update"]
-    SKILL["skill_manage/view"]
-    TGTOOL["tg"]
-    TTS["tts"]
-    CLARIFY["clarify"]
-  end
+  BIN --> CLI
+  BIN --> GWCMD
+  BIN --> CRONCMD
 
-  subgraph Adapters["Adapter Layer"]
-    CLIADAPTER["CliAdapter"]
-    TGADAPTER["TelegramAdapter"]
-    SESSADAPTER["SessionAdapter"]
-  end
+  CLI --> AGENT
+  GWCMD --> TGADAPTER
+  TGADAPTER --> TGSESSION
+  TGSESSION --> AGENT
 
-  subgraph Storage["Storage & Foundation"]
-    SQLITE[("SQLite")]
-    FS["Config / Memory / Skills"]
-    LOGGER["Logger (pino)"]
-  end
-
-  CLI --> CHAT
-  CLI --> INIT
-  CLI --> CONFIG
-  CLI --> MODEL
-  TG --> GW
-  CRON --> AGENT
-
-  CHAT --> AGENT
-  GW --> TGADAPTER
-  TGADAPTER --> SESSADAPTER
-  SESSADAPTER --> AGENT
+  CRONCMD --> SCHED
+  SCHED --> CRONADAPTER
+  CRONADAPTER --> AGENT
 
   AGENT --> PROMPT
   AGENT --> HISTORY
   AGENT --> COMPRESS
-  AGENT --> REGISTRY
-  AGENT --> TOOLREG
-  AGENT --> SQLITE
+  AGENT --> ERR
+  AGENT --> PROVIDER
+  AGENT --> TOOLS
 
-  REGISTRY --> GEMINI
-  REGISTRY --> OPENAI
-  GEMINI --> POOL
-  OPENAI -.-> POOL
+  PROMPT --> MEM
+  PROMPT --> SKILLS
+  SKILLS --> SKDIR
 
-  TOOLREG --> FILE
-  TOOLREG --> SHELL
-  TOOLREG --> SEARCH
-  TOOLREG --> MEM
-  TOOLREG --> SKILL
-  TOOLREG --> TGTOOL
-  TOOLREG --> TTS
-  TOOLREG --> CLARIFY
-
-  AGENT --> CLIADAPTER
-  AGENT --> SESSADAPTER
-  AGENT --> ERRCLASS
-
-  PROMPT --> FS
-  MEM --> FS
-  SKILL --> FS
+  TOOLS --> DBS
+  TOOLS --> CACHE
+  AGENT --> STATE
+  CLI --> CONFIG
+  TGADAPTER --> CONFIG
+  SCHED --> CRONJOBS
+  Runtime --> LOGS
 ```
+
+**怎么看：**
+
+- `bin/anya.ts` 是所有命令的入口
+- 真正干活的是 `Agent.run()`
+- `Agent.run()` 依赖 Prompt、Provider、Tools、Skills
+- 所有长期状态最终都落到 `~/.anya/` 里
 
 ---
 
-## 2. ReAct 循环流程
+## 2. CLI 启动与命令分发
+
+**这张图在讲什么：**
+
+- 用户敲 `anya ...` 以后，命令是怎么被分发到具体实现的
+- 这里的 `chat` 不代表主产品入口，只是本地 smoke test 路径
 
 ```mermaid
 flowchart TD
-  INPUT["User Input"] --> SESSION["Load/Create Session"]
-  SESSION --> LOAD["Load + Truncate + Sanitize History"]
-  LOAD --> BUILD["Build System Prompt"]
-  BUILD --> COMPRESS{"Token count > 75% limit?"}
+  START["User runs anya\n用户执行命令"] --> BIN["bin/anya.ts\nCLI 解析入口"]
+  BIN --> PARSE["Commander parse()\n解析命令行参数"]
+  PARSE --> CMD{"Which command?\n用户调用了哪个命令?"}
 
-  COMPRESS -->|yes| DO_COMPRESS["Compress middle zone via LLM summary"]
-  DO_COMPRESS --> LLM
-  COMPRESS -->|no| LLM["Call Provider (Gemini / OpenAI)"]
-
-  LLM --> ERR{"API Error?"}
-  ERR -->|yes| CLASSIFY["errorClassifier"]
-  CLASSIFY --> RETRY{"Retryable?"}
-  RETRY -->|yes, rotate| ROTATE["Rotate credential"] --> LLM
-  RETRY -->|yes, compress| DO_COMPRESS
-  RETRY -->|no| THROW["Throw to caller"]
-
-  ERR -->|no| RESP{"Response Type"}
-  RESP -->|"Tool Calls"| EXEC["Execute tools via dispatch()"]
-  EXEC --> FEEDBACK["Show tool call/result via adapter"]
-  FEEDBACK --> APPEND["Append assistant + tool messages"]
-  APPEND --> COMPRESS
-
-  RESP -->|"Text (final)"| SAVE["Save all new messages to SQLite"]
-  SAVE --> REPLY["Reply via adapter"]
-  REPLY --> DONE["Return RunResult"]
-
-  style DO_COMPRESS fill:#fff3cd
-  style CLASSIFY fill:#f8d7da
+  CMD -->|init| INIT["runInit()\n初始化 ~/.anya/"]
+  CMD -->|chat| CHAT["runChat()\n本地 smoke test"]
+  CMD -->|config| CONFIG["registerConfig subtree\n配置子命令"]
+  CMD -->|gateway| GATEWAY["registerGateway subtree\nTelegram 网关命令"]
+  CMD -->|cron| CRON["registerCron subtree\n定时任务命令"]
+  CMD -->|sessions| SESSIONS["registerSessions subtree\n会话查询命令"]
+  CMD -->|skills| SKILLS["registerSkills subtree\n技能管理命令"]
+  CMD -->|usage| USAGE["runUsage()\n查看使用统计"]
 ```
+
+**怎么看：**
+
+- `init` 是初始化环境
+- `chat` 只是本地快速测试链路
+- 真正长期运行主要是 `gateway` 和 `cron`
 
 ---
 
-## 3. Telegram 消息处理流程
+## 3. Agent ReAct 主循环
+
+**这张图在讲什么：**
+
+- 这是整个系统最核心的一张图
+- 它描述 `Agent.run()` 每次接到输入后，如何反复调用模型、执行工具、再继续推理
 
 ```mermaid
 flowchart TD
-  USER["Telegram User"] --> UPDATE["Incoming Update"]
+  INPUT["input + sessionKey\n当前输入 + 会话标识"] --> SESSION["Resolve or create session\n找到或创建 session"]
+  SESSION --> LOAD["loadMessages(sessionId)\n读取历史消息"]
+  LOAD --> TRUNCATE["truncateHistory()\n截断过长历史"]
+  TRUNCATE --> SANITIZE["sanitizeHistory()\n清洗历史格式"]
+  SANITIZE --> PROMPT["buildSystemPrompt()\n构建系统提示词"]
+  PROMPT --> ASSEMBLE["system + history + user input\n拼完整消息数组"]
+  ASSEMBLE --> CHECK["Need preflight compression?\n上下文是否过长?"]
 
-  UPDATE --> TYPE{"Message Type"}
-  TYPE -->|"/start, /new"| CMD["Handle Command"]
-  TYPE -->|text| TEXT["Extract text"]
-  TYPE -->|voice| VOICE["Download .ogg"]
-  TYPE -->|photo| PHOTO["Download image"]
-  TYPE -->|callback_query| CB["Callback Dispatcher"]
+  CHECK -->|yes| COMPRESS["ContextCompressor.compress()\n先压缩上下文"]
+  COMPRESS --> PROVIDER
+  CHECK -->|no| PROVIDER["provider.chat(...)\n调用大模型"]
 
-  VOICE --> STT["Groq Whisper STT"]
-  STT --> WRAP_V["Wrap: [语音消息: transcript]"]
+  PROVIDER --> APIERR{"API error?\n调用是否报错?"}
+  APIERR -->|yes + compressable| COMPRESS
+  APIERR -->|yes + fatal| THROW["throw\n直接抛错"]
 
-  PHOTO --> VISION["Gemini Vision"]
-  VISION --> WRAP_P["Wrap: [图片分析: description]"]
+  APIERR -->|no| RESP{"toolCalls?\n模型是否要调工具?"}
+  RESP -->|yes| TOOLMSG["Append assistant tool-call msg\n先把工具调用写入消息链"]
+  TOOLMSG --> DISPATCH["dispatch(tool, args)\n执行工具"]
+  DISPATCH --> APPEND["Append tool result msg\n写回工具结果"]
+  APPEND --> CHECK
 
-  TEXT --> HANDLE["handleIncoming()"]
-  WRAP_V --> HANDLE
-  WRAP_P --> HANDLE
-
-  CB --> CB_TYPE{"Prefix?"}
-  CB_TYPE -->|"approval_*"| RESOLVE_A["Resolve pendingApproval"]
-  CB_TYPE -->|"choice_*"| RESOLVE_C["Resolve pendingChoice"]
-  CB_TYPE -->|other| CB_AGENT["Build input: [callback] data"]
-  CB_AGENT --> HANDLE
-
-  HANDLE --> AUTH{"User authorized?"}
-  AUTH -->|no| REJECT["Reply: Unauthorized"]
-  AUTH -->|yes| TYPING["Start typing indicator"]
-  TYPING --> CREATE["Create SessionAdapter + Agent"]
-  CREATE --> RUN["Agent.run()"]
-  RUN --> RESULT{"result.tgSent?"}
-  RESULT -->|yes| CLEANUP["Cleanup status message"]
-  RESULT -->|no| FINAL["sessionAdapter.reply()"]
-  FINAL --> CLEANUP
+  RESP -->|no| FINAL["assistant final content\n得到最终文本回复"]
+  FINAL --> SAVE["saveMessages(newMessages)\n保存本轮新增消息"]
+  SAVE --> RETURN["RunResult\n返回结果"]
 ```
+
+**怎么看：**
+
+- 如果模型要调用工具，就不会立刻结束
+- 工具结果会回写消息链，再继续问模型
+- 直到模型给出真正最终答案，才结束这一轮
 
 ---
 
-## 4. SessionAdapter 出站队列
+## 4. System Prompt 组装
+
+**这张图在讲什么：**
+
+- 每次 `Agent.run()` 开始时，system prompt 是由哪些部分拼起来的
+
+```mermaid
+flowchart LR
+  PERSONA["config.agent.personality\nAgent 人格设定"] --> PROMPT["System Prompt\n最终系统提示词"]
+  RULES["memories/RULES.md\n全局规则"] --> PROMPT
+  NOW["Current ISO timestamp\n当前时间"] --> PROMPT
+  USER["memories/USER.md\n用户画像"] --> MEMSEC["Memory Section\n记忆区块"]
+  MEMORY["memories/MEMORY.md\nAgent 记忆"] --> MEMSEC
+  MEMSEC --> PROMPT
+  SKIDX["buildSkillIndex()\n技能索引"] --> PROMPT
+  SEC["Security Rules\n安全约束"] --> PROMPT
+  CAPS["Tool-based Platform Capabilities\n平台能力说明"] --> PROMPT
+
+  style MEMSEC fill:#fdebd0
+  style SKIDX fill:#d6eaf8
+  style CAPS fill:#d5f5e3
+```
+
+**怎么看：**
+
+- Prompt 不是只靠一段固定 system message
+- 它是把人格、规则、时间、记忆、技能索引、安全策略拼出来的
+
+---
+
+## 5. Tool Registry 与执行链
+
+**这张图在讲什么：**
+
+- tool 是怎么注册进去的
+- 模型看见 tool schema 后，如何真正调用到本地代码
 
 ```mermaid
 flowchart TD
-  subgraph Callers["Who calls"]
-    TOOLS["tg tool"]
-    REPLY["adapter.reply()"]
-    STATUS["showToolCall/Result"]
+  IMPORTS["registerAllTools() dynamic imports\n动态加载所有内置工具"] --> REG["Map<toolName, ToolDefinition>\n工具注册表"]
+  REG --> SCHEMAS["getToolSchemas(config, isTelegram)\n生成给模型看的工具 schema"]
+  REG --> EXEC["dispatch(name, args, context)\n按名字执行工具"]
+
+  SCHEMAS --> MODEL["Visible to LLM\n模型可见工具"]
+  MODEL --> CALL["LLM emits tool call\n模型发起工具调用"]
+  CALL --> EXEC
+
+  EXEC --> FOUND{"Tool exists?\n工具是否存在?"}
+  FOUND -->|no| ERR1["Unknown tool error\n未知工具"]
+  FOUND -->|yes| RUN["tool.execute(args, context)\n执行工具代码"]
+  RUN --> OK["ToolDispatchResult isError=false\n成功结果"]
+  RUN --> FAIL["Catch error -> isError=true\n失败结果"]
+```
+
+**怎么看：**
+
+- 模型不会直接执行本地代码
+- 它只能“声明想调哪个工具”
+- 真正执行动作的是 `dispatch()`
+
+---
+
+## 6. Telegram 网关处理流程
+
+**这张图在讲什么：**
+
+- Telegram 收到不同类型消息后，如何被包装成 Agent 输入
+
+```mermaid
+flowchart TD
+  UPDATE["Telegram update\n收到 Telegram 更新"] --> TYPE{"Update type\n消息类型?"}
+
+  TYPE -->|command| CMD["/start /new /kill /skill-cmd\n命令"]
+  TYPE -->|text| TEXT["message:text\n文本消息"]
+  TYPE -->|voice| VOICE["message:voice\n语音消息"]
+  TYPE -->|photo| PHOTO["message:photo\n图片消息"]
+  TYPE -->|callback_query| CALLBACK["callback_query:data\n按钮回调"]
+
+  TEXT --> INPUT["raw text input\n直接文本输入"]
+
+  VOICE --> DOWNLOADV["download ogg -> VOICE_DIR\n下载语音文件"]
+  DOWNLOADV --> STT["transcribeAudio()\n语音转文字"]
+  STT --> VINPUT["inject transcript + audio_path\n注入转写文本与音频路径"]
+
+  PHOTO --> DOWNLOADP["download image -> IMAGE_RECEIVED_DIR\n下载图片"]
+  DOWNLOADP --> VISION["analyzeImage()\n图片分析"]
+  VISION --> PINPUT["inject caption + vision description\n注入 caption 与视觉描述"]
+
+  CALLBACK --> CBTYPE{"callback prefix\n回调前缀?"}
+  CBTYPE -->|approval_*| APPROVAL["resolve pending approval\n处理授权结果"]
+  CBTYPE -->|choice_*| CHOICE["resolve pending choice\n处理选项结果"]
+  CBTYPE -->|other| CINPUT["wrap as callback input\n包装成普通输入"]
+
+  INPUT --> HANDLE["handleIncoming()\n统一入口处理"]
+  VINPUT --> HANDLE
+  PINPUT --> HANDLE
+  CINPUT --> HANDLE
+
+  HANDLE --> AUTH{"authorized user?\n用户是否有权限?"}
+  AUTH -->|no| REJECT["reply unauthorized\n拒绝访问"]
+  AUTH -->|yes| SESSION["new TelegramSessionAdapter\n创建单轮适配器"]
+  SESSION --> AGENT["Agent.run()\n进入 Agent 主流程"]
+  AGENT --> TGSENT{"tg tool already sent?\n工具是否已发消息?"}
+  TGSENT -->|yes| CLEAN["cleanup status only\n只清理状态消息"]
+  TGSENT -->|no| REPLY["adapter.reply(final text)\n补发最终文本"]
+  REPLY --> CLEAN
+```
+
+**怎么看：**
+
+- Telegram 不同类型输入，最后都会被转换成字符串上下文
+- 然后统一喂给 `Agent.run()`
+
+---
+
+## 7. TelegramSessionAdapter 出站串行化
+
+**这张图在讲什么：**
+
+- 为什么 Telegram 发消息不会乱序
+- 为什么 tool 发过消息后，最终 reply 不会重复发一遍
+
+```mermaid
+flowchart TD
+  subgraph Sources["消息来源 / Message sources"]
+    FINAL["reply()\n最终回复"]
+    TGTOOL["tg tool\n工具主动发消息"]
+    STATUS["showToolCall / showToolResult\n状态提示"]
   end
 
-  TOOLS --> ENQ["enqueue(fn)"]
-  STATUS --> ENQ
-  REPLY --> WAIT["Wait for queue to drain"]
-  WAIT --> CHECK{"hasSentContent?"}
+  FINAL --> QUEUE["PQueue(concurrency=1)\n串行发送队列"]
+  TGTOOL --> QUEUE
+  STATUS --> QUEUE
 
-  ENQ --> QUEUE["PQueue (concurrency=1)"]
+  QUEUE --> SEND["Telegram Bot API call\n调用 Telegram 发送接口"]
+  SEND --> TRACK["trackMessage(message_id, tag?)\n记录消息 ID"]
+  TRACK --> STATE["update hasSentContent / lastSentMessageId\n更新发送状态"]
 
-  QUEUE --> API["TG API Call"]
-  API --> TRACK["trackMessage(id, tag?)"]
-  TRACK --> SET_SENT["hasSentContent = true"]
-
-  CHECK -->|yes| CLEANUP_ONLY["Delete status message only"]
-  CHECK -->|no| SEND_FINAL["Convert markdown → MarkdownV2"]
-  SEND_FINAL --> SPLIT["Split at 4000 chars"]
-  SPLIT --> SEND["Send segments (fallback to plain text)"]
-  SEND --> CLEANUP_ONLY
-
-  style QUEUE fill:#d4edda
+  FINAL --> CHECK{"hasSentContent?\n是否已经发过内容?"}
+  CHECK -->|yes| SKIP["skip duplicate final reply\n跳过重复最终回复"]
+  CHECK -->|no| FORMAT["markdownToTelegramV2 + split\n格式化并拆分长消息"]
+  FORMAT --> SEND
 ```
+
+**怎么看：**
+
+- `PQueue(1)` 保证所有出站动作按顺序执行
+- `hasSentContent` 保证不会“工具发一遍 + 最终回复再发一遍”
 
 ---
 
-## 5. Credential Pool 轮换
+## 8. Cron 调度与结果投递
 
-```mermaid
-stateDiagram-v2
-  [*] --> active: register(key)
+**这张图在讲什么：**
 
-  active --> active: API call succeeds
-  active --> cooldown: rate_limit (429)
-  active --> cooldown: auth error (401/403)
-  active --> exhausted: billing error (402)
-
-  cooldown --> active: 3 min timeout
-  exhausted --> [*]: Manual reset only
-
-  note right of active
-    current() returns this key
-  end note
-
-  note right of cooldown
-    Skipped by current()
-    Next active key is selected
-  end note
-```
-
----
-
-## 6. Context Compression 流程
-
-```mermaid
-flowchart LR
-  MSGS["Messages Array"] --> SPLIT["Split into zones"]
-
-  SPLIT --> HEAD["Head (first 3 msgs)"]
-  SPLIT --> MIDDLE["Middle zone"]
-  SPLIT --> TAIL["Tail (last 8 msgs)"]
-
-  MIDDLE --> TRIM["Trim tool results > 2000 chars"]
-  TRIM --> SUMMARIZE["LLM: Generate structured summary"]
-  SUMMARIZE --> SUMMARY["Summary message"]
-
-  HEAD --> RESULT["Compressed: head + summary + tail"]
-  SUMMARY --> RESULT
-  TAIL --> RESULT
-
-  SUMMARIZE -.->|"LLM failed"| FALLBACK["Extractive fallback"]
-  FALLBACK --> SUMMARY
-
-  style HEAD fill:#d4edda
-  style TAIL fill:#d4edda
-  style MIDDLE fill:#fff3cd
-```
-
----
-
-## 7. Prompt 组装
-
-```mermaid
-flowchart LR
-  SOUL["SOUL.md"] --> PROMPT["System Prompt"]
-  RULES["RULES.md"] --> PROMPT
-  TIME["Current Timestamp"] --> PROMPT
-  USER_MEM["USER.md"] --> MEMORY["Memory Section"]
-  AGENT_MEM["MEMORY.md"] --> MEMORY
-  MEMORY --> PROMPT
-  SKILLS["Skill Index"] --> PROMPT
-  SECURITY["Security Rules"] --> PROMPT
-  CAPS["Platform Capabilities"] --> PROMPT
-
-  PROMPT --> AGENT["Agent.run()"]
-  INPUT["User Message"] --> AGENT
-
-  style SOUL fill:#e8daef
-  style RULES fill:#d5f5e3
-  style MEMORY fill:#fdebd0
-  style SKILLS fill:#d6eaf8
-```
-
----
-
-## 8. Error Recovery 策略
+- 定时任务如何从 `jobs.json` 被加载、触发、执行、投递
 
 ```mermaid
 flowchart TD
-  ERROR["API Error"] --> EXTRACT["Extract HTTP status code"]
-  EXTRACT --> CLASSIFY{"Status Code"}
-
-  CLASSIFY -->|429| RATE["rate_limit"]
-  CLASSIFY -->|401/403| AUTH["auth"]
-  CLASSIFY -->|402| BILLING["billing"]
-  CLASSIFY -->|400 + overflow msg| OVERFLOW["context_overflow"]
-  CLASSIFY -->|500/502| SERVER["server_error"]
-  CLASSIFY -->|503/529| OVERLOAD["overloaded"]
-  CLASSIFY -->|timeout/ECONNRESET| TIMEOUT["timeout"]
-  CLASSIFY -->|other| UNKNOWN["unknown"]
-
-  RATE --> ROTATE_RETRY["Rotate key + retry"]
-  AUTH --> REFRESH["Refresh token → rotate → retry"]
-  BILLING --> ROTATE_ABORT["Rotate key (may exhaust all)"]
-  OVERFLOW --> COMPRESS_RETRY["Compress context + retry"]
-  SERVER --> BACKOFF["Exponential backoff retry"]
-  OVERLOAD --> BACKOFF
-  TIMEOUT --> BACKOFF
-  UNKNOWN --> BACKOFF
-
-  style OVERFLOW fill:#fff3cd
-  style RATE fill:#fde2e2
-  style COMPRESS_RETRY fill:#fff3cd
+  JOBS["cron/jobs.json\n任务定义文件"] --> LOAD["loadJobs().filter(enabled)\n读取启用任务"]
+  LOAD --> SYNC["syncJobs() every 60s\n每 60 秒同步一次"]
+  SYNC --> REGISTER["Create/refresh Cron instances\n创建或刷新调度实例"]
+  REGISTER --> FIRE["job trigger fires\n任务触发"]
+  FIRE --> EXEC["executeJob(job)\n执行任务"]
+  EXEC --> AGENT["Agent.run(job.prompt, newSession=true)\n让 Agent 跑任务 prompt"]
+  AGENT --> RESULT["result.content\n得到执行结果"]
+  RESULT --> DELIVER{"deliver_to\n投递到哪里?"}
+  DELIVER -->|telegram| TG["sendMessage via Bot API\n发到 Telegram"]
+  TG --> LINK["write mirrored messages to tg session history\n回写 Telegram 会话历史"]
+  RESULT --> HISTORY["write cron history json\n写执行历史"]
 ```
+
+**怎么看：**
+
+- Cron 本质上也是调用 `Agent.run()`
+- 只是输入不是用户即时消息，而是 job 里的 prompt
+
+---
+
+## 9. 配置加载与迁移
+
+**这张图在讲什么：**
+
+- 配置不是简单读一个 JSON 文件，而是默认值、配置文件、环境变量三层叠加
+
+```mermaid
+flowchart TD
+  DEFAULT["DEFAULT_CONFIG\n内置默认配置"] --> MERGE["deepMerge\n深度合并"]
+  FILE{"config.json exists?\n配置文件存在吗?"} -->|yes| READ["read + JSON.parse\n读取并解析 JSON"]
+  FILE -->|no| MERGE
+  READ --> MIGRATE["migrateConfig()\n迁移旧版本配置"]
+  MIGRATE --> VALIDATE["Zod safeParse\n结构校验"]
+  VALIDATE --> MERGE
+  MERGE --> ENV["applyEnvOverrides()\n应用环境变量覆盖"]
+  ENV --> FINAL["AnyaConfig singleton\n最终运行配置"]
+
+  MIGRATE -.-> OLD1["google -> gemini\n旧字段迁移"]
+  MIGRATE -.-> OLD2["legacy provider shape -> new shape\n旧结构转新结构"]
+```
+
+**怎么看：**
+
+- 最终生效配置不是只看 `config.json`
+- 还会被环境变量覆盖
+
+---
+
+## 10. 会话持久化模型
+
+**这张图在讲什么：**
+
+- 一轮 Agent 执行结束后，消息是怎么落到 SQLite 里的
+
+```mermaid
+flowchart TD
+  RUN["Agent run\n一次 Agent 执行"] --> GET["getOrCreateSession()\n获取或创建会话"]
+  GET --> LOAD["loadMessages(sessionId)\n读取历史消息"]
+  LOAD --> LOOP["Agent loop\n执行主循环"]
+  LOOP --> NEWMSGS["collect newMessages only\n只收集本轮新增消息"]
+  NEWMSGS --> SAVE["saveMessages(sessionId, newMessages)\n保存新增消息"]
+
+  SAVE --> TX["BEGIN transaction\n开启事务"]
+  TX --> INS["insert each message with seq\n按顺序写消息"]
+  INS --> META["update sessions.updated_at + message_count\n更新会话元数据"]
+  META --> COMMIT["COMMIT\n提交事务"]
+
+  SAVE -.-> LOCK["database is locked\n数据库锁冲突"]
+  LOCK -.-> RETRY["withWriteRetry() linear backoff\n线性退避重试"]
+```
+
+**怎么看：**
+
+- 历史消息先读出来
+- 本轮新消息单独收集
+- 最后统一事务写入，避免半写半不写
+
+---
+
+## 11. Skill 加载与使用路径
+
+**这张图在讲什么：**
+
+- skills 从仓库 bundled 资源，到最终进入 prompt、被 Agent 感知和调用的路径
+
+```mermaid
+flowchart LR
+  INIT["anya init\n初始化"] --> COPY["copy src/skills/bundled -> ~/.anya/skills/.bundled\n复制内置技能"]
+  COPY --> SCAN["loadSkills() scan SKILL.md recursively\n递归扫描技能文件"]
+  SCAN --> INDEX["buildSkillIndex()\n构建技能索引"]
+  INDEX --> PROMPT["Injected into system prompt\n注入系统提示词"]
+  PROMPT --> MODEL["Model becomes aware of skill names/descriptions\n模型先知道有哪些技能"]
+  MODEL --> VIEW["skill_view / skill file read on demand\n按需读取技能详情"]
+  VIEW --> EXEC["Use tools to execute skill workflow\n用工具执行技能流程"]
+```
+
+**怎么看：**
+
+- skill 不会一上来全文塞进 prompt
+- 先给模型看 skill index，真的需要时再加载细节
+
+---
+
+## 12. IELTS Skill Runtime 专项流程图
+
+**这张图在讲什么：**
+
+- Learner 在 Telegram 里发来的消息，如何进入 IELTS 相关 skill
+- 单词、练习、定时任务这三大块如何和 `memory` / `db` / `tts` / `tg` 联动
+
+```mermaid
+flowchart TD
+  USER["Learner message on Telegram\n学习者在 Telegram 发消息"] --> ROUTE{"Intent\n意图识别"}
+
+  ROUTE -->|单词 / lookup| WORDS["words skill\n单词技能"]
+  ROUTE -->|阅读 / 听力 / 口语 / 写作| PRACTICE["practice skill\n练习技能"]
+  ROUTE -->|初始化 / 建档| INIT["init skill\n初始化技能"]
+  ROUTE -->|定时任务| CRON["cron ielts skill\nIELTS 定时任务技能"]
+
+  INIT --> MEMREAD["read/write memories\n读写全局记忆"]
+  INIT --> DBINIT["db -> learner/vocab schema or records\n初始化学习数据库"]
+
+  WORDS --> WDB["db name=vocab\n访问词汇数据库"]
+  WDB --> WORDSTATE{"Word exists?\n数据库里已有这个词吗?"}
+  WORDSTATE -->|yes| CARD["reuse definition/example/audio_path\n复用已存释义/例句/音频"]
+  WORDSTATE -->|no| GEN["LLM generate meaning/example/collocations\n生成释义/例句/搭配"]
+  GEN --> TTS["tts generate segmented audio\n生成分段单词音频"]
+  TTS --> SAVEAUDIO["persist audio_path\n保存音频路径"]
+  SAVEAUDIO --> CARD
+  CARD --> TG["tg send voice + word card + keyboard\n发语音 + 单词卡 + 按钮"]
+  TG --> EVENT["db write word_events + counters\n写事件与统计计数"]
+
+  PRACTICE --> PROFILE["read USER.md / MEMORY.md\n读取学习者画像与记忆"]
+  PROFILE --> LDB["db name=learner\n访问 learner 数据库"]
+  LDB --> CONTENT["build task / question / assessment\n构建题目/任务/评估"]
+  CONTENT --> INTERACT["tg / clarify / tts / pron_assess\n与用户交互"]
+  INTERACT --> RESULT["write learner progress / errors / scores\n写学习记录/错误/分数"]
+
+  CRON --> SEED["cron-word-seed / cron-review / briefing\n定时播种/复习/briefing"]
+  SEED --> VDB["db read vocab / learner\n读取词汇与学习数据"]
+  VDB --> PUSH["tg deliver briefing or review task\n推送 briefing 或复习任务"]
+
+  RESULT --> TRANSFER{"Need vocab transfer?\n是否需要词汇迁移升级?"}
+  TRANSFER -->|yes| XFER["update vocab mastery / transfer_level\n提升词汇掌握度/迁移等级"]
+  TRANSFER -->|no| DONE["turn complete\n本轮结束"]
+  XFER --> DONE
+  EVENT --> DONE
+```
+
+**怎么看：**
+
+- `words` 主要围绕 `vocab.db`
+- `practice` 主要围绕 `learner.db`
+- 所有对用户的输出仍主要通过 `tg`、`tts`、`clarify` 等工具完成
+
+---
+
+## 13. 数据目录关系
+
+**这张图在讲什么：**
+
+- `~/.anya/` 目录内部最重要的层级关系
+
+```mermaid
+graph TD
+  HOME["~/.anya\n运行时根目录"] --> CFG["config.json\n主配置"]
+  HOME --> MEM["memories/\n记忆文件"]
+  HOME --> SK["skills/\n技能目录"]
+  HOME --> CRON["cron/\n定时任务目录"]
+  HOME --> DATA["data/\n核心数据目录"]
+  HOME --> LOGS["logs/\n日志"]
+  HOME --> RUN["run/\nPID 与进程状态"]
+
+  DATA --> STORE["store/\nSQLite 数据库"]
+  DATA --> IELTS["ielts/\nIELTS 专项目录"]
+  DATA --> SEARCH["search/\n搜索缓存"]
+  DATA --> CACHE["cache/\n通用缓存"]
+  DATA --> AUDIO["audio/\n音频目录"]
+  DATA --> IMG["images/\n图片目录"]
+
+  STORE --> STATE["state.db\n会话与消息"]
+  STORE --> VOCAB["vocab.db\n单词数据库"]
+  STORE --> LEARNER["learner.db\n学习者数据库"]
+
+  AUDIO --> VOICE["voice/\n用户语音"]
+  AUDIO --> TTS["tts/\n生成音频"]
+
+  IMG --> RECEIVED["received/\n收到的图片"]
+  IMG --> GENERATED["generated/\n生成的图片"]
+```
+
+**怎么看：**
+
+- `store/` 里是最关键的结构化数据库
+- `audio/` 和 `images/` 主要是媒体与缓存
+
+---
+
+style OVERFLOW fill:#fff3cd
+style RATE fill:#fde2e2
+style COMPRESS_RETRY fill:#fff3cd
+
+````
 
 ---
 
@@ -359,7 +578,7 @@ sequenceDiagram
       A-->>U: Display response
     end
   end
-```
+````
 
 ---
 

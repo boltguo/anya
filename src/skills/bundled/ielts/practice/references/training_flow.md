@@ -39,7 +39,7 @@ Synced to `learner.db` via `db` tool after completion.
 
 - Select training mode based on learner data (each skill has its own mode selection logic)
 - Set difficulty = current band + 0.5 (adjustable by difficulty_feedback history)
-- Inject vocabulary: `db name=vocab sql="SELECT word, definition FROM words WHERE topics LIKE ? AND mastery != 'mastered' ORDER BY srs_due LIMIT 3" params='["%<topic>%"]'`
+- Inject vocabulary: `db name=vocab sql="SELECT word, definition FROM words WHERE topics LIKE ? AND mastery IN ('learning','known') AND transfer_level >= 2 ORDER BY is_user_word DESC, priority DESC, srs_due ASC LIMIT 3" params='["%<topic>%"]'`
 - For speaking/listening: also inject recently learned L2+ words as challenge words
 
 #### S3 Warm-up (Optional)
@@ -151,7 +151,7 @@ All next-step buttons use callback prefix:
 | `word_review`                                                           | Trigger SRS review            |
 | `word_history`                                                          | Show word usage history       |
 | `report_detail`                                                         | Detailed assessment report    |
-| `report_plan`                                                           | Show/generate weekly plan     |
+| `report_focus`                                                          | Show current active driver    |
 | `menu`                                                                  | Return to practice menu       |
 
 ## Error Recording

@@ -25,6 +25,48 @@ import type { ToolContext } from '../agent/types.js';
 /** Cache of open database connections. */
 const dbCache = new Map<string, DatabaseSync>();
 
+/** SQL statement prefixes allowed for execution. */
+const ALLOWED_SQL_PREFIXES = [
+  'SELECT', 'INSERT', 'UPDATE', 'DELETE',
+  'CREATE TABLE', 'CREATE INDEX', 'CREATE UNIQUE INDEX',
+  'ALTER TABLE', 'PRAGMA', 'EXPLAIN',
+  'WITH',  // CTEs that lead to SELECT/INSERT/UPDATE/DELETE
+];
+
+/** SQL statements explicitly blocked for safety. */
+const BLOCKED_SQL_PATTERNS = [
+  /\bDROP\s+(TABLE|INDEX|TRIGGER|VIEW)\b/i,
+  /\bTRUNCATE\b/i,
+  /\bATTACH\b/i,    // prevent accessing arbitrary files via ATTACH DATABASE
+  /\bDETACH\b/i,
+];
+
+/**
+ * Validate that a SQL statement is in the allowed whitelist.
+ * Returns an error message if blocked, or null if allowed.
+ */
+function validateSql(sql: string): string | null {
+  const trimmedUpper = sql.trimStart().toUpperCase();
+
+  // Check blocklist first (catches e.g. DROP inside a CTE)
+  for (const pattern of BLOCKED_SQL_PATTERNS) {
+    if (pattern.test(sql)) {
+      return `Blocked: destructive SQL statement detected (${pattern.source})`;
+    }
+  }
+
+  // Check if statement starts with an allowed prefix
+  const isAllowed = ALLOWED_SQL_PREFIXES.some(prefix =>
+    trimmedUpper.startsWith(prefix)
+  );
+
+  if (!isAllowed) {
+    return `Blocked: SQL must start with one of: ${ALLOWED_SQL_PREFIXES.join(', ')}`;
+  }
+
+  return null;
+}
+
 /**
  * Find and execute a schema .sql file for a given database name.
  * Scans all skills directories for schema/<name>.sql files.
@@ -94,17 +136,30 @@ function getDatabase(name: string): DatabaseSync {
   return db;
 }
 
+/** Close all cached database connections. Called on process exit. */
+function closeAllDatabases(): void {
+  for (const [, db] of dbCache) {
+    try { db.close(); } catch { /* ignore close errors */ }
+  }
+  dbCache.clear();
+}
+
+// Ensure connections are closed on process exit to avoid WAL corruption
+process.on('exit', closeAllDatabases);
+process.on('SIGINT', () => { closeAllDatabases(); process.exit(0); });
+process.on('SIGTERM', () => { closeAllDatabases(); process.exit(0); });
+
 // ── db tool ──────────────────────────────────────────────────────────────────
 
 register({
   name: 'db',
-  description: 'Execute SQL on a named SQLite database. Use `db` for learner data (samples, errors, vocab, plans). Database name maps to ~/.anya/data/store/<name>.db. Supports SELECT (returns rows as JSON), INSERT/UPDATE/DELETE (returns changes count), and CREATE TABLE/INDEX. Always use parameterized queries via the `params` array for safety.',
+  description: 'Execute SQL on a named SQLite database. Database name maps to ~/.anya/data/store/<name>.db. Supports SELECT (returns rows as JSON), INSERT/UPDATE/DELETE (returns changes count), and CREATE TABLE/INDEX. Always use parameterized queries via the `params` array for safety.',
   parameters: {
     type: 'object',
     properties: {
       name: {
         type: 'string',
-        description: 'Database name: "learner" for practice data, "vocab" for vocabulary. Maps to <name>.db in the store.',
+        description: 'Database name. Maps to <name>.db in the store directory.',
       },
       sql: {
         type: 'string',
@@ -126,6 +181,10 @@ register({
     if (!dbName) return JSON.stringify({ error: 'Missing database name' });
     if (!sql) return JSON.stringify({ error: 'Missing SQL statement' });
 
+    // Validate SQL against whitelist
+    const sqlError = validateSql(sql);
+    if (sqlError) return JSON.stringify({ error: sqlError });
+
     // Parse parameters
     let params: unknown[] = [];
     if (paramsRaw) {
@@ -144,7 +203,7 @@ register({
       if (trimmedUpper.startsWith('SELECT') || trimmedUpper.startsWith('PRAGMA') || trimmedUpper.startsWith('EXPLAIN')) {
         // Read query — return rows
         const stmt = db.prepare(sql);
-        const rows = stmt.all(...params);
+        const rows = stmt.all(...params as any[]);
 
         // Truncate if too many rows
         const MAX_ROWS = 100;
@@ -159,7 +218,7 @@ register({
       } else {
         // Write query (INSERT, UPDATE, DELETE, CREATE, etc.)
         const stmt = db.prepare(sql);
-        const result = stmt.run(...params);
+        const result = stmt.run(...params as any[]);
 
         return JSON.stringify({
           ok: true,

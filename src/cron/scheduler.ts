@@ -98,8 +98,8 @@ async function deliverResult(job: CronJob, result: string): Promise<void> {
 
           try {
             const sessionKey = `tg:${userId}`;
-            const sessionId = getOrCreateSession(sessionKey);
-            saveMessages(sessionId, [
+            const sessionId = await getOrCreateSession(sessionKey);
+            await saveMessages(sessionId, [
               { role: 'user', content: `[定时任务: ${job.name}]` },
               { role: 'assistant', content: header + result },
             ]);

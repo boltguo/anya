@@ -4,12 +4,12 @@
  *
  * Supports two modes:
  *   1. Simple: text + voice + rate → single voice audio
- *   2. Segments: array of {voice, text, rate, break} → multi-voice dialogue
+ *   2. Segments: array of {voice, text, rate, break} → multi-voice SSML dialogue
  *
  * Usage by the model:
  *   tts({ text: "Hello world" })                          → simple
  *   tts({ text: "slow read", rate: "-30%" })              → slow speech
- *   tts({ segments: '[...]' })                            → multi-voice dialogue
+ *   tts({ segments: '[...]' })                            → multi-voice SSML dialogue
  */
 
 import { register } from './registry.js';
@@ -51,13 +51,15 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
         return JSON.stringify({ success: false, error: 'Invalid segments JSON' });
       }
 
-      // Build multi-voice SSML
+      // Build multi-voice SSML — breaks must be inside <voice> tags for Azure
       const ssmlParts: string[] = [];
       const textParts: string[] = [];
+      let pendingBreak: string | null = null;
 
       for (const seg of segments) {
         if (seg.break) {
-          ssmlParts.push(`  <break time="${seg.break}"/>`);
+          // Buffer the break — it will be prepended to the next voice segment
+          pendingBreak = seg.break;
         } else if (seg.text) {
           const v = seg.voice || 'en-US-AriaNeural';
           const escaped = seg.text
@@ -66,10 +68,13 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
 
+          const breakTag = pendingBreak ? `<break time="${pendingBreak}"/>` : '';
+          pendingBreak = null;
+
           if (seg.rate) {
-            ssmlParts.push(`  <voice name="${v}"><prosody rate="${seg.rate}">${escaped}</prosody></voice>`);
+            ssmlParts.push(`  <voice name="${v}">${breakTag}<prosody rate="${seg.rate}">${escaped}</prosody></voice>`);
           } else {
-            ssmlParts.push(`  <voice name="${v}">${escaped}</voice>`);
+            ssmlParts.push(`  <voice name="${v}">${breakTag}${escaped}</voice>`);
           }
           textParts.push(seg.text);
         }
@@ -90,7 +95,7 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
       const adapter = context.adapter as any;
       if (typeof adapter.sendVoice === 'function') {
         await adapter.sendVoice(result.filePath);
-        return JSON.stringify({ success: true, sent: true, durationSec: result.durationSec });
+        return JSON.stringify({ success: true, sent: true, filePath: result.filePath, durationSec: result.durationSec });
       }
       return JSON.stringify({ success: true, filePath: result.filePath, durationSec: result.durationSec });
     }
@@ -114,7 +119,7 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
     const adapter = context.adapter as any;
     if (typeof adapter.sendVoice === 'function') {
       await adapter.sendVoice(result.filePath);
-      return JSON.stringify({ success: true, sent: true, durationSec: result.durationSec });
+      return JSON.stringify({ success: true, sent: true, filePath: result.filePath, durationSec: result.durationSec });
     }
     return JSON.stringify({ success: true, filePath: result.filePath, durationSec: result.durationSec });
   },

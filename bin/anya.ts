@@ -43,8 +43,12 @@ const program = new Command();
 
 program
   .name('anya')
-  .description('Anya - A self-evolving personal AI agent')
-  .version(version, '-v, --version');
+  .description('Anya — Personal AI agent')
+  .version(version, '-v, --version')
+  .addHelpCommand(false)  // remove implicit "help [command]" subcommand
+  .action(() => {
+    program.outputHelp();
+  });
 
 // Small inline commands kept here; subcommand trees live in ./commands/.
 

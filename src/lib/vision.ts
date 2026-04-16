@@ -28,7 +28,7 @@ export async function analyzeImage(
 ): Promise<VisionResult> {
   const apiKey = config.gemini?.api_key;
   if (!apiKey) {
-    return { success: false, error: '未配置 Gemini API Key。运行 anya config → Gemini 配置。' };
+    return { success: false, error: 'Gemini API key not configured. Run `anya config` → Gemini.' };
   }
 
   if (!fs.existsSync(imagePath)) {
@@ -50,7 +50,7 @@ export async function analyzeImage(
     : 'Describe everything visible in this image in thorough detail. Include any text, code, data, objects, people, layout, colors, and any other notable visual information. Reply in Chinese if the image contains Chinese text, otherwise reply in the same language as any text in the image.';
 
   try {
-    agentLogger.info({ msg: 'vision_analyze', model, sizeMB: sizeMB.toFixed(1) });
+    agentLogger.info({ msg: 'vision_analyze', imagePath, model, sizeMB: sizeMB.toFixed(1) });
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {

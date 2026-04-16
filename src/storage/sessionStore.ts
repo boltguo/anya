@@ -21,11 +21,11 @@ const MAX_WRITE_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 200;
 
 /**
- * Execute a synchronous write operation with retry on "database is locked".
- * Complements the busy_timeout PRAGMA for edge cases where the timeout
- * is insufficient (e.g. long-running transactions from another process).
+ * Execute a synchronous write operation with async retry on "database is locked".
+ * Uses setTimeout-based delay to avoid blocking the Node.js event loop,
+ * keeping the Telegram bot responsive during retry waits.
  */
-function withWriteRetry<T>(fn: () => T): T {
+async function withWriteRetry<T>(fn: () => T): Promise<T> {
   for (let attempt = 0; attempt < MAX_WRITE_RETRIES; attempt++) {
     try {
       return fn();
@@ -34,8 +34,7 @@ function withWriteRetry<T>(fn: () => T): T {
       if (isLocked && attempt < MAX_WRITE_RETRIES - 1) {
         // Linear backoff with jitter to avoid thundering herd
         const delay = BASE_RETRY_DELAY_MS * (attempt + 1) + Math.random() * 100;
-        // Atomics.wait provides sub-ms sync sleep without blocking the event loop thread
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+        await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
       throw err;
@@ -58,7 +57,7 @@ export interface SessionInfo {
  * Get or create a session for the given session key.
  * Returns the most recent active session for the key.
  */
-export function getOrCreateSession(sessionKey: string): string {
+export async function getOrCreateSession(sessionKey: string): Promise<string> {
   const db = getDb();
 
   // Find existing session
@@ -71,7 +70,7 @@ export function getOrCreateSession(sessionKey: string): string {
 
   // Create new session
   const id = randomUUID();
-  withWriteRetry(() => {
+  await withWriteRetry(() => {
     db.prepare(
       'INSERT INTO sessions (id, session_key, title) VALUES (?, ?, ?)'
     ).run(id, sessionKey, '');
@@ -83,11 +82,11 @@ export function getOrCreateSession(sessionKey: string): string {
 /**
  * Create a new session (even if one exists for the key).
  */
-export function createSession(sessionKey: string, title?: string): string {
+export async function createSession(sessionKey: string, title?: string): Promise<string> {
   const db = getDb();
   const id = randomUUID();
 
-  withWriteRetry(() => {
+  await withWriteRetry(() => {
     db.prepare(
       'INSERT INTO sessions (id, session_key, title) VALUES (?, ?, ?)'
     ).run(id, sessionKey, title || '');
@@ -138,8 +137,8 @@ export function loadMessages(sessionId: string): Message[] {
  * Ensures all INSERTs + the metadata UPDATE are atomic — a crash
  * mid-write cannot leave orphaned messages or a stale count.
  */
-export function saveMessages(sessionId: string, messages: Message[]): void {
-  withWriteRetry(() => {
+export async function saveMessages(sessionId: string, messages: Message[]): Promise<void> {
+  await withWriteRetry(() => {
     const db = getDb();
 
     const seqRows = db.prepare(
@@ -185,8 +184,8 @@ export function saveMessages(sessionId: string, messages: Message[]): void {
 /**
  * Update the session title (auto-generated from first user message).
  */
-export function updateSessionTitle(sessionId: string, title: string): void {
-  withWriteRetry(() => {
+export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
+  await withWriteRetry(() => {
     const db = getDb();
     db.prepare('UPDATE sessions SET title = ? WHERE id = ?').run(title, sessionId);
   });

@@ -1,0 +1,45 @@
+{
+  "main": {
+    "text": "🎯 想练什么？",
+    "buttons": [
+      ["✍️ 写作|nav:writing", "🗣️ 口语|nav:speaking"],
+      ["📖 阅读|nav:reading", "🎧 听力|nav:listening"],
+      ["📚 单词|words", "📋 测评|assessment"]
+    ]
+  },
+  "speaking": {
+    "text": "🗣️ 口语练习 — 选择模式",
+    "buttons": [
+      ["🎙️ 跟读|speaking:shadowing", "🗣️ 问答|speaking:qa"],
+      ["🃏 话题卡|speaking:cuecard", "🎭 角色扮演|speaking:roleplay"],
+      ["📖 复述|speaking:retell", "👨‍🏫 模考|speaking:exam"],
+      ["🤖 自动选择|speaking"],
+      ["← 返回|nav:main"]
+    ]
+  },
+  "listening": {
+    "text": "🎧 听力练习 — 选择模式",
+    "buttons": [
+      ["🔊 辨音|listening:sound", "✏️ 听写|listening:dictation"],
+      ["🎬 短片|listening:clip", "📋 题型|listening:type"],
+      ["🤖 自动选择|listening"],
+      ["← 返回|nav:main"]
+    ]
+  },
+  "reading": {
+    "text": "📖 阅读练习 — 选择模式",
+    "buttons": [
+      ["⚡ 速读|reading:skim", "🔍 句子拆解|reading:anatomy"],
+      ["📖 标准练习|reading"],
+      ["← 返回|nav:main"]
+    ]
+  },
+  "writing": {
+    "text": "✍️ 写作练习 — 选择模式",
+    "buttons": [
+      ["💡 头脑风暴|writing:brain", "📝 TEEL段落|writing:teel"],
+      ["🤖 自动选择|writing"],
+      ["← 返回|nav:main"]
+    ]
+  }
+}

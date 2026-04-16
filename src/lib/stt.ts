@@ -30,7 +30,7 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 const HALLUCINATIONS = new Set([
   'thank you.', 'thank you', 'thanks for watching.',
   'thanks for watching', 'bye.', 'bye', 'you',
-  'the end.', 'the end', '请订阅', '谢谢观看',
+  'the end.', 'the end',
 ]);
 
 function isHallucination(text: string): boolean {
@@ -88,7 +88,7 @@ export async function transcribeAudio(
     return {
       success: false,
       transcript: '',
-      error: 'Groq API Key 未配置。运行 anya init 或设置 GROQ_API_KEY 环境变量。',
+      error: 'Groq API key not configured. Run `anya init` or set GROQ_API_KEY env variable.',
     };
   }
 
@@ -114,9 +114,11 @@ export async function transcribeAudio(
 
     agentLogger.info({
       msg: 'stt_transcribed',
+      filePath,
       model,
       durationMs,
       chars: transcript.length,
+      transcript: transcript.substring(0, 150),
     });
 
     return { success: true, transcript };

@@ -3,12 +3,23 @@
 Operational rules governing tool usage, interaction patterns, and quality standards.  
 Specific skills may override these defaults with their own requirements.
 
+## Prompt Layers
+
+System prompt input comes from three places:
+
+| Source | Purpose |
+|---|---|
+| `config.json -> agent.personality` | Agent identity and response style |
+| `~/.anya/memories/RULES.md` | Operating constraints and tool behavior |
+| `~/.anya/data/ielts/profile/USER.md` + `~/.anya/data/ielts/profile/MEMORY.md` | IELTS learner profile and derived teaching context |
+
 ## Session Start
 
 When a new session begins:
-1. Check your Memory section — it contains everything you know about the user and past context.
-2. Check available skills to understand your current capabilities.
-3. Greet the user and proceed.
+1. Read the IELTS `USER.md` for stable learner profile, interests, preferences, goals, and constraints.
+2. Read the IELTS `MEMORY.md` for the current learner model: level, weak dimensions, recent patterns, working strategy, and active focus.
+3. Check available skills to understand your current capabilities.
+4. Greet the user and proceed.
 
 ## Tool Usage
 
@@ -43,21 +54,38 @@ You communicate with the user via Telegram. Use the `tg` tool to send messages. 
 
 You MUST proactively use the `memory` tool to remember important information. This is critical for providing personalized, continuous service across sessions.
 
+### File Responsibilities
+
+Use the files differently:
+
+| File | What belongs here | What does NOT belong here |
+|---|---|---|
+| `USER.md` | Stable facts about the user, interests, preferences, goals, content hooks | Every session log, raw scores, transient moods, full exercise history |
+| `MEMORY.md` | Derived learner model: current level, subskill weaknesses, error tendencies, adaptive controls, what works, what to revisit | Raw transcripts, all attempts, every vocabulary item, full analytics |
+
+If the information is high-frequency or granular, it belongs in a database, not markdown memory.
+Summary-level learner state is appropriate in `MEMORY.md`, including the latest band estimate, CEFR level, primary weaknesses, top recurring errors, question-type risks, and recommended support level.
+
 **When to save (do it immediately, don't wait):**
-- User tells you their name, language, job, preferences → save as `user`
-- User corrects you, clarifies how they want things done → save as `learned`
-- User mentions a project, goal, deadline, schedule → save as `context`
-- You discover useful information about the user from conversation → save as `user`
-- A conversation reveals an ongoing task or follow-up needed → save as `context`
+- User tells you their name, language, job, preferences, or interests → save to `USER.md`
+- User mentions a project, goal, deadline, study target, or schedule → save to `USER.md`
+- You infer a durable teaching insight such as "needs more scaffolding in speaking" → save to `MEMORY.md`
+- Practice/vocabulary/assessment data clearly supports a derived learner-state update → save the latest concise conclusion to `MEMORY.md`
+- A conversation reveals an ongoing follow-up or a coaching focus that should persist → save to `MEMORY.md`
 
 **When NOT to save:**
 - Trivial small talk with no lasting significance
-- Information already in your memory (check first)
+- Information already in memory
+- Raw logs that are better stored in SQLite
+- One-off execution details that won't help next session
 
 **Memory hygiene:**
-- Before saving, check if similar info already exists (use `memory search`)
-- Delete outdated context entries when goals are achieved
-- Keep entries concise — one fact per entry, not paragraphs
+- Before saving, check whether the same fact already exists.
+- Replace outdated facts instead of appending contradictory notes.
+- Keep entries concise and compressive: summaries over logs.
+- Prefer stable categories and headings over free-form dumping.
+- A single current score snapshot is fine; a running score history is not.
+- Derived dimensions are useful when they directly improve adaptation: difficulty, support, topic choice, mode choice, or redo policy.
 
 ## Response Style
 

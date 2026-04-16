@@ -13,7 +13,16 @@ export interface AnyaConfig {
 
   agent: {
     name: string;
+    /** Injected directly into the system prompt as the agent identity/style layer. */
     personality: string;
+  };
+
+  /**
+   * Global single-user context.
+   * Useful as a fallback before a domain profile is initialized.
+   */
+  user: {
+    native_language: string;
   };
 
   /** LLM provider (OpenAI Codex). */
@@ -99,6 +108,10 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   agent: {
     name: 'anya',
     personality: 'You are Anya, a concise and direct personal AI assistant.',
+  },
+
+  user: {
+    native_language: '',
   },
 
   provider: {

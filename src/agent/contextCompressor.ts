@@ -100,7 +100,7 @@ export class ContextCompressor implements ContextEngine {
 
     try {
       const { getProvider } = await import('../providers/openai.js');
-      const provider = getProvider(this.config.provider.model);
+      const provider = getProvider();
 
       const response = await provider.chat(
         [
@@ -145,15 +145,32 @@ export class ContextCompressor implements ContextEngine {
   }
 }
 
+/** Regex matching CJK Unified Ideographs + common CJK punctuation ranges. */
+const CJK_RANGE = /[\u2E80-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F]/g;
+
 /**
- * Rough token estimate: ~4 chars per token for English/mixed content.
+ * Rough token estimate with CJK awareness.
+ * - English/Latin: ~4 chars per token
+ * - CJK characters: ~1.5 chars per token (each CJK char is typically 1 token)
  * Used only for threshold checks, not billing.
  */
-export function estimateTokens(messages: Message[]): number {
-  let chars = 0;
+/** Approximate overhead per tool schema (name + description + parameters JSON). */
+const TOOL_SCHEMA_OVERHEAD_TOKENS = 200;
+
+export function estimateTokens(messages: Message[], toolCount: number = 0): number {
+  let tokens = 0;
   for (const m of messages) {
-    if (m.content) chars += m.content.length;
-    if (m.toolCalls) chars += JSON.stringify(m.toolCalls).length;
+    if (m.content) tokens += estimateStringTokens(m.content);
+    if (m.toolCalls) tokens += estimateStringTokens(JSON.stringify(m.toolCalls));
   }
-  return Math.ceil(chars / 4);
+  tokens += toolCount * TOOL_SCHEMA_OVERHEAD_TOKENS;
+  return Math.ceil(tokens);
+}
+
+function estimateStringTokens(text: string): number {
+  const cjkMatches = text.match(CJK_RANGE);
+  const cjkCount = cjkMatches ? cjkMatches.length : 0;
+  const nonCjkCount = text.length - cjkCount;
+  // CJK: ~1 token per 1.5 chars; Latin: ~1 token per 4 chars
+  return (cjkCount / 1.5) + (nonCjkCount / 4);
 }

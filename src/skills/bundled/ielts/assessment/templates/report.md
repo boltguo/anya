@@ -24,7 +24,7 @@
 3. {{error_3}} ({{cat_3}}) — {{count_3}} 次
 
 [KEYBOARD:
-📋 下周计划=report_plan | 📊 详细数据=report_detail | 🏠 返回=menu
+🎯 当前驱动=report_focus | 📊 详细数据=report_detail | 🏠 返回=menu
 ]
 ```
 
@@ -60,7 +60,7 @@ Let's go! 💪
 ⚠️ 薄弱点: {{weaknesses}}
 
 [KEYBOARD:
-📊 详细分析=report_detail | 📋 学习计划=report_plan | 🎯 开始练习=menu
+📊 详细分析=report_detail | 🎯 当前驱动=report_focus | 🎯 开始练习=menu
 ]
 ```
 
@@ -92,6 +92,26 @@ Let's go! 💪
 - L1: {{l1_count}} | L2: {{l2_count}} | L3: {{l3_count}} | L4: {{l4_count}}
 
 [KEYBOARD:
-📋 学习计划=report_plan | 🎯 开始练习=menu
+🎯 当前驱动=report_focus | 🎯 开始练习=menu
+]
+```
+
+### Current Driver (report_focus)
+
+```
+🎯 **当前驱动**
+
+- 主攻: {{driver_primary}}
+- 次重点: {{driver_secondary}}
+- 推荐模式: {{driver_modes}}
+- 支架强度: {{driver_support}}
+- 持续盯住: {{driver_errors}}
+- 下一步: {{driver_next_step}}
+
+原因:
+{{driver_reason}}
+
+[KEYBOARD:
+🎯 开始练习=menu | 📊 详细分析=report_detail | 🏠 返回=menu
 ]
 ```

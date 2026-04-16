@@ -124,7 +124,6 @@ export class OpenAIProvider implements LLMProvider {
 
 const _provider = new OpenAIProvider();
 
-/** Get the LLM provider (always OpenAI Codex). */
-export function getProvider(_name?: string): LLMProvider {
+export function getProvider(): LLMProvider {
   return _provider;
 }

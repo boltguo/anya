@@ -23,8 +23,19 @@
         },
         "personality": {
           "type": "string",
-          "description": "System prompt personality. Defines how the agent behaves and responds.",
+          "description": "Agent identity/style prompt. Injected directly into the system prompt and replaces legacy file-based personality loading.",
           "default": "你是 Anya，一个简洁、直接的个人 AI 助手。"
+        }
+      }
+    },
+    "user": {
+      "type": "object",
+      "description": "Global single-user context used as a fallback before domain profiles are initialized.",
+      "properties": {
+        "native_language": {
+          "type": "string",
+          "description": "Current user's native language, e.g. Chinese, English, Japanese. Used as a fallback context before skill-specific profile data is collected.",
+          "default": ""
         }
       }
     },

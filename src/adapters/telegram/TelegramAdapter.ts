@@ -29,6 +29,7 @@ import path from 'node:path';
 import { TelegramSessionAdapter } from './SessionAdapter.js';
 import type { PendingApproval, PendingChoice } from './types.js';
 import { formatTgError, startTypingIndicator } from './errors.js';
+import { isNavCallback, getNavPage, getMainMenu } from './skillMenu.js';
 
 /**
  * TelegramAdapter — the top-level bot manager.
@@ -117,12 +118,15 @@ export class TelegramAdapter {
     const sessionKey = `tg:${ctx.chat!.id}`;
     const typingInterval = startTypingIndicator(ctx);
 
+    agentLogger.info({ msg: 'tg_incoming', chatId: ctx.chat!.id, userId, input: input.substring(0, 200) });
+
     const sessionAdapter = new TelegramSessionAdapter(
       ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices,
     );
     const agent = new Agent(this.config, sessionAdapter);
 
     try {
+      await sessionAdapter.sendThinking();
       const result: RunResult = await agent.run(input, { sessionKey });
       if (!result.tgSent && result.content) {
         await sessionAdapter.reply(result.content);
@@ -132,6 +136,7 @@ export class TelegramAdapter {
       agentLogger.error({ msg: 'tg_error', chatId: ctx.chat!.id, error: error.message });
       await ctx.reply(formatTgError(error), { link_preview_options: { is_disabled: true } });
     } finally {
+      await sessionAdapter.cleanupStatus();
       clearInterval(typingInterval);
       cleanup?.();
     }
@@ -141,7 +146,7 @@ export class TelegramAdapter {
    * Initialize bot handlers and start long-polling.
    *
    * Handler registration order matters:
-   * 1. Commands (/start, /new) — registered first for priority
+   * 1. Commands (/start, /new, /kill, dynamic skill commands such as /init) — registered first for priority
    * 2. Text messages
    * 3. Voice messages (download → STT → agent)
    * 4. Photo messages (download → vision → agent)
@@ -189,7 +194,7 @@ export class TelegramAdapter {
     this.bot.command('new', async (ctx) => {
       const sessionKey = `tg:${ctx.chat.id}`;
       this.cancelPending();
-      createSession(sessionKey);
+      await createSession(sessionKey);
       await ctx.reply('🔄 Fresh start! What\'s on your mind?');
       agentLogger.info({ msg: 'tg_new_session', chatId: ctx.chat.id });
     });
@@ -197,7 +202,7 @@ export class TelegramAdapter {
     this.bot.command('kill', async (ctx) => {
       const sessionKey = `tg:${ctx.chat.id}`;
       const cancelled = this.cancelPending();
-      createSession(sessionKey);
+      await createSession(sessionKey);
       const extra = cancelled > 0 ? ` Cancelled ${cancelled} pending task(s).` : '';
       await ctx.reply(`💀 Stopped.${extra}\nSession cleared — send a message to start over.`);
       agentLogger.info({ msg: 'tg_kill', chatId: ctx.chat.id, cancelled });
@@ -208,10 +213,10 @@ export class TelegramAdapter {
       this.bot.command(cmd, async (ctx) => {
         agentLogger.info({ msg: 'tg_skill_command', chatId: ctx.chat.id, skill: skillName });
         const sessionKey = `tg:${ctx.chat.id}`;
-        createSession(sessionKey);
+        await createSession(sessionKey);
         const input = `[/command: ${skillName}] Run the "${skillName}" skill now.`;
         // Fire-and-forget so bot stays responsive
-        this.handleIncoming(ctx, input).catch(() => {});
+        this.handleIncoming(ctx, input).catch(err => agentLogger.error({ msg: 'tg_handle_error', error: (err as Error).message }));
       });
     }
 
@@ -228,7 +233,7 @@ export class TelegramAdapter {
 
       agentLogger.info({ msg: 'tg_message', chatId: ctx.chat.id, userId: ctx.from?.id, text: input.substring(0, 100) });
       // Fire-and-forget so bot stays responsive to /new and callbacks
-      this.handleIncoming(ctx, input).catch(() => {});
+      this.handleIncoming(ctx, input).catch(err => agentLogger.error({ msg: 'tg_handle_error', error: (err as Error).message }));
     });
 
     // ── Voice message handler (download → Groq Whisper STT → agent) ──
@@ -273,7 +278,7 @@ export class TelegramAdapter {
       trackStt(ctx.message.voice.duration || 0);
 
       // Fire-and-forget so bot stays responsive
-      this.handleIncoming(ctx, input).catch(() => {});
+      this.handleIncoming(ctx, input).catch(err => agentLogger.error({ msg: 'tg_handle_error', error: (err as Error).message }));
     });
 
     // ── Photo message handler (download → Gemini Vision → agent) ──
@@ -296,7 +301,7 @@ export class TelegramAdapter {
         const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.bot_token}/${file.file_path}`;
         const response = await fetch(fileUrl);
         if (!response.ok) {
-          await ctx.reply('❌ 图片下载失败。');
+          await ctx.reply('❌ Image download failed.');
           return;
         }
 
@@ -307,7 +312,7 @@ export class TelegramAdapter {
         agentLogger.info({ msg: 'tg_photo_cached', path: imagePath, bytes: buffer.length });
       } catch (err) {
         agentLogger.error({ msg: 'tg_photo_download_error', error: (err as Error).message });
-        await ctx.reply('❌ 图片下载失败，请重试。');
+        await ctx.reply('❌ Image download failed, please try again.');
         return;
       }
 
@@ -329,8 +334,8 @@ export class TelegramAdapter {
 
       agentLogger.info({ msg: 'tg_vision_done', chatId: ctx.chat.id, descLength: visionResult.description.length });
 
-      // Fire-and-forget so bot stays responsive
-      this.handleIncoming(ctx, input, () => fs.unlink(imagePath, () => {})).catch(() => {});
+      // Keep image for audit trail (don't delete)
+      this.handleIncoming(ctx, input).catch(err => agentLogger.error({ msg: 'tg_handle_error', error: (err as Error).message }));
     });
 
     // ── Callback query dispatcher (approvals + choices + custom) ──
@@ -367,7 +372,7 @@ export class TelegramAdapter {
           if (inlineKeyboard) {
             for (const row of inlineKeyboard) {
               for (const btn of row) {
-                if (btn.callback_data === data) {
+                if ('callback_data' in btn && btn.callback_data === data) {
                   selectedText = btn.text;
                 }
               }
@@ -378,6 +383,24 @@ export class TelegramAdapter {
           await ctx.editMessageText(
             ctx.callbackQuery.message?.text + `\n\n-> ${selectedText || 'Selected'}`
           ).catch(() => {});
+        }
+      }
+      // ── Practice menu navigation (client-side, no agent) ──
+      else if (isNavCallback(data)) {
+        const page = getNavPage(data);
+        if (page) {
+          await ctx.editMessageText(page.text, {
+            reply_markup: page.keyboard,
+          }).catch(() => {});
+        }
+      }
+      // ── Show main menu (from menu callback) ──
+      else if (data === 'menu') {
+        const menu = getMainMenu();
+        if (menu) {
+          await ctx.editMessageText(menu.text, {
+            reply_markup: menu.keyboard,
+          }).catch(() => {});
         }
       }
       // ── Generic callback (from tg_keyboard tool) ──
@@ -395,7 +418,7 @@ export class TelegramAdapter {
         if (inlineKeyboard) {
           for (const row of inlineKeyboard) {
             for (const btn of row) {
-              if (btn.callback_data === data) {
+              if ('callback_data' in btn && btn.callback_data === data) {
                 selectedLabel = btn.text;
               }
             }
@@ -418,6 +441,7 @@ export class TelegramAdapter {
           const agent = new Agent(this.config, sessionAdapter);
 
           try {
+            await sessionAdapter.sendThinking();
             const result: RunResult = await agent.run(agentInput, { sessionKey });
             if (!result.tgSent && result.content) {
               await sessionAdapter.reply(result.content);
@@ -426,6 +450,8 @@ export class TelegramAdapter {
             const error = err as Error;
             agentLogger.error({ msg: 'tg_callback_error', chatId, error: error.message });
             await this.bot.api.sendMessage(chatId, formatTgError(error), { link_preview_options: { is_disabled: true } }).catch(() => {});
+          } finally {
+            await sessionAdapter.cleanupStatus();
           }
         }
       }

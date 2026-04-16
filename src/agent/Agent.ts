@@ -62,7 +62,7 @@ export interface RunResult {
  *
  * Lifecycle per user message:
  * 1. Load/create session and conversation history from SQLite
- * 2. Build system prompt (SOUL.md + memory + skills)
+ * 2. Build system prompt (config personality + rules + profile + skills)
  * 3. Sanitize history for provider compatibility
  * 4. Enter ReAct loop: call LLM → execute tools → repeat
  * 5. Save new messages to session history
@@ -91,8 +91,8 @@ export class Agent {
 
     if (!sessionId) {
       sessionId = newSession
-        ? createSession(sessionKey)
-        : getOrCreateSession(sessionKey);
+        ? await createSession(sessionKey)
+        : await getOrCreateSession(sessionKey);
     }
 
     let history = loadMessages(sessionId);
@@ -102,10 +102,14 @@ export class Agent {
 
     const systemPrompt = buildSystemPrompt(this.config);
 
+    // Timestamp is appended to user input (not system prompt) to keep the
+    // system prompt stable across turns, maximising prompt cache hit rate.
+    const timestampedInput = `[${new Date().toISOString()}] ${input}`;
+
     const messages: Message[] = [
       { role: 'system', content: systemPrompt },
       ...history,
-      { role: 'user', content: input },
+      { role: 'user', content: timestampedInput },
     ];
 
     const newMessages: Message[] = [
@@ -115,7 +119,7 @@ export class Agent {
     // Auto-title the session from first user message.
     if (history.length === 0) {
       const title = input.length > 50 ? input.substring(0, 50) + '...' : input;
-      updateSessionTitle(sessionId, title);
+      await updateSessionTitle(sessionId, title);
     }
 
     const maxLoops = this.config.advanced.max_react_loops;
@@ -132,7 +136,7 @@ export class Agent {
 
       // ── Pre-flight: compress context if approaching the limit ──
       // Use real token count from last LLM response if available, else estimate
-      const tokenCount = lastRealTokenCount || estimateTokens(messages);
+      const tokenCount = lastRealTokenCount || estimateTokens(messages, this.config.tools.enabled.length);
       if (compressor.shouldCompress(messages, tokenCount, contextLimit) && compressionCount < MAX_COMPRESSIONS) {
         compressionCount++;
         const compressed = await compressor.compress(messages, contextLimit);
@@ -145,7 +149,7 @@ export class Agent {
       const toolSchemas = getToolSchemas(this.config, isTelegram);
 
       const model = this.config.provider.model;
-      const provider = getProvider(model);
+      const provider = getProvider();
 
       let response;
       try {
@@ -255,7 +259,7 @@ export class Agent {
       };
       newMessages.push(assistantMsg);
 
-      saveMessages(sessionId, newMessages);
+      await saveMessages(sessionId, newMessages);
 
       return {
         content: finalContent,

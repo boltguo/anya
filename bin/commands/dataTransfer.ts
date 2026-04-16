@@ -13,7 +13,7 @@ export function registerDataTransfer(program: Command): void {
         try {
           execFileSync('tar', [
             '-czf', file, '-C', ANYA_HOME,
-            'config.json', 'config.schema.json', 'memory/', 'skills/', 'cron/jobs.json',
+            'config.json', 'config.schema.json', 'memories/', 'skills/', 'cron/jobs.json',
           ], { stdio: 'inherit' });
         } catch {
           // Some paths may not exist — non-fatal
@@ -23,17 +23,5 @@ export function registerDataTransfer(program: Command): void {
       }
 
       console.log(`\n  [ok] Exported to ${file}\n`);
-    });
-
-  program
-    .command('import <file>')
-    .description('Import from a backup')
-    .action(async (file: string) => {
-      const { execFileSync } = await import('node:child_process');
-      const { ANYA_HOME, ensureDirectories } = await import('../../src/lib/paths.js');
-
-      ensureDirectories();
-      execFileSync('tar', ['-xzf', file, '-C', ANYA_HOME], { stdio: 'inherit' });
-      console.log(`\n  [ok] Imported from ${file}\n`);
     });
 }

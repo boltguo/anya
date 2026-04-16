@@ -12,9 +12,13 @@ import { SEARCH_CACHE_DIR } from '../lib/paths.js';
 import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { tavily } from '@tavily/core';
+import { tavily, type TavilyClient } from '@tavily/core';
 import { agentLogger } from '../lib/logger.js';
 import { trackWebSearch } from '../lib/usage.js';
+
+/** Cached Tavily client instance, keyed by API key. */
+let _tavilyClient: TavilyClient | null = null;
+let _tavilyApiKey: string | null = null;
 
 // ── Cache Helpers ────────────────────────────────────────────────────────────
 
@@ -110,8 +114,12 @@ register({
     agentLogger.info({ msg: 'web_search_start', query: query.substring(0, 80), maxResults });
     const t0 = Date.now();
 
-    // Use Tavily SDK
-    const client = tavily({ apiKey });
+    // Reuse Tavily client across calls (recreate only if API key changes)
+    if (!_tavilyClient || _tavilyApiKey !== apiKey) {
+      _tavilyClient = tavily({ apiKey });
+      _tavilyApiKey = apiKey;
+    }
+    const client = _tavilyClient;
     const data = await client.search(query, {
       maxResults,
       includeAnswer: true,
