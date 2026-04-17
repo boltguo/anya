@@ -45,6 +45,12 @@ export class TelegramAdapter {
   private pendingApprovals = new Map<string, PendingApproval>();
   /** Pending choice dialogs, keyed by choice ID. Resolved by callback_query handler. */
   private pendingChoices = new Map<string, PendingChoice>();
+  /**
+   * Per-chat serial queue. Two messages in the same chat cannot run
+   * Agent.run concurrently — that would race on the shared tg:<chatId>
+   * history and let status messages collide.
+   */
+  private chatQueue = new Map<number, Promise<void>>();
 
   constructor(config: AnyaConfig) {
     if (!config.telegram.bot_token) {
@@ -95,6 +101,24 @@ export class TelegramAdapter {
     this.pendingApprovals.delete(id);
     pending.resolve(action);
     return true;
+  }
+
+  /**
+   * Chain `task` onto the serial queue for this chat. Returns immediately;
+   * the task runs after any earlier turn for the same chat finishes.
+   * Errors are logged — they never propagate out, so the queue stays live.
+   */
+  private enqueuePerChat(chatId: number, task: () => Promise<void>): void {
+    const prev = this.chatQueue.get(chatId) ?? Promise.resolve();
+    const next = prev.then(task).catch((err) => {
+      agentLogger.error({ msg: 'tg_queue_task_error', chatId, error: (err as Error).message });
+    });
+    this.chatQueue.set(chatId, next);
+    next.then(() => {
+      if (this.chatQueue.get(chatId) === next) {
+        this.chatQueue.delete(chatId);
+      }
+    });
   }
 
   /**
@@ -215,8 +239,7 @@ export class TelegramAdapter {
         const sessionKey = `tg:${ctx.chat.id}`;
         await createSession(sessionKey);
         const input = `[/command: ${skillName}] Run the "${skillName}" skill now.`;
-        // Fire-and-forget so bot stays responsive
-        this.handleIncoming(ctx, input).catch(err => agentLogger.error({ msg: 'tg_handle_error', error: (err as Error).message }));
+        this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
       });
     }
 
@@ -232,8 +255,7 @@ export class TelegramAdapter {
       }
 
       agentLogger.info({ msg: 'tg_message', chatId: ctx.chat.id, userId: ctx.from?.id, text: input.substring(0, 100) });
-      // Fire-and-forget so bot stays responsive to /new and callbacks
-      this.handleIncoming(ctx, input).catch(err => agentLogger.error({ msg: 'tg_handle_error', error: (err as Error).message }));
+      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
     });
 
     // ── Voice message handler (download → Groq Whisper STT → agent) ──
@@ -277,8 +299,7 @@ export class TelegramAdapter {
       agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, text: sttResult.transcript.substring(0, 100) });
       trackStt(ctx.message.voice.duration || 0);
 
-      // Fire-and-forget so bot stays responsive
-      this.handleIncoming(ctx, input).catch(err => agentLogger.error({ msg: 'tg_handle_error', error: (err as Error).message }));
+      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
     });
 
     // ── Photo message handler (download → Gemini Vision → agent) ──
@@ -335,7 +356,7 @@ export class TelegramAdapter {
       agentLogger.info({ msg: 'tg_vision_done', chatId: ctx.chat.id, descLength: visionResult.description.length });
 
       // Keep image for audit trail (don't delete)
-      this.handleIncoming(ctx, input).catch(err => agentLogger.error({ msg: 'tg_handle_error', error: (err as Error).message }));
+      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
     });
 
     // ── Callback query dispatcher (approvals + choices + custom) ──
@@ -437,22 +458,24 @@ export class TelegramAdapter {
           agentLogger.info({ msg: 'tg_callback', chatId, userId, data, label: selectedLabel });
           console.log(`[gateway] callback: ${selectedLabel} (${data})`);
 
-          const sessionAdapter = new TelegramSessionAdapter(ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices);
-          const agent = new Agent(this.config, sessionAdapter);
+          this.enqueuePerChat(chatId, async () => {
+            const sessionAdapter = new TelegramSessionAdapter(ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices);
+            const agent = new Agent(this.config, sessionAdapter);
 
-          try {
-            await sessionAdapter.sendThinking();
-            const result: RunResult = await agent.run(agentInput, { sessionKey });
-            if (!result.tgSent && result.content) {
-              await sessionAdapter.reply(result.content);
+            try {
+              await sessionAdapter.sendThinking();
+              const result: RunResult = await agent.run(agentInput, { sessionKey });
+              if (!result.tgSent && result.content) {
+                await sessionAdapter.reply(result.content);
+              }
+            } catch (err) {
+              const error = err as Error;
+              agentLogger.error({ msg: 'tg_callback_error', chatId, error: error.message });
+              await this.bot.api.sendMessage(chatId, formatTgError(error), { link_preview_options: { is_disabled: true } }).catch(() => {});
+            } finally {
+              await sessionAdapter.cleanupStatus();
             }
-          } catch (err) {
-            const error = err as Error;
-            agentLogger.error({ msg: 'tg_callback_error', chatId, error: error.message });
-            await this.bot.api.sendMessage(chatId, formatTgError(error), { link_preview_options: { is_disabled: true } }).catch(() => {});
-          } finally {
-            await sessionAdapter.cleanupStatus();
-          }
+          });
         }
       }
     });

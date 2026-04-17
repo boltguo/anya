@@ -156,7 +156,7 @@ export async function runInit(): Promise<void> {
   console.log(chalk.bold.green('✓ Init complete'));
   console.log();
   console.log(chalk.dim('  Next steps:'));
-  console.log(`    ${chalk.bold('anya config')}  — Configure Gemini / Azure / Telegram`);
+  console.log(`    ${chalk.bold('anya config')}  — Sign in to OpenAI, configure Gemini / Azure / Telegram`);
   console.log(`    ${chalk.bold('anya doctor')}  — Verify configuration`);
   console.log();
 }

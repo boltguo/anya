@@ -1,13 +1,16 @@
 import type { Command } from 'commander';
+import chalk from 'chalk';
+import { isInitialized, CONFIG_PATH, ANYA_HOME } from '../../src/lib/paths.js';
+import { loadConfig } from '../../src/config/loader.js';
+import { hasCodexAuth } from '../../src/lib/auth.js';
+import { loadSkills } from '../../src/skills/loader.js';
+import { isServiceRunning } from '../../src/lib/pidfile.js';
 
 export function registerDoctor(program: Command): void {
   program
     .command('doctor')
     .description('Check environment and configuration')
-    .action(async () => {
-      const chalk = (await import('chalk')).default;
-      const { isInitialized, CONFIG_PATH, ANYA_HOME } = await import('../../src/lib/paths.js');
-
+    .action(() => {
       console.log(chalk.bold.cyan('\nAnya Doctor\n'));
 
       const nodeVersion = process.version;
@@ -18,11 +21,9 @@ export function registerDoctor(program: Command): void {
       console.log(`  Init:      ${inited ? '[ok]' : '[!!]'} ${inited ? CONFIG_PATH : 'Not initialized. Run: anya init'}`);
 
       if (inited) {
-        const { loadConfig } = await import('../../src/config/loader.js');
         const config = loadConfig();
 
         // LLM — OpenAI Codex
-        const { hasCodexAuth } = await import('../../src/lib/auth.js');
         const hasAuth = hasCodexAuth();
         console.log(`  LLM:       ${hasAuth ? '[ok]' : '[!!]'} OpenAI Codex (${config.provider.model}) ${hasAuth ? '✓' : 'not authenticated'}`);
 
@@ -43,11 +44,9 @@ export function registerDoctor(program: Command): void {
         const hasTelegram = config.telegram?.enabled;
         console.log(`  Telegram:  ${hasTelegram ? '[ok]' : '[--]'} ${hasTelegram ? 'enabled' : 'not configured'}`);
 
-        const { loadSkills } = await import('../../src/skills/loader.js');
         const skills = loadSkills();
         console.log(`  Skills:    [..] ${skills.length} installed`);
 
-        const { isServiceRunning } = await import('../../src/lib/pidfile.js');
         const gw = isServiceRunning('gateway');
         console.log(`  Gateway:   ${gw.running ? '[ok] running (PID ' + gw.pid + ')' : '[--] stopped'}`);
         const cr = isServiceRunning('cron');

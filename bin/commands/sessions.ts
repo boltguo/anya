@@ -1,4 +1,6 @@
 import type { Command } from 'commander';
+import chalk from 'chalk';
+import { listSessions, searchMessages } from '../../src/storage/sessionStore.js';
 
 export function registerSessions(program: Command): void {
   const sessionsCmd = program
@@ -9,9 +11,7 @@ export function registerSessions(program: Command): void {
     .command('list')
     .description('List recent sessions')
     .option('-n, --limit <n>', 'Number of sessions to show', '20')
-    .action(async (opts: { limit: string }) => {
-      const chalk = (await import('chalk')).default;
-      const { listSessions } = await import('../../src/storage/sessionStore.js');
+    .action((opts: { limit: string }) => {
       const sessions = listSessions(parseInt(opts.limit, 10));
 
       if (sessions.length === 0) {
@@ -32,9 +32,7 @@ export function registerSessions(program: Command): void {
   sessionsCmd
     .command('search <query>')
     .description('Search messages')
-    .action(async (query: string) => {
-      const chalk = (await import('chalk')).default;
-      const { searchMessages } = await import('../../src/storage/sessionStore.js');
+    .action((query: string) => {
       const results = searchMessages(query);
 
       if (results.length === 0) {

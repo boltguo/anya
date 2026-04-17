@@ -14,6 +14,8 @@ import { select } from '@inquirer/prompts';
 import chalk from 'chalk';
 import { loadConfig } from '../../config/loader.js';
 import { CONFIG_PATH, isInitialized } from '../../lib/paths.js';
+import { hasCodexAuth } from '../../lib/auth.js';
+import { configLLM } from './llm.js';
 import { configGemini } from './gemini.js';
 import { configAzure } from './azure.js';
 import { configSTT } from './stt.js';
@@ -21,7 +23,7 @@ import { configTavily } from './tavily.js';
 import { configTelegram } from './telegram.js';
 import { maskKey } from './helpers.js';
 
-export { configGemini, configAzure, configSTT, configTavily, configTelegram };
+export { configLLM, configGemini, configAzure, configSTT, configTavily, configTelegram };
 
 export async function runConfigMenu(): Promise<void> {
   if (!isInitialized()) {
@@ -35,6 +37,10 @@ export async function runConfigMenu(): Promise<void> {
     const section = await select({
       message: 'Configure',
       choices: [
+        {
+          name: `LLM      ${chalk.dim(`(OpenAI Codex${hasCodexAuth() ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+          value: 'llm',
+        },
         {
           name: `Gemini   ${chalk.dim(`(Vision + ImageGen${config.gemini?.api_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
           value: 'gemini',
@@ -63,6 +69,7 @@ export async function runConfigMenu(): Promise<void> {
     });
 
     switch (section) {
+      case 'llm': await configLLM(config); break;
       case 'gemini': await configGemini(config); break;
       case 'azure': await configAzure(config); break;
       case 'stt': await configSTT(config); break;

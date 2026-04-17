@@ -2,6 +2,22 @@
 
 > 用 IELTS 的优质训练内容，提升真实英语能力。
 
+运行在 Telegram / CLI 上的陪伴式英语私教，由一个可扩展的个人 Agent 框架驱动。
+
+## 目录
+
+- [项目定位](#项目定位)
+- [目标中的产品形态](#目标中的产品形态)
+- [快速上手](#快速上手)
+- [外部服务与 API Key](#外部服务与-api-key)
+- [CLI 命令](#cli-命令)
+- [开发](#开发)
+- [Agent 架构](#agent-架构)
+- [Skills 职责](#skills-职责)
+- [代码结构](#代码结构)
+- [数据分工](#数据分工)
+- [License](#license)
+
 ## 项目定位
 
 Anya 不是一个“刷题器”，也不应该是一个“考官机器人”。
@@ -29,26 +45,195 @@ Anya 应该更像这样：
 
 **IELTS-inspired English coaching, not IELTS-pressure machinery.**
 
-## Agent 架构
+## 快速上手
 
-运行链路可以概括成：
+### 环境要求
 
-`Telegram / CLI 输入 → Agent → tools / skills → SQLite → assessment 汇总 → MEMORY.md → 下一轮按当前水平出题`
+- Node.js **≥ 22**（依赖实验性的 `node:sqlite`）
+- [pnpm](https://pnpm.io/)（仓库使用 pnpm workspace）
+- 可选：`ffmpeg`（语音转写/合成链路用到）
 
-更细一点：
+### 安装与初始化
 
-1. 用户从 Telegram 或 CLI 进入
-2. `Agent` 读取系统 prompt、`USER.md`、`MEMORY.md`、已安装 skills 索引
-3. 模型根据请求决定调用哪个 skill / tool
-4. 练习类 skill 把原始证据写进 `learner.db` / `vocab.db`
-5. `assessment` 在手动或定时触发时分析这些学习数据，回写 `MEMORY.md`
-6. 后续 `practice-*` skill 再按 `MEMORY` 里的 band / weak dimensions / adaptive controls 控制难度和支架
+```bash
+pnpm install
+pnpm build            # 编译到 dist/
 
-这套结构的关键分工是：
+# 初始化 ~/.anya/ 目录、默认配置和 skills 索引
+node dist/bin/anya.js init
+# 或者链到 PATH 后：
+anya init
+```
 
-- 训练 skill 负责“产生日志和样本”
-- `assessment` 负责“聚合分析并更新 MEMORY”
-- `MEMORY` 负责“给下一轮训练提供难度控制和学习画像”
+`anya init` 会在 `~/.anya/` 下生成 `config.json`、`USER.md`、`MEMORY.md`、`state.db` 等文件。
+
+### 配置
+
+编辑 `~/.anya/config.json`，最关键的几项：
+
+- `provider.model` —— 主 LLM（默认 OpenAI Codex `gpt-5.4`，通过 `anya gateway` 做 OAuth 设备码登录）
+- `gemini.api_key` —— 视觉 / 图像生成
+- `azure.speech_key` + `azure.speech_region` —— TTS 与发音评分
+- `stt.groq_api_key` —— 语音识别
+- `telegram.bot_token` + `telegram.allowed_user_ids` —— Telegram Bot 接入
+- `tools.web_search.api_key` —— Tavily 联网搜索
+
+也可以用 CLI 直接改：
+
+```bash
+anya config get
+anya config set gemini.api_key sk-...
+anya doctor              # 体检：检查 Node、ffmpeg、API key、数据库
+```
+
+### 日常运行
+
+```bash
+# 单次对话（CLI）
+anya chat "帮我练一组雅思口语 Part 2"
+
+# 启动 Telegram Bot
+anya gateway start
+
+# 查看 / 管理定时任务（每日 briefing、词汇推送、assessment 同步）
+anya cron list
+anya cron enable daily-briefing
+
+# 查看会话历史 / 本月 API 用量
+anya sessions list
+anya usage
+```
+
+## 外部服务与 API Key
+
+| 用途           | 服务                         | 配置字段                                |
+| -------------- | ---------------------------- | --------------------------------------- |
+| 主 LLM         | OpenAI Codex（OAuth 设备码） | `provider.model` + `anya gateway login` |
+| 视觉、图像生成 | Google Gemini（AI Studio）   | `gemini.*`                              |
+| TTS、发音评分  | Azure Speech                 | `azure.*`                               |
+| 语音识别       | Groq Whisper                 | `stt.groq_api_key`                      |
+| 联网搜索       | Tavily                       | `tools.web_search.api_key`              |
+| 聊天入口       | Telegram Bot                 | `telegram.*`                            |
+
+其中 Azure、Telegram、Tavily 不配置也能跑，只是相应功能会被禁用；主 LLM 与 Gemini 是体验完整性所需的最小集。
+
+## CLI 命令
+
+所有命令都以 `anya` 为入口（对应 [bin/anya.ts](bin/anya.ts)）：
+
+| 命令                                          | 作用                                                                    |
+| --------------------------------------------- | ----------------------------------------------------------------------- |
+| `anya init`                                   | 初始化 `~/.anya/` 与默认配置                                            |
+| `anya chat [msg]`                             | 单次对话                                                                |
+| `anya config <get\|set\|edit\|path>`          | 读写 `config.json`                                                      |
+| `anya doctor`                                 | 环境体检（Node、ffmpeg、API、DB）                                       |
+| `anya skills <list\|install\|remove\|reload>` | 管理本地与打包 skills                                                   |
+| `anya gateway <start\|login\|status>`         | Telegram Bot / OAuth 会话                                               |
+| `anya cron <list\|enable\|disable\|run>`      | 定时任务（见 [src/cron/default_jobs.json](src/cron/default_jobs.json)） |
+| `anya sessions <list\|show\|delete>`          | 会话历史存档（SQLite）                                                  |
+| `anya export <file>`                          | 把 `~/.anya/` 打包成 tar.gz                                             |
+| `anya usage`                                  | 计费型服务的月度用量                                                    |
+
+## 开发
+
+```bash
+pnpm dev         # tsup --watch，编辑即重编译
+pnpm test        # vitest run
+pnpm test:watch  # vitest 监听模式
+pnpm typecheck   # tsc --noEmit
+pnpm build       # 产出 dist/
+```
+
+打包由 [tsup.config.ts](tsup.config.ts) 驱动，采用单入口静态 import 策略，产物只有 3 个文件：`dist/bin/anya.js`（CLI）+ `dist/index.js`（可编程 API）+ `dist/index.d.ts`（类型声明）。[scripts/postbuild.cjs](scripts/postbuild.cjs) 负责加 shebang 和修正 `node:sqlite` import。
+
+## Agent 架构与数据流
+
+Anya 采用统一 Agent Core 架构，所有入口（CLI/Telegram/Cron）最终都汇聚到 `Agent.run()`，由其统一调度工具、技能和本地数据，所有运行态数据都落在 `~/.anya/`。
+
+**数据流游泳池（Swimlane）图：**
+
+```mermaid
+sequenceDiagram
+  participant User as User
+  participant Adapter as Adapter (CLI/TG)
+  participant Agent as Agent Core
+  participant Provider as OpenAI Provider
+  participant Tools as Tool Registry
+  participant DB as SQLite (state.db)
+
+  User->>Adapter: 发送消息
+  Adapter->>Agent: run(input, sessionKey)
+  Agent->>DB: getOrCreateSession()
+  Agent->>DB: loadMessages(sessionId)
+  Agent->>Agent: truncateHistory() + sanitizeHistory()
+  Agent->>Agent: buildSystemPrompt(config)
+  Note over Agent: 时间戳注入用户消息（非 system prompt）保持 system prompt 稳定以最大化 prompt cache
+
+  loop ReAct 循环 (max_react_loops)
+    Agent->>Provider: chat(messages, toolSchemas, config)
+    Provider-->>Agent: LLM 响应
+    alt 模型发出 Tool Calls
+      Agent->>Tools: dispatch(toolName, args)
+      Tools-->>Agent: ToolDispatchResult
+      Note over Agent: 追加 tool result 到 messages，继续循环
+    else 模型给出文本回复
+      Agent->>DB: saveMessages(newMessages only)
+      Agent->>Adapter: reply(content)
+      Adapter->>User: 发送回复
+    end
+  end
+```
+
+### 架构分层与职责
+
+- **Entry / Process Layer**：`bin/anya.ts` 负责 CLI/网关/定时任务分发。
+- **Command Layer**：`src/commands/` 提供命令实现。
+- **Adapter Layer**：`src/adapters/telegram/` 等将平台输入/输出转为统一格式。
+- **Agent Core Layer**：`src/agent/Agent.ts` 统一 ReAct 循环、prompt 组装、历史管理、工具调度、消息落库。
+- **Provider Layer**：`src/providers/openai.ts` 目前唯一主 LLM Provider。
+- **Tool & Skill Layer**：`src/tools/`、`src/skills/` 注册原子工具与领域技能。
+- **Storage / Runtime Foundation Layer**：`src/storage/`、`src/lib/paths.ts` 等统一路径、SQLite、日志、配置。
+- **Bundled Domain Assets Layer**：`src/skills/bundled/ielts/**` 提供 IELTS 能力跃迁系统。
+
+### 运行时数据目录结构
+
+所有运行态数据均存于 `~/.anya/`，结构如下：
+
+```text
+~/.anya/
+├── config.json
+├── config.schema.json
+├── auth.json
+├── memories/
+│   ├── RULES.md
+│   ├── USER.md
+│   └── MEMORY.md
+├── skills/
+│   └── .bundled/
+├── cron/
+│   ├── jobs.json
+│   └── history/
+├── data/
+│   ├── store/
+│   │   ├── state.db          # 会话与消息历史
+│   │   └── *.db              # vocab.db / learner.db 等由 db tool 按需创建
+│   ├── search/
+│   ├── cache/
+│   ├── audio/
+│   │   ├── voice/
+│   │   └── tts/
+│   └── images/
+│       ├── received/
+│       └── generated/
+├── logs/
+└── run/
+```
+
+### 设计理念（核心摘录）
+
+> Anya 不是“刷题器”或“考官机器人”，而是以 IELTS 优质训练内容为基础，打造低压力、长期主义、真实有效的英语成长系统。所有能力都围绕“陪伴式私教”体验设计，IELTS 只是方法论和素材库。
+
+---
 
 ## Skills 职责
 
@@ -78,33 +263,43 @@ Anya 应该更像这样：
   静默词库补货。根据当前水平往 `vocab.db` 里补 `queued_new` 词项。
 - `cron-word-review`
   每日单词复习推送。只推已经进入学习系统的词，不引入未学新词。
-- `cron-assessment-light`
-  日常静默同步。定时调用 `assessment` 的轻量模式，把近期练习结果同步进 `MEMORY.md`。
-- `cron-assessment-deep`
-  周度深度重算。定时调用 `assessment` 的深度模式，更完整地刷新 `MEMORY.md`。
 
 ## 代码结构
 
-- `src/agent`
-  Agent 主循环、prompt 拼装、上下文压缩、历史记录
-- `src/adapters/telegram`
-  Telegram Bot、菜单、语音/图片消息接入
-- `src/tools`
-  `db`、`memory`、`tts`、`pron_assess`、`web_search`、`image_gen` 等工具
-- `src/storage`
-  SQLite 会话与消息存储
-- `src/skills/bundled/ielts/init`
-  初始化、用户档案、轻量水平校准
-- `src/skills/bundled/ielts/practice*`
-  听说读写四项训练技能
-- `src/skills/bundled/ielts/words`
-  词汇与词块系统
-- `src/skills/bundled/ielts/assessment`
-  学习数据分析、MEMORY 同步、light/deep assessment
-- `src/skills/bundled/ielts/database`
-  learner/vocab SQLite schema 与查询参考
-- `src/cron`
-  每日 briefing、词汇推送、assessment 定时同步
+- [bin/](bin/)
+  CLI 外壳。`anya.ts` 是入口，`bin/commands/*.ts` 用 commander 注册各子命令，仅负责参数解析和输出格式化。
+- [src/index.ts](src/index.ts)
+  可编程 API 导出（`Agent`、`loadConfig`、`registerTool` 等），供外部项目 `import` 使用。
+- [src/agent/](src/agent/)
+  Agent 主循环、prompt 拼装（`promptBuilder`）、上下文引擎与压缩（`contextEngine` / `contextCompressor`）、历史管理、错误分类器。
+- [src/providers/](src/providers/)
+  LLM provider 抽象，当前只有 OpenAI Codex 实现。
+- [src/adapters/telegram/](src/adapters/telegram/)
+  Telegram Bot、菜单、语音/图片消息接入。
+- [src/tools/](src/tools/)
+  Agent 可调用的工具：`db`、`memory`、`file`、`shell`、`skill`、`clarify`、`tts`、`pron_assess`、`web_search`、`image_gen`、`telegram`，以及 `registry` 负责装配。
+- [src/commands/](src/commands/)
+  CLI 命令的真正实现（`runInit` / `runChat` / `runConfigMenu` / `runGatewayStart-Stop-Status-Logs` / `runUsage`），供 [bin/](bin/) 调用。
+- [src/config/](src/config/)
+  配置默认值、JSON schema、loader，以及 `RULES.template.md`（写入 `~/.anya/memories/`）。
+- [src/storage/](src/storage/)
+  `db` 基础连接 + `sessionStore` 会话/消息档案。
+- [src/lib/](src/lib/)
+  通用库：`paths`（`ANYA_HOME` 等路径）、`auth`（Codex OAuth）、`pidfile`（守护进程）、`ffmpeg`、`stt`、`tts`、`vision`、`tgFormat`、`logger`、`usage`、`approval`。
+- [src/skills/bundled/ielts/init/](src/skills/bundled/ielts/init/)
+  初始化、用户档案、轻量水平校准。
+- [src/skills/bundled/ielts/practice/](src/skills/bundled/ielts/practice/) 及 `practice-*`
+  训练总入口 + 听说读写四项训练技能。
+- [src/skills/bundled/ielts/words/](src/skills/bundled/ielts/words/)
+  词汇与词块系统。
+- [src/skills/bundled/ielts/assessment/](src/skills/bundled/ielts/assessment/)
+  学习数据分析，重算 band / weak dimensions，回写 `MEMORY.md`。
+- [src/skills/bundled/ielts/database/](src/skills/bundled/ielts/database/)
+  `learner.db` / `vocab.db` 的 schema 与查询参考。
+- [src/cron/](src/cron/)
+  调度器 + 默认任务（`default_jobs.json`），目前负责每日 briefing、词汇补货和词汇复习推送。
+- [scripts/postbuild.cjs](scripts/postbuild.cjs)
+  打包后处理：为 `dist/bin/anya.js` 加 shebang，修正 `node:sqlite` import。
 
 ## 数据分工
 

@@ -9,8 +9,8 @@ export default defineConfig({
   target: 'node20',
   clean: true,
   dts: { entry: 'src/index.ts' },
-  splitting: true,
-  sourcemap: true,
+  splitting: false,
+  sourcemap: false,
   onSuccess: 'node scripts/postbuild.cjs',
   esbuildPlugins: [
     {

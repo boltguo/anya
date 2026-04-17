@@ -208,7 +208,7 @@ export function getCodexAccessToken(): string {
 
   if (!store.openai?.tokens?.access_token) {
     throw new Error(
-      'No OpenAI credentials found. Run "anya model" to authenticate.'
+      'No OpenAI credentials found. Run "anya config" → LLM to authenticate.'
     );
   }
 
@@ -275,7 +275,7 @@ export async function forceRefreshCodexToken(): Promise<string> {
   const refreshToken = store.openai?.tokens?.refresh_token;
 
   if (!refreshToken) {
-    throw new Error('No refresh_token available. Run "anya model" to re-authenticate.');
+    throw new Error('No refresh_token available. Run "anya config" → LLM to re-authenticate.');
   }
 
   agentLogger.info({ msg: 'codex_force_refresh', reason: '401' });

@@ -1,18 +1,3 @@
-#!/usr/bin/env node
-
-// Suppress node:sqlite ExperimentalWarning (expected on Node 22)
-const _emit = process.emit;
-// @ts-expect-error -- patching process.emit to filter warnings
-process.emit = function (event: string, ...args: unknown[]) {
-  if (event === 'warning') {
-    const warning = args[0] as { name?: string; message?: string } | undefined;
-    if (warning?.name === 'ExperimentalWarning' && warning.message?.includes('SQLite')) {
-      return false;
-    }
-  }
-  return _emit.apply(process, [event, ...args] as Parameters<typeof _emit>);
-};
-
 import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +10,9 @@ import { registerGateway } from './commands/gateway.js';
 import { registerCron } from './commands/cron.js';
 import { registerSessions } from './commands/sessions.js';
 import { registerDataTransfer } from './commands/dataTransfer.js';
+import { runInit } from '../src/commands/init.js';
+import { runChat } from '../src/commands/chat.js';
+import { runUsage } from '../src/commands/usage.js';
 
 // Resolve package.json for version
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -56,7 +44,6 @@ program
   .command('init')
   .description('Initialize ~/.anya/ directory and configuration')
   .action(async () => {
-    const { runInit } = await import('../src/commands/init.js');
     await runInit();
   });
 
@@ -65,7 +52,6 @@ program
   .description('Send a single message to the agent and print the response')
   .argument('[message]', 'Message to send', 'Hello, who are you?')
   .action(async (message: string) => {
-    const { runChat } = await import('../src/commands/chat.js');
     await runChat(message);
   });
 
@@ -81,8 +67,7 @@ program
   .command('usage')
   .description('Show monthly API usage statistics')
   .option('-m, --month <YYYY-MM>', 'Show a specific month (default: current)')
-  .action(async (options) => {
-    const { runUsage } = await import('../src/commands/usage.js');
+  .action((options) => {
     runUsage(options.month);
   });
 

@@ -272,7 +272,7 @@ export class Agent {
     // ── Max loops reached ──
     const fallbackMsg = 'Warning: Maximum loop count reached. Please try simplifying your request.';
     newMessages.push({ role: 'assistant', content: fallbackMsg });
-    saveMessages(sessionId, newMessages);
+    await saveMessages(sessionId, newMessages);
 
     return {
       content: fallbackMsg,

@@ -1,4 +1,9 @@
 import type { Command } from 'commander';
+import chalk from 'chalk';
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { getSkill, loadSkills, listSkillFiles } from '../../src/skills/loader.js';
+import { SKILLS_DIR } from '../../src/lib/paths.js';
 
 export function registerSkills(program: Command): void {
   const skillsCmd = program
@@ -8,9 +13,7 @@ export function registerSkills(program: Command): void {
   skillsCmd
     .command('list')
     .description('List all installed skills')
-    .action(async () => {
-      const { loadSkills } = await import('../../src/skills/loader.js');
-      const chalk = (await import('chalk')).default;
+    .action(() => {
       const skills = loadSkills(true);
 
       if (skills.length === 0) {
@@ -30,10 +33,7 @@ export function registerSkills(program: Command): void {
   skillsCmd
     .command('view <name>')
     .description('View a skill\'s full content')
-    .action(async (name: string) => {
-      const { getSkill, loadSkills, listSkillFiles } = await import('../../src/skills/loader.js');
-      const chalk = (await import('chalk')).default;
-
+    .action((name: string) => {
       const skill = getSkill(name);
       if (!skill) {
         const all = loadSkills();
@@ -57,11 +57,7 @@ export function registerSkills(program: Command): void {
     .command('create <name>')
     .description('Create a new empty skill template')
     .option('-c, --category <category>', 'Category subdirectory', 'general')
-    .action(async (name: string, opts: { category: string }) => {
-      const { writeFileSync, mkdirSync, existsSync } = await import('node:fs');
-      const { join } = await import('node:path');
-      const { SKILLS_DIR } = await import('../../src/lib/paths.js');
-
+    .action((name: string, opts: { category: string }) => {
       const skillDir = join(SKILLS_DIR, opts.category, name);
       const skillPath = join(skillDir, 'SKILL.md');
 

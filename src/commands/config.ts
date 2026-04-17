@@ -6,6 +6,7 @@
 export {
   runConfigMenu,
   runConfigShow,
+  configLLM,
   configGemini,
   configAzure,
   configSTT,

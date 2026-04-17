@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm build *)",
+      "Bash(node /Users/bolt/agent/anya/dist/bin/anya.js --version)",
+      "Bash(node /Users/bolt/agent/anya/dist/bin/anya.js --help)",
+      "Bash(node dist/bin/anya.js --version)",
+      "Bash(node dist/bin/anya.js --help)",
+      "Bash(anya --version)",
+      "Bash(anya --help)"
+    ]
+  }
+}

@@ -1,4 +1,9 @@
 import type { Command } from 'commander';
+import chalk from 'chalk';
+import { input as promptInput } from '@inquirer/prompts';
+import { startScheduler, runJobManually } from '../../src/cron/scheduler.js';
+import { stopService, isServiceRunning } from '../../src/lib/pidfile.js';
+import { loadJobs, addJob, removeJob } from '../../src/cron/jobs.js';
 
 export function registerCron(program: Command): void {
   const cronCmd = program
@@ -9,7 +14,6 @@ export function registerCron(program: Command): void {
     .command('start')
     .description('Start the cron scheduler')
     .action(async () => {
-      const { startScheduler } = await import('../../src/cron/scheduler.js');
       await startScheduler();
     });
 
@@ -17,7 +21,6 @@ export function registerCron(program: Command): void {
     .command('stop')
     .description('Stop the cron scheduler')
     .action(async () => {
-      const { stopService } = await import('../../src/lib/pidfile.js');
       const stopped = await stopService('cron');
       console.log(stopped ? '\n  [ok] Cron stopped.\n' : '\n  Cron is not running.\n');
     });
@@ -25,9 +28,7 @@ export function registerCron(program: Command): void {
   cronCmd
     .command('status')
     .description('Show cron scheduler status')
-    .action(async () => {
-      const chalk = (await import('chalk')).default;
-      const { isServiceRunning } = await import('../../src/lib/pidfile.js');
+    .action(() => {
       const { running, pid } = isServiceRunning('cron');
       if (running) {
         console.log(`\n  Cron: ${chalk.green('running')} (PID ${pid})\n`);
@@ -39,9 +40,7 @@ export function registerCron(program: Command): void {
   cronCmd
     .command('list')
     .description('List all cron jobs')
-    .action(async () => {
-      const chalk = (await import('chalk')).default;
-      const { loadJobs } = await import('../../src/cron/jobs.js');
+    .action(() => {
       const jobs = loadJobs();
 
       if (jobs.length === 0) {
@@ -63,9 +62,6 @@ export function registerCron(program: Command): void {
     .command('add')
     .description('Add a new cron job')
     .action(async () => {
-      const { input: promptInput } = await import('@inquirer/prompts');
-      const { addJob } = await import('../../src/cron/jobs.js');
-
       const id = await promptInput({ message: 'Job ID (kebab-case):' });
       const name = await promptInput({ message: 'Job name:' });
       const schedule = await promptInput({ message: 'Cron schedule (e.g. "0 9 * * *"):' });
@@ -88,8 +84,7 @@ export function registerCron(program: Command): void {
   cronCmd
     .command('remove <id>')
     .description('Remove a cron job')
-    .action(async (id: string) => {
-      const { removeJob } = await import('../../src/cron/jobs.js');
+    .action((id: string) => {
       const removed = removeJob(id);
       console.log(removed ? `\n  [ok] Job "${id}" removed.\n` : `\n  Job "${id}" not found.\n`);
     });
@@ -98,8 +93,6 @@ export function registerCron(program: Command): void {
     .command('run <id>')
     .description('Run a cron job manually')
     .action(async (id: string) => {
-      const chalk = (await import('chalk')).default;
-      const { runJobManually } = await import('../../src/cron/scheduler.js');
       try {
         console.log(chalk.dim(`\n  Running job "${id}"...\n`));
         const result = await runJobManually(id);

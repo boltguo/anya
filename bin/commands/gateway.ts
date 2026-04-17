@@ -1,4 +1,11 @@
 import type { Command } from 'commander';
+import {
+  runGatewayStart,
+  runGatewayStop,
+  runGatewayRestart,
+  runGatewayStatus,
+  runGatewayLogs,
+} from '../../src/commands/gateway.js';
 
 export function registerGateway(program: Command): void {
   const gatewayCmd = program
@@ -10,7 +17,6 @@ export function registerGateway(program: Command): void {
     .description('Start the Telegram gateway')
     .option('--foreground', 'Run in foreground (for debugging)')
     .action(async (opts: { foreground?: boolean }) => {
-      const { runGatewayStart } = await import('../../src/commands/gateway.js');
       await runGatewayStart(opts.foreground);
     });
 
@@ -18,7 +24,6 @@ export function registerGateway(program: Command): void {
     .command('stop')
     .description('Stop the Telegram gateway')
     .action(async () => {
-      const { runGatewayStop } = await import('../../src/commands/gateway.js');
       await runGatewayStop();
     });
 
@@ -26,15 +31,13 @@ export function registerGateway(program: Command): void {
     .command('restart')
     .description('Restart the Telegram gateway')
     .action(async () => {
-      const { runGatewayRestart } = await import('../../src/commands/gateway.js');
       await runGatewayRestart();
     });
 
   gatewayCmd
     .command('status')
     .description('Show gateway status')
-    .action(async () => {
-      const { runGatewayStatus } = await import('../../src/commands/gateway.js');
+    .action(() => {
       runGatewayStatus();
     });
 
@@ -42,8 +45,7 @@ export function registerGateway(program: Command): void {
     .command('logs')
     .description('View gateway logs')
     .option('-n, --lines <n>', 'Number of lines to show', '50')
-    .action(async (opts: { lines: string }) => {
-      const { runGatewayLogs } = await import('../../src/commands/gateway.js');
+    .action((opts: { lines: string }) => {
       runGatewayLogs(parseInt(opts.lines, 10));
     });
 }
