@@ -178,15 +178,17 @@ Anya 是一个以 TypeScript 构建的个人 AI Agent 运行时，目标不是�
 
 - `src/skills/bundled/ielts/**`
 
-这是项目的业务重点：
+这是项目的业务重点，已从散技能集合升级为完整的 7.0-7.5 能力跃迁系统：
 
-- IELTS 初始化
-- 词汇学习与复习
-- 阅读、听力、口语、写作练习
-- 词汇数据库与 learner 数据库模板
-- 每日 briefing / 定时 word seed / word review 等工作流
+- **数据底座**：`learner.db`（samples / errors / subcap_scores / daily_tasks / mock_sessions / stage_transitions）+ `vocab.db`（words + paraphrase_groups）
+- **诊断大脑** (`assessment`)：4 模式（daily light / weekly deep / biweekly focus / on-demand），subcap 雷达 + 稳定性指标 + 根因三分类 + Active Driver
+- **路径调度** (`orchestrator`)：A/B/C 路径 + 4 阶段（diagnose / breakthrough / integrate / sprint）+ 每日 3 任务调度 + 认知负荷预算
+- **训练执行**：Writing（+ sentence-lab + 3 层反馈）/ Speaking（+ 素材库 + OEE/五要素）/ Listening（+ note-taking + 6 类认知错因）/ Reading（+ argument-map + attitude-scan）
+- **词汇系统** (`words`)：chunk / pattern / paraphrase_group / personal_error 五种 item_kind + 全技能自动沉淀
+- **整合验证** (`mock-exam`)：full / biweekly / weekly 三模式 + 迁移分析 + 稳定性评分 + 阶段跃迁检查
+- **定时生态**：08:00 orchestrator / 08:30 briefing / 20:00 deep assessment (周日) / 21:00 word review / 22:00 light assessment
 
-这些能力不是通过硬编码业务流程堆在 Agent 里，而是由 Skill 文档 + Tool + DB 组合构成。
+这些能力不是通过硬编码业务流程堆在 Agent 里，而是由 Skill 文档 + Tool + DB + Cron 组合构成闭环。
 
 ---
 
@@ -430,6 +432,37 @@ Agent 本身进一步接住 `shouldCompress` 类型错误并触发 Context Compr
 
 这是“轻索引 + 按需加载”的设计。
 
+### 8.4 IELTS 能力跃迁系统
+
+IELTS 技能群已从独立散技能升级为闭环能力系统，包含三层架构：
+
+#### 数据底座层
+
+- `learner.db`：samples（含 rewrite chain 追踪 parent_sample_id / prompt_hash）、errors（16 key taxonomy + root cause tags）、subcap_scores（25 个子能力 key）、daily_tasks、mock_sessions、stage_transitions
+- `vocab.db`：words（5 种 item_kind）、paraphrase_groups / paraphrase_members
+- Schema 管理：直接更新 `.sql` 模板 + 重传 `.db` 文件，无需迁移脚本
+
+#### 诊断与调度层
+
+- **Assessment**（诊断大脑）：daily light (22:00 silent) / weekly deep (周日 20:00 报告) / biweekly focus / on-demand。输出 subcap 雷达、稳定性指标（mean/std/trough）、根因分布、Active Driver
+- **Orchestrator**（路径调度中枢）：A/B/C 路径决策 + 4 阶段判定 + 每日负荷预算 + 今日 3 任务调度 + 阶段跃迁守门
+- **触发约定**：所有 skill 间调用统一使用显式 callback（如 `orchestrator:run`），禁止隐式链调用
+
+#### 训练执行层闭环
+
+每个训练 skill 完成后：写 samples + errors + subcap_scores → 沉淀表达到 vocab.db → 标记 daily_tasks.completed → 持久化难度反馈到 feedback JSON → 元认知自评用 force_reply 记 gap
+
+#### Cron 时序
+
+| 时间 | Job | 说明 |
+|---|---|---|
+| 07:15 | word-seed | 静默补库 |
+| 08:00 | orchestrator | 生成今日 3 任务 |
+| 08:30 | briefing | 推送晨报 + 任务仪表盘 |
+| 20:00 | assessment-deep | 周日周报 + orchestrator:run 按钮 |
+| 21:00 | word-review | 推送复习 |
+| 22:00 | assessment-light | 静默更新 MEMORY |
+
 ---
 
 ## 9. Telegram 子系统分析
@@ -510,6 +543,17 @@ Cron 不需要复杂交互，因此提供一个极轻量 `CronAdapter`：
 - `requestApproval()` 永远返回 `allow`
 
 说明 cron 任务被设计为无人值守执行路径。
+
+当前默认注册了 6 个 cron job：
+
+| ID | 名称 | 时间 | 投递 | 说明 |
+|---|---|---|---|---|
+| `cron_orchestrator` | Daily Task Generation | 08:00 每天 | cli (silent) | 生成今日 3 任务到 daily_tasks |
+| `cron_briefing` | Daily Briefing | 08:30 每天 | telegram | 晨报 + 任务仪表盘 |
+| `cron_assessment` | Weekly Deep Assessment | 20:00 周日 | telegram | 周报 + 路径刷新按钮 |
+| `cron_word_seed` | Word Inventory Seed | 07:15 每天 | cli (silent) | 补充 queued_new 词库 |
+| `cron_word_review` | Daily Word Review | 21:00 每天 | telegram | 复习推送 |
+| `cron_assessment_light` | Daily Light Assessment | 22:00 每天 | cli (silent) | 更新 MEMORY bands/errors |
 
 ### 10.3 Cron 与会话系统的连接
 

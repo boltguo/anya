@@ -19,6 +19,11 @@ import { ANYA_HOME } from './paths.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+export interface DailySttUsage {
+  calls: number;
+  duration_sec: number;
+}
+
 export interface MonthlyUsage {
   month: string; // YYYY-MM
 
@@ -56,6 +61,9 @@ export interface MonthlyUsage {
   web_search: {
     calls: number;
   };
+
+  /** Per-day STT breakdown, keyed by DD (01-31) */
+  stt_daily: Record<string, DailySttUsage>;
 }
 
 // ── Paths ────────────────────────────────────────────────────────────────────
@@ -71,6 +79,14 @@ function currentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function currentDay(): string {
+  return String(new Date().getDate()).padStart(2, '0');
+}
+
+function emptyDailyStt(): DailySttUsage {
+  return { calls: 0, duration_sec: 0 };
+}
+
 // ── Load / Save ──────────────────────────────────────────────────────────────
 
 function emptyUsage(month: string): MonthlyUsage {
@@ -83,6 +99,7 @@ function emptyUsage(month: string): MonthlyUsage {
     vision: { calls: 0 },
     image_gen: { calls: 0 },
     web_search: { calls: 0 },
+    stt_daily: {},
   };
 }
 
@@ -105,6 +122,7 @@ export function loadUsage(month?: string): MonthlyUsage {
       vision: { ...empty.vision, ...(data.vision || {}) },
       image_gen: { ...empty.image_gen, ...(data.image_gen || {}) },
       web_search: { ...empty.web_search, ...(data.web_search || {}) },
+      stt_daily: data.stt_daily || {},
     };
   } catch {
     return emptyUsage(m);
@@ -204,6 +222,11 @@ export function trackStt(durationSec: number): void {
   const usage = loadUsage();
   usage.stt.calls++;
   usage.stt.duration_sec += durationSec;
+  // daily accumulator
+  const day = currentDay();
+  if (!usage.stt_daily[day]) usage.stt_daily[day] = emptyDailyStt();
+  usage.stt_daily[day].calls++;
+  usage.stt_daily[day].duration_sec += durationSec;
   saveUsage(usage);
 }
 

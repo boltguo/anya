@@ -74,6 +74,11 @@ export function runUsage(month?: string): void {
   console.log(chalk.bold('  🎤 STT (Groq Whisper)'));
   console.log(`     Calls:    ${chalk.white(fmtNum(usage.stt.calls))}`);
   console.log(`     Duration: ${chalk.white(fmtDuration(usage.stt.duration_sec))}`);
+  const day = String(new Date().getDate()).padStart(2, '0');
+  const sttToday = usage.stt_daily?.[day];
+  if (sttToday && sttToday.calls > 0) {
+    console.log(`     Today:    ${chalk.yellow(fmtNum(sttToday.calls))} calls, ${chalk.yellow(fmtDuration(sttToday.duration_sec))}`);
+  }
   console.log();
 
   // ── Vision (Gemini) ──

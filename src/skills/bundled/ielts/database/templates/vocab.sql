@@ -1,5 +1,5 @@
 -- vocab.db schema
--- Vocabulary notebook with SRS (spaced repetition)
+-- Vocabulary notebook with SRS, chunks, patterns, and paraphrase groups
 
 CREATE TABLE IF NOT EXISTS words (
     word            TEXT PRIMARY KEY,
@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS words (
     srs_interval    INTEGER NOT NULL DEFAULT 0,
     srs_due         TEXT,
     srs_ease        REAL NOT NULL DEFAULT 2.5,
+    item_kind       TEXT NOT NULL DEFAULT 'word',
+    source_sample_id INTEGER,
     introduced_at   TEXT,
     last_seen_at    TEXT,
     created_at      TEXT NOT NULL,
@@ -41,9 +43,24 @@ CREATE TABLE IF NOT EXISTS word_events (
     created_at      TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_words_mastery ON words(mastery);
-CREATE INDEX IF NOT EXISTS idx_words_srs_due ON words(srs_due);
+CREATE TABLE IF NOT EXISTS paraphrase_groups (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic       TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS paraphrase_members (
+    group_id    INTEGER NOT NULL REFERENCES paraphrase_groups(id) ON DELETE CASCADE,
+    word_id     TEXT NOT NULL REFERENCES words(word) ON DELETE CASCADE,
+    register    TEXT NOT NULL DEFAULT 'neutral',
+    PRIMARY KEY (group_id, word_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_words_mastery        ON words(mastery);
+CREATE INDEX IF NOT EXISTS idx_words_srs_due        ON words(srs_due);
 CREATE INDEX IF NOT EXISTS idx_words_transfer_level ON words(transfer_level);
-CREATE INDEX IF NOT EXISTS idx_words_origin ON words(origin);
-CREATE INDEX IF NOT EXISTS idx_words_user_priority ON words(is_user_word, priority);
-CREATE INDEX IF NOT EXISTS idx_word_events_word ON word_events(word);
+CREATE INDEX IF NOT EXISTS idx_words_origin         ON words(origin);
+CREATE INDEX IF NOT EXISTS idx_words_user_priority  ON words(is_user_word, priority);
+CREATE INDEX IF NOT EXISTS idx_words_item_kind      ON words(item_kind);
+CREATE INDEX IF NOT EXISTS idx_word_events_word     ON word_events(word);
+CREATE INDEX IF NOT EXISTS idx_paraphrase_group     ON paraphrase_members(group_id);

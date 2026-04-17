@@ -114,8 +114,73 @@ All errors recorded by `data` MUST use a key from this taxonomy.
 
 ---
 
+## Chinese L1 Transfer (chinglish)
+
+Errors rooted in systematic Chinese-English language transfer (PRD §4B). Tracked as a distinct category for targeted remediation.
+
+| Key | Description | Example |
+| --- | --- | --- |
+| `chinglish_transfer` | Topic-comment structure, zero article, or other Chinese-influenced syntax | "This problem, we should solve it" |
+| `article_system` | Systematic article misuse beyond single slips (a/the/Ø pattern) | Consistent missing "the" before superlatives |
+| `modal_flat` | Insufficient should/could/might/may distinction; flat modal usage | "We should..." for every hedging context |
+| `connector_overload` | Excessive furthermore/moreover/additionally stacking | "Moreover, furthermore, in addition…" in one paragraph |
+| `lexical_repetition_high` | Same word/phrase reused 3+ times where paraphrase is expected | "important" × 5 in a single essay |
+| `self_correction_loop` | Repeated mid-sentence self-corrections that break fluency rhythm | "He goed… he went… he was going…" |
+
+## Advanced Writing (writing_advanced)
+
+Higher-order writing errors that block 6.5 → 7+ progression.
+
+| Key | Description | Example |
+| --- | --- | --- |
+| `argument_depth_weak` | Supporting ideas left as assertions without specifics | "Education is important because it helps people" (no data, no example) |
+| `task2_counterargument_miss` | Discussion essay fails to address the opposing view | Only argues one side in a "discuss both views" prompt |
+
+## Advanced Speaking (speaking_advanced)
+
+Structure and abstraction gaps relevant to Part 2/3 scoring.
+
+| Key | Description | Example |
+| --- | --- | --- |
+| `part2_structure_weak` | Cue Card response lacks story skeleton (setting/character/conflict/resolution/feeling) | Rambles without a clear narrative arc |
+| `part3_abstraction_gap` | Cannot discuss abstract/societal topics; falls back to personal anecdote | "In my opinion my friend also thinks so" instead of analyzing a trend |
+
+## Advanced Listening (listening_advanced)
+
+Cognitive-process errors beyond surface-level mishearing.
+
+| Key | Description | Example |
+| --- | --- | --- |
+| `attitude_signal_miss` | Fails to catch speaker's stance from discourse markers or tone | Misses "I'm afraid" as a softened disagreement |
+| `implied_meaning_fail` | Cannot infer unstated meaning from context or hedging | Takes "That's one way of looking at it" as agreement |
+| `note_taking_breakdown` | Information anchors lost due to note-taking overload or strategy failure | Writes too much detail, misses the next key point |
+
+## Advanced Reading (reading_advanced)
+
+Higher-order comprehension errors beyond word/sentence level.
+
+| Key | Description | Example |
+| --- | --- | --- |
+| `author_attitude_miss` | Cannot detect author stance through lexical cues (hedging, emphasis, irony) | Misreads "arguably" as a neutral statement |
+| `argument_structure_miss` | Fails to map claim → support → counter-argument relationships | Cannot identify which paragraph refutes the main thesis |
+
+---
+
+## Root Cause Tags
+
+Every `recurrence_key` should be tagged with one root cause when recorded in `errors`:
+
+| Root Cause | Tag | Covers |
+| --- | --- | --- |
+| Language | `root:language` | Vocab, grammar, phonetics — the learner doesn't know it yet |
+| Cognitive | `root:cognitive` | The learner knows it but fails under processing load |
+| Strategy | `root:strategy` | Wrong test-taking or time-management approach |
+
+---
+
 ## Maintenance
 
 - Review this taxonomy monthly
 - New keys require adding to this file first, then using in tracker
 - Retired keys should be marked as `[DEPRECATED]` but never deleted (historical data references them)
+- Root cause tags should be applied when errors are inserted into the `errors` table

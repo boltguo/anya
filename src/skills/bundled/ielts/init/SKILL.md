@@ -51,23 +51,46 @@ Never write to `USER.md` / `MEMORY.md` directly — always go through the `memor
 | 2     | 10-step learner profile               | `references/phase2-profile.md`       |
 | 3     | Persist USER.md (inside Phase 2 ref)  | `references/phase2-profile.md`       |
 | 4     | Baseline assessment + MEMORY write    | `references/phase4-assessment.md`    |
+| 4B    | Path assignment + first day tasks     | (auto-trigger orchestrator)          |
 | 5     | Wrap-up entry point (below)           | (in this file)                       |
 
 Run them in order. Don't skip. The interception rule applies if any earlier phase is incomplete when a later one is requested.
 
+## Phase 4B — Path Assignment (Auto)
+
+Immediately after Phase 4 writes MEMORY bands, trigger the orchestrator for first-time setup:
+
+1. Orchestrator determines initial `Path.type` (A/B/C) based on baseline bands
+2. Orchestrator sets `Current Stage` to `breakthrough` (diagnose is considered done)
+3. Orchestrator generates first day's 3 tasks and writes `daily_tasks`
+4. Orchestrator writes `Daily Load.budget` based on path type
+
+No separate message to learner — the results are shown in Phase 5.
+
 ## Phase 5 — Wrap Up
 
-Send one message via the native adapter with this inline keyboard:
+Send one message via the native adapter summarizing the learner's starting point:
 
 ```
-设置完成 ✅ 从哪里开始？
+设置完成 ✅
+
+📊 你的起点: {{overall_band}} ({{path_label}})
+🎯 当前阶段: {{stage_label}}
+📋 今日负荷预算: {{budget}}
+
+今天推荐先做:
+🔴 {{primary_task}}
 
 [KEYBOARD:
+🎯 开始今日训练=practice | 📊 查看画像=assessment
 ✍️ 写作=writing | 🗣️ 口语=speaking
 📖 阅读=reading | 🎧 听力=listening
-📚 单词=words | 📋 我的水平=assessment
+📚 单词=words
 ]
 ```
+
+Path labels: A=基础重建 / B=高原突破 / C=冲刺精进
+Stage labels: diagnose=诊断期 / breakthrough=突破期 / integrate=整合期 / sprint=冲刺期
 
 ## Telegram Interaction Style
 

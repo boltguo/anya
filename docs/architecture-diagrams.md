@@ -336,6 +336,7 @@ flowchart TD
 **这张图在讲什么：**
 
 - 定时任务如何从 `jobs.json` 被加载、触发、执行、投递
+- 当前 6 个 cron job 的完整时序
 
 ```mermaid
 flowchart TD
@@ -348,14 +349,27 @@ flowchart TD
   AGENT --> RESULT["result.content\n得到执行结果"]
   RESULT --> DELIVER{"deliver_to\n投递到哪里?"}
   DELIVER -->|telegram| TG["sendMessage via Bot API\n发到 Telegram"]
+  DELIVER -->|cli| SILENT["silent — no user message\n静默执行"]
   TG --> LINK["write mirrored messages to tg session history\n回写 Telegram 会话历史"]
   RESULT --> HISTORY["write cron history json\n写执行历史"]
+```
+
+**当前 6 个 cron job 时序：**
+
+```
+07:15  word-seed        → cli (silent)    补充 queued_new 词库
+08:00  orchestrator     → cli (silent)    生成今日 3 任务到 daily_tasks
+08:30  briefing         → telegram        推送晨报 + 任务仪表盘
+20:00  assessment-deep  → telegram        周日周报 + orchestrator:run 按钮
+21:00  word-review      → telegram        复习推送
+22:00  assessment-light → cli (silent)    更新 MEMORY bands/errors
 ```
 
 **怎么看：**
 
 - Cron 本质上也是调用 `Agent.run()`
 - 只是输入不是用户即时消息，而是 job 里的 prompt
+- silent job 用 `deliver_to: cli` 不发消息给用户，只更新数据
 
 ---
 
@@ -442,57 +456,87 @@ flowchart LR
 
 ---
 
-## 12. IELTS Skill Runtime 专项流程图
+## 12. IELTS 能力跃迁系统架构
 
 **这张图在讲什么：**
 
-- Learner 在 Telegram 里发来的消息，如何进入 IELTS 相关 skill
-- 单词、练习、定时任务这三大块如何和 `memory` / `db` / `tts` / `tg` 联动
+- 完整的 IELTS 闭环系统：Cron 生态 → Orchestrator → 训练执行 → Assessment → 数据回写
+- 三条核心数据流：日更任务链、训练闭环链、诊断刷新链
 
 ```mermaid
 flowchart TD
-  USER["Learner message on Telegram\n学习者在 Telegram 发消息"] --> ROUTE{"Intent\n意图识别"}
+  subgraph Cron["Cron 生态 (每日自动)"]
+    C1["07:15 word-seed\n静默补库"]
+    C2["08:00 orchestrator\n生成今日任务"]
+    C3["08:30 briefing\n推送晨报"]
+    C4["20:00 assessment-deep\n周日周报"]
+    C5["21:00 word-review\n推送复习"]
+    C6["22:00 assessment-light\n静默更新 MEMORY"]
+  end
 
-  ROUTE -->|单词 / lookup| WORDS["words skill\n单词技能"]
-  ROUTE -->|阅读 / 听力 / 口语 / 写作| PRACTICE["practice skill\n练习技能"]
-  ROUTE -->|初始化 / 建档| INIT["init skill\n初始化技能"]
-  ROUTE -->|定时任务| CRON["cron ielts skill\nIELTS 定时任务技能"]
+  subgraph Orchestrator["路径调度中枢"]
+    PATH["A/B/C 路径决策"]
+    STAGE["4 阶段判定\ndiagnose→breakthrough→integrate→sprint"]
+    LOAD["每日负荷预算"]
+    TASKS["生成 3 任务\nprimary/review/consolidation"]
+    PATH --> STAGE --> LOAD --> TASKS
+  end
 
-  INIT --> MEMREAD["read/write memories\n读写全局记忆"]
-  INIT --> DBINIT["db -> learner/vocab schema or records\n初始化学习数据库"]
+  subgraph Training["训练执行层"]
+    HUB["Dynamic Hub\n今日任务面板"]
+    W["Writing\n+sentence-lab"]
+    S["Speaking\n+素材库+OEE"]
+    L["Listening\n+note-taking"]
+    R["Reading\n+argument-map"]
+    V["Words\n+chunk/pattern"]
+    HUB --> W & S & L & R & V
+  end
 
-  WORDS --> WDB["db name=vocab\n访问词汇数据库"]
-  WDB --> WORDSTATE{"Word exists?\n数据库里已有这个词吗?"}
-  WORDSTATE -->|yes| CARD["reuse definition/example/audio_path\n复用已存释义/例句/音频"]
-  WORDSTATE -->|no| GEN["LLM generate meaning/example/collocations\n生成释义/例句/搭配"]
-  GEN --> TTS["tts generate segmented audio\n生成分段单词音频"]
-  TTS --> SAVEAUDIO["persist audio_path\n保存音频路径"]
-  SAVEAUDIO --> CARD
-  CARD --> TG["tg send voice + word card + keyboard\n发语音 + 单词卡 + 按钮"]
-  TG --> EVENT["db write word_events + counters\n写事件与统计计数"]
+  subgraph Completion["训练完成闭环"]
+    SAM["写 samples + errors"]
+    SUB["写 subcap_scores"]
+    HARV["沉淀到 vocab.db"]
+    DONE["标记 daily_tasks.completed"]
+    DIFF["持久化难度反馈"]
+    META["元认知 force_reply"]
+  end
 
-  PRACTICE --> PROFILE["read USER.md / MEMORY.md\n读取学习者画像与记忆"]
-  PROFILE --> LDB["db name=learner\n访问 learner 数据库"]
-  LDB --> CONTENT["build task / question / assessment\n构建题目/任务/评估"]
-  CONTENT --> INTERACT["tg / clarify / tts / pron_assess\n与用户交互"]
-  INTERACT --> RESULT["write learner progress / errors / scores\n写学习记录/错误/分数"]
+  subgraph Assessment["诊断大脑"]
+    LIGHT["Light (22:00)\n更新 MEMORY"]
+    DEEP["Deep (周日 20:00)\nsubcap 雷达 + 稳定性"]
+    DRIVER["Active Driver\nfocus + micro_action"]
+  end
 
-  CRON --> SEED["cron-word-seed / cron-review / briefing\n定时播种/复习/briefing"]
-  SEED --> VDB["db read vocab / learner\n读取词汇与学习数据"]
-  VDB --> PUSH["tg deliver briefing or review task\n推送 briefing 或复习任务"]
+  subgraph Data["数据底座"]
+    LDB[("learner.db\nsamples/errors/subcap_scores\ndaily_tasks/mock_sessions")]
+    VDB[("vocab.db\nwords/paraphrase_groups")]
+    MEM["MEMORY.md\nbands/driver/stage"]
+  end
 
-  RESULT --> TRANSFER{"Need vocab transfer?\n是否需要词汇迁移升级?"}
-  TRANSFER -->|yes| XFER["update vocab mastery / transfer_level\n提升词汇掌握度/迁移等级"]
-  TRANSFER -->|no| DONE["turn complete\n本轮结束"]
-  XFER --> DONE
-  EVENT --> DONE
+  C2 --> Orchestrator
+  TASKS -->|"写 daily_tasks"| LDB
+  C3 -->|"读 daily_tasks"| HUB
+
+  W & S & L & R & V --> SAM --> LDB
+  SAM --> SUB --> LDB
+  SAM --> HARV --> VDB
+  SAM --> DONE --> LDB
+  SAM --> DIFF --> LDB
+  SAM --> META
+
+  C6 --> LIGHT -->|"更新"| MEM
+  C4 --> DEEP -->|"更新"| MEM
+  DEEP -->|"orchestrator:run 按钮"| Orchestrator
+  MEM --> DRIVER --> Orchestrator
+  LDB --> Assessment
 ```
 
 **怎么看：**
 
-- `words` 主要围绕 `vocab.db`
-- `practice` 主要围绕 `learner.db`
-- 所有对用户的输出仍主要通过 `tg`、`tts`、`clarify` 等工具完成
+- 上层 Cron 驱动日更任务生成和诊断刷新
+- 中层 Orchestrator 根据 Active Driver 决定今天练什么
+- 下层训练执行完成后数据回写闭环：samples → subcap_scores → daily_tasks.completed
+- Assessment 消费训练数据产出 Active Driver，再反馈给 Orchestrator 形成循环
 
 ---
 
@@ -520,8 +564,8 @@ graph TD
   DATA --> IMG["images/\n图片目录"]
 
   STORE --> STATE["state.db\n会话与消息"]
-  STORE --> VOCAB["vocab.db\n单词数据库"]
-  STORE --> LEARNER["learner.db\n学习者数据库"]
+  STORE --> VOCAB["vocab.db\nwords + paraphrase_groups"]
+  STORE --> LEARNER["learner.db\nsamples / errors / subcap_scores\ndaily_tasks / mock_sessions"]
 
   AUDIO --> VOICE["voice/\n用户语音"]
   AUDIO --> TTS["tts/\n生成音频"]

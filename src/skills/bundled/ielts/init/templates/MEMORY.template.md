@@ -5,6 +5,23 @@
 - last_active: (not set)
 - total_sessions: 0
 
+## Path
+- type: (not set)
+- since: (not set)
+- rationale: (not set)
+
+## Current Stage
+- stage: (not set)
+- since: (not set)
+- criteria_met: (not set)
+- next_gate: (not set)
+
+## Daily Load
+- date: (not set)
+- budget: (not set)
+- consumed: 0
+- remaining: (not set)
+
 ## Calibration
 - profile_confidence: (not set)
 - based_on: (not set)
@@ -103,6 +120,8 @@
 - topic_bias: (not set)
 - watch_errors: (not set)
 - next_step: (not set)
+- stability_status: (not set)
+- next_micro_action: (not set)
 - reason: (not set)
 - updated_at: (not set)
 
@@ -122,3 +141,9 @@
 - best_prompt_style: (not set)
 - best_support_level: (not set)
 - revisit_next: (not set)
+
+## Metacognition
+- self_prediction_gap: (not set)
+- self_attribution_accuracy: (not set)
+- weekly_reflection_band: (not set)
+- total_reflections: 0

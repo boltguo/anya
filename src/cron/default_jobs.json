@@ -1,5 +1,15 @@
 [
   {
+    "id": "cron_orchestrator",
+    "name": "Daily Task Generation",
+    "schedule": "0 8 * * *",
+    "prompt": "Run the orchestrator skill: read it with skill_view first, then follow its Standard Run protocol. Read MEMORY for current path/stage/bands. Check if daily_tasks for today already exist — if yes, skip. Otherwise generate today's 3 tasks (primary/review/consolidation), write them to learner.db daily_tasks table, and update MEMORY Daily Load budget. This is a silent job — do not send any message to the learner.",
+    "deliver_to": "cli",
+    "attached_skills": ["orchestrator", "database"],
+    "enabled": true,
+    "created_at": "2026-04-17T08:00:00+08:00"
+  },
+  {
     "id": "cron_briefing",
     "name": "Daily Briefing",
     "schedule": "30 8 * * *",
@@ -13,9 +23,9 @@
     "id": "cron_assessment",
     "name": "Weekly Deep Assessment",
     "schedule": "0 20 * * 0",
-    "prompt": "Run deep weekly assessment using the assessment skill. Query all samples from the past 7 days from learner.db via the db tool. Analyze band scores, weaknesses, improvements, and vocabulary transfer. Update MEMORY.md, especially the Active Driver section. Send the weekly report to the learner.",
+    "prompt": "Run the cron-assessment-deep skill: read it with skill_view first, then follow its workflow exactly. Picks Deep vs Biweekly by week parity and delegates to the assessment skill.",
     "deliver_to": "telegram",
-    "attached_skills": ["assessment", "database"],
+    "attached_skills": ["cron-assessment-deep", "assessment", "database"],
     "enabled": true,
     "created_at": "2026-04-12T17:09:04+08:00"
   },
@@ -38,5 +48,16 @@
     "attached_skills": ["cron-word-review", "database"],
     "enabled": true,
     "created_at": "2026-04-16T04:22:00+08:00"
+  },
+  {
+    "id": "cron_assessment_light",
+    "name": "Daily Light Assessment",
+    "schedule": "0 22 * * *",
+    "prompt": "Run the cron-assessment-light skill: read it with skill_view first, then follow its workflow exactly. Silent daily MEMORY update.",
+    "deliver_to": "cli",
+    "attached_skills": ["cron-assessment-light", "assessment", "database"],
+    "enabled": true,
+    "created_at": "2026-04-17T10:00:00+08:00"
   }
 ]
+

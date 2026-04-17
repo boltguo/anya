@@ -1,10 +1,19 @@
 {
-  "main": {
-    "text": "🎯 想练什么？",
+  "menu_full": {
+    "text": "📚 全技能菜单 — 选择练习",
     "buttons": [
       ["✍️ 写作|nav:writing", "🗣️ 口语|nav:speaking"],
       ["📖 阅读|nav:reading", "🎧 听力|nav:listening"],
-      ["📚 单词|words", "📋 测评|assessment"]
+      ["📚 单词|words", "📋 测评|assessment"],
+      ["← 返回今日任务|practice"]
+    ]
+  },
+  "menu_ext": {
+    "text": "📖 延展轨 — 低负荷耐力训练",
+    "buttons": [
+      ["📖 泛读|reading:ext", "🎧 泛听|listening:ext"],
+      ["🗣️ 影子跟读|speaking:shadowing"],
+      ["← 返回今日任务|practice"]
     ]
   },
   "speaking": {
@@ -14,7 +23,7 @@
       ["🃏 话题卡|speaking:cuecard", "🎭 角色扮演|speaking:roleplay"],
       ["📖 复述|speaking:retell", "👨‍🏫 模考|speaking:exam"],
       ["🤖 自动选择|speaking"],
-      ["← 返回|nav:main"]
+      ["← 返回|nav:menu_full"]
     ]
   },
   "listening": {
@@ -22,24 +31,27 @@
     "buttons": [
       ["🔊 辨音|listening:sound", "✏️ 听写|listening:dictation"],
       ["🎬 短片|listening:clip", "📋 题型|listening:type"],
+      ["📝 笔记法|listening:notetaking", "📖 泛听|listening:ext"],
       ["🤖 自动选择|listening"],
-      ["← 返回|nav:main"]
+      ["← 返回|nav:menu_full"]
     ]
   },
   "reading": {
     "text": "📖 阅读练习 — 选择模式",
     "buttons": [
       ["⚡ 速读|reading:skim", "🔍 句子拆解|reading:anatomy"],
-      ["📖 标准练习|reading"],
-      ["← 返回|nav:main"]
+      ["📖 标准练习|reading", "🗺️ 论证结构|reading:argmap"],
+      ["👁️ 态度识别|reading:attitude", "📖 泛读|reading:ext"],
+      ["← 返回|nav:menu_full"]
     ]
   },
   "writing": {
     "text": "✍️ 写作练习 — 选择模式",
     "buttons": [
       ["💡 头脑风暴|writing:brain", "📝 TEEL段落|writing:teel"],
+      ["🔬 句子实验室|writing:sentlab"],
       ["🤖 自动选择|writing"],
-      ["← 返回|nav:main"]
+      ["← 返回|nav:menu_full"]
     ]
   }
 }
