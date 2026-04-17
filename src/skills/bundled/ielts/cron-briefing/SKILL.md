@@ -1,10 +1,6 @@
 ---
 name: cron-briefing
 description: 'Personalized daily IELTS briefing with timely topic selection, adapted article, audio, image, and pinned Telegram delivery'
-version: '3.0.0'
-metadatahermes:
-  tags: [ielts, daily_briefing, briefing, cron, news, telegram, tts, image]
-  category: anya
 ---
 
 # Daily Briefing

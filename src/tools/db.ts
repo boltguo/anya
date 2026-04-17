@@ -151,86 +151,142 @@ process.on('SIGTERM', () => { closeAllDatabases(); process.exit(0); });
 
 // ── db tool ──────────────────────────────────────────────────────────────────
 
+/**
+ * Return a compact schema dump for an entire database.
+ * One entry per table with columns and indexes — used for zero-shot discovery
+ * and for augmenting failed-query errors with relevant context.
+ */
+function dumpSchema(db: DatabaseSync, onlyTables?: string[]): unknown {
+  const tables = db.prepare(
+    "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+  ).all() as Array<{ name: string; sql: string }>;
+
+  const filter = onlyTables && onlyTables.length > 0
+    ? new Set(onlyTables.map(t => t.toLowerCase()))
+    : null;
+
+  return tables
+    .filter(t => !filter || filter.has(t.name.toLowerCase()))
+    .map(t => {
+      const columns = db.prepare(`PRAGMA table_info(${t.name})`).all() as Array<{
+        name: string; type: string; notnull: number; dflt_value: unknown; pk: number;
+      }>;
+      return {
+        table: t.name,
+        columns: columns.map(c => ({
+          name: c.name,
+          type: c.type,
+          notnull: c.notnull === 1,
+          default: c.dflt_value,
+          pk: c.pk === 1,
+        })),
+      };
+    });
+}
+
+/** Extract bare table identifiers from a SQL string (best-effort regex). */
+function extractTableNames(sql: string): string[] {
+  const found = new Set<string>();
+  const re = /\b(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+([A-Za-z_][A-Za-z0-9_]*)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(sql)) !== null) found.add(m[1]);
+  return [...found];
+}
+
 register({
   name: 'db',
-  description: 'Execute SQL on a named SQLite database. Database name maps to ~/.anya/data/store/<name>.db. Supports SELECT (returns rows as JSON), INSERT/UPDATE/DELETE (returns changes count), and CREATE TABLE/INDEX. Always use parameterized queries via the `params` array for safety.',
+  description: 'Execute SQL on a named SQLite database (~/.anya/data/store/<name>.db). SELECT returns rows; INSERT/UPDATE/DELETE/CREATE return change counts. Omit `sql` to get the full schema dump for `name` (useful for zero-shot discovery). Always use ? placeholders + `params` for values — never string-concat. On error, the response includes the schema for tables mentioned in the SQL so you can self-correct.',
   parameters: {
     type: 'object',
     properties: {
       name: {
         type: 'string',
-        description: 'Database name. Maps to <name>.db in the store directory.',
+        description: 'Database name (e.g. "learner", "vocab"). Maps to <name>.db in the store directory.',
       },
       sql: {
         type: 'string',
-        description: 'SQL statement to execute. Use ? placeholders for parameters.',
+        description: 'SQL statement. Use ? placeholders for values. Omit to get schema for all tables in this db.',
       },
       params: {
         type: 'string',
-        description: 'JSON array of parameter values for ? placeholders. Example: \'["writing", 5]\'',
+        description: 'JSON-stringified array of values for ? placeholders. Example: \'["writing", 5]\'. Use null for SQL NULL.',
       },
     },
-    required: ['name', 'sql'],
+    required: ['name'],
   },
 
   async execute(args: Record<string, unknown>, _context: ToolContext): Promise<string> {
     const dbName = String(args.name || '').trim();
     const sql = String(args.sql || '').trim();
-    const paramsRaw = args.params as string | undefined;
+    const paramsRaw = args.params;
 
     if (!dbName) return JSON.stringify({ error: 'Missing database name' });
-    if (!sql) return JSON.stringify({ error: 'Missing SQL statement' });
 
-    // Validate SQL against whitelist
+    // Schema-discovery mode: no SQL → return the full schema for this db.
+    if (!sql) {
+      try {
+        const db = getDatabase(dbName);
+        return JSON.stringify({ schema: dumpSchema(db) });
+      } catch (err) {
+        return JSON.stringify({ error: (err as Error).message });
+      }
+    }
+
     const sqlError = validateSql(sql);
     if (sqlError) return JSON.stringify({ error: sqlError });
 
-    // Parse parameters
     let params: unknown[] = [];
-    if (paramsRaw) {
+    if (paramsRaw !== undefined && paramsRaw !== null && paramsRaw !== '') {
       try {
         params = typeof paramsRaw === 'string' ? JSON.parse(paramsRaw) : paramsRaw as unknown[];
         if (!Array.isArray(params)) params = [params];
       } catch {
-        return JSON.stringify({ error: 'Invalid params JSON' });
+        return JSON.stringify({ error: 'Invalid params JSON — must be a JSON-stringified array, e.g. \'["a", 2]\'' });
       }
     }
 
+    let db: DatabaseSync;
     try {
-      const db = getDatabase(dbName);
+      db = getDatabase(dbName);
+    } catch (err) {
+      return JSON.stringify({ error: (err as Error).message });
+    }
+
+    try {
       const trimmedUpper = sql.trimStart().toUpperCase();
 
-      if (trimmedUpper.startsWith('SELECT') || trimmedUpper.startsWith('PRAGMA') || trimmedUpper.startsWith('EXPLAIN')) {
-        // Read query — return rows
+      if (trimmedUpper.startsWith('SELECT') || trimmedUpper.startsWith('PRAGMA') || trimmedUpper.startsWith('EXPLAIN') || trimmedUpper.startsWith('WITH')) {
         const stmt = db.prepare(sql);
         const rows = stmt.all(...params as any[]);
-
-        // Truncate if too many rows
         const MAX_ROWS = 100;
         const truncated = rows.length > MAX_ROWS;
         const result = truncated ? rows.slice(0, MAX_ROWS) : rows;
-
         return JSON.stringify({
           rows: result,
           count: rows.length,
           ...(truncated ? { truncated: true, total: rows.length } : {}),
         });
-      } else {
-        // Write query (INSERT, UPDATE, DELETE, CREATE, etc.)
-        const stmt = db.prepare(sql);
-        const result = stmt.run(...params as any[]);
-
-        return JSON.stringify({
-          ok: true,
-          changes: result.changes,
-          lastInsertRowid: typeof result.lastInsertRowid === 'bigint'
-            ? Number(result.lastInsertRowid)
-            : result.lastInsertRowid,
-        });
       }
+
+      const stmt = db.prepare(sql);
+      const result = stmt.run(...params as any[]);
+      return JSON.stringify({
+        ok: true,
+        changes: result.changes,
+        lastInsertRowid: typeof result.lastInsertRowid === 'bigint'
+          ? Number(result.lastInsertRowid)
+          : result.lastInsertRowid,
+      });
     } catch (err) {
-      const error = err as Error;
-      return JSON.stringify({ error: error.message });
+      const message = (err as Error).message;
+      // Self-correcting hint: attach schema for the tables in the SQL so the
+      // LLM can fix typos / wrong column names without another round-trip.
+      let schemaHint: unknown;
+      try { schemaHint = dumpSchema(db, extractTableNames(sql)); } catch { /* ignore */ }
+      return JSON.stringify({
+        error: message,
+        ...(schemaHint && Array.isArray(schemaHint) && schemaHint.length > 0 ? { schema: schemaHint } : {}),
+      });
     }
   },
 });

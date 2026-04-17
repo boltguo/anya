@@ -1,10 +1,6 @@
 ---
 name: assessment
 description: 'IELTS eval: 3 modes — daily cron / weekly cron / on-demand + difficulty tracking'
-version: '2.0.0'
-metadatahermes:
-  tags: [ielts, assessment, evaluation, band, report]
-  category: anya
 ---
 
 # Assessment Engine

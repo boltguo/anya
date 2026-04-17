@@ -7,9 +7,10 @@
  * 2. **Full** — Load complete SKILL.md body for a specific skill
  * 3. **Files** — List and read auxiliary files in a skill's directory
  *
- * Results are cached with a TTL to avoid redundant filesystem reads.
- * The skill index is injected into the system prompt so the LLM knows
- * which skills are available.
+ * The cache is invalidated automatically when any SKILL.md mtime changes
+ * (or when the skills directory itself changes), so live edits get picked
+ * up without restarting the bot. `invalidateCache()` is also exposed for
+ * explicit refresh after create/delete.
  */
 
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
@@ -17,10 +18,13 @@ import { join, basename, dirname, resolve, relative, sep } from 'node:path';
 import { SKILLS_DIR } from '../lib/paths.js';
 import { parseSkill, type Skill } from './parser.js';
 
-/**
- * Cached skills list. Invalidated on explicit reload.
- */
-let _cache: Skill[] | null = null;
+interface SkillCache {
+  skills: Skill[];
+  /** Map of SKILL.md path → mtimeMs at load time. */
+  mtimes: Map<string, number>;
+}
+
+let _cache: SkillCache | null = null;
 
 /**
  * Scan ~/.anya/skills/ recursively and load all SKILL.md files.
@@ -34,24 +38,40 @@ let _cache: Skill[] | null = null;
  *         scripts/     (optional)
  */
 export function loadSkills(forceReload = false): Skill[] {
-  if (_cache && !forceReload) return _cache;
+  if (!forceReload && _cache && isCacheFresh(_cache)) {
+    return _cache.skills;
+  }
 
   if (!existsSync(SKILLS_DIR)) {
-    _cache = [];
-    return _cache;
+    _cache = { skills: [], mtimes: new Map() };
+    return _cache.skills;
   }
 
   const skills: Skill[] = [];
-  scanDirectory(SKILLS_DIR, skills);
+  const mtimes = new Map<string, number>();
+  scanDirectory(SKILLS_DIR, skills, mtimes);
 
-  _cache = skills;
+  _cache = { skills, mtimes };
   return skills;
 }
 
 /**
- * Recursively scan a directory for SKILL.md files.
+ * Cheap freshness check: re-stat each tracked SKILL.md and bail out if any
+ * mtime moved. Adds/deletes are caught because the new file won't be in the
+ * map (or a deleted file's stat will throw).
  */
-function scanDirectory(dir: string, results: Skill[]): void {
+function isCacheFresh(cache: SkillCache): boolean {
+  for (const [path, mtime] of cache.mtimes) {
+    try {
+      if (statSync(path).mtimeMs !== mtime) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+function scanDirectory(dir: string, results: Skill[], mtimes: Map<string, number>): void {
   let entries: string[];
   try {
     entries = readdirSync(dir);
@@ -72,19 +92,18 @@ function scanDirectory(dir: string, results: Skill[]): void {
     }
 
     if (stat.isDirectory()) {
-      // Check if this directory contains a SKILL.md
       const skillPath = join(fullPath, 'SKILL.md');
       if (existsSync(skillPath)) {
         try {
           const content = readFileSync(skillPath, 'utf-8');
           const skill = parseSkill(content, skillPath, basename(fullPath));
           results.push(skill);
+          mtimes.set(skillPath, statSync(skillPath).mtimeMs);
         } catch {
           // Skip unparseable skills
         }
       } else {
-        // Recurse into subdirectories (category folders)
-        scanDirectory(fullPath, results);
+        scanDirectory(fullPath, results, mtimes);
       }
     }
   }
@@ -110,8 +129,7 @@ export function buildSkillIndex(): string {
   lines.push('Use `skill_view` to read the full procedure before executing a skill.\n');
 
   for (const skill of skills) {
-    const tags = skill.tags.length > 0 ? ` [${skill.tags.join(', ')}]` : '';
-    lines.push(`- **${skill.name}**: ${skill.description}${tags}`);
+    lines.push(`- **${skill.name}**: ${skill.description}`);
   }
 
   return lines.join('\n');

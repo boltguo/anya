@@ -1,9 +1,6 @@
 ---
 name: cron-word-seed
 description: 'Silent vocabulary inventory refill: keep queued_new words ready for future learning sessions'
-version: '1.0.0'
-tags: [ielts, vocabulary, seed, cron, silent]
-category: anya
 ---
 
 # Word Inventory Seed

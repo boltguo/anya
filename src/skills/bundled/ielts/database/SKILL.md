@@ -1,9 +1,6 @@
 ---
 name: database
 description: "Database schema and query reference for learner progress and vocabulary"
-version: "2.0.0"
-tags: [ielts, data, sqlite]
-category: anya
 ---
 
 # Learning Data Store
@@ -16,6 +13,17 @@ All persistent data is stored in SQLite via the `db` tool. Schema is auto-initia
 |------|--------|---------|
 | `learner` | `samples`, `errors`, `sample_words` | Practice records and error tracking |
 | `vocab` | `words`, `word_events` | Vocabulary notebook, seeded queue, lookup history, and SRS review |
+
+## Schema Discovery
+
+If you don't remember the columns for a database, call `db` with **just** the name:
+
+```
+db name=learner            # → returns full schema for all tables in learner.db
+db name=vocab              # → returns full schema for all tables in vocab.db
+```
+
+If a query fails (typo, wrong column), the error response automatically includes the schema for the tables in the failing SQL — read it and retry.
 
 ## Common Queries
 

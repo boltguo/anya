@@ -1,9 +1,6 @@
 ---
 name: cron-word-review
 description: 'Daily vocabulary review push: only review already introduced words from vocab.db'
-version: '2.0.0'
-tags: [ielts, vocabulary, review, cron, telegram]
-category: anya
 ---
 
 # Word Review Push

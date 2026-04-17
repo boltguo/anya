@@ -7,8 +7,8 @@ Each skill's SKILL.md contains the complete step-by-step checklist; this file do
 
 ## Session Data
 
-All session data saved to `~/.anya/data/ielts/learn/{timestamp}_{type}.json`.
-Synced to `learner.db` via `db` tool after completion.
+All session, error, and band data live in `learner.db` and `vocab.db`.
+Write through the `db` tool only — no JSON sidecar files.
 
 ## 10-Step Universal Training Loop
 

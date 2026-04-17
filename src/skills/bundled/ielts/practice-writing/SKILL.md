@@ -1,10 +1,6 @@
 ---
 name: practice-writing
 description: 'IELTS writing: brainstorming + TEEL scaffold + forced rewrite loop + Task 1/2'
-version: '3.0.0'
-metadatahermes:
-  tags: [ielts, writing, task1, task2, teel, rewrite]
-  category: anya
 ---
 
 # Writing Coach — Scaffolded Rewrite System
@@ -17,30 +13,48 @@ metadatahermes:
 
 ## Data
 
-Session saved to `~/.anya/data/ielts/learn/{timestamp}_writing.json` after completion.
-Synced to `learner.db` via `db` tool.
+All session, error, and band data live in `learner.db` (tables `samples` + `errors`).
+Write through the `db` tool only — no JSON sidecar files.
 
-## Mode Matrix
+Useful queries:
 
-| Phase          | Mode                       | When                             | Callback           |
-| -------------- | -------------------------- | -------------------------------- | ------------------ |
-| **Cold start** | Brainstorming              | band < 5.5, brain blank          | `writing:brain` |
-| **Paragraph**  | TEEL Drill                 | Logic scattered, can't structure | `writing:teel`  |
-| **Full task**  | Full Task + Forced Rewrite | Regular training                 | `writing`       |
-| **Task 1**     | Chart Description          | Task 1 practice                  | (via S2 decision)  |
+```
+# Recent writing sessions
+db name=learner sql="SELECT id, created_at, band_overall FROM samples WHERE skill_type='writing' ORDER BY created_at DESC LIMIT 5"
 
----
+# Top recurring writing errors
+db name=learner sql="SELECT recurrence_key, category, COUNT(*) as count FROM errors e JOIN samples s ON e.sample_id=s.id WHERE s.skill_type='writing' GROUP BY recurrence_key ORDER BY count DESC LIMIT 10"
 
-## Workflow
+# Inject 3 transferable challenge words for a topic
+db name=vocab sql="SELECT word, definition FROM words WHERE topics LIKE ? AND mastery IN ('learning','known') AND transfer_level >= 2 ORDER BY is_user_word DESC, priority DESC, srs_due ASC LIMIT 3" params='["%<topic>%"]'
+```
 
-### [ ] S1 — Context Load
+If a column is unfamiliar, call `db name=learner` (no sql) for a full schema dump.
 
-1. Read MEMORY.md → current writing band + weak dimensions
-2. Read USER.md → interests (for topic personalization)
-3. Query `db name=learner sql="SELECT id, created_at, band_overall FROM samples WHERE skill_type='writing' ORDER BY created_at DESC LIMIT 5"`
-4. Query `db name=learner sql="SELECT recurrence_key, category, COUNT(*) as count FROM errors e JOIN samples s ON e.sample_id=s.id WHERE s.skill_type='writing' GROUP BY recurrence_key ORDER BY count DESC LIMIT 10"`
+## Mode Matrix → Reference Files
 
-### [ ] S2 — Decision Engine
+| Phase          | Mode                       | When                             | Callback           | Reference                                |
+| -------------- | -------------------------- | -------------------------------- | ------------------ | ---------------------------------------- |
+| **Cold start** | Brainstorming              | band < 5.5, brain blank          | `writing:brain`    | `references/modes/brainstorming.md`      |
+| **Paragraph**  | TEEL Drill                 | Logic scattered, can't structure | `writing:teel`     | `references/modes/teel.md`               |
+| **Full task**  | Full Task + Forced Rewrite | Regular training                 | `writing`          | `references/modes/full-task.md`          |
+| **Task 1**     | Chart Description          | Task 1 practice                  | (via S2 decision)  | `references/modes/full-task.md` (Task 1) |
+
+Load before executing:
+
+```
+skill_view name=practice-writing file=references/modes/<mode>.md
+```
+
+## Universal Workflow
+
+### S1 — Context Load
+
+1. `memory target=user action=read` → interests
+2. `memory target=memory action=read` → current writing band, weak dimensions
+3. Recent writing samples + top errors (queries above)
+
+### S2 — Decision Engine
 
 Decide task type:
 
@@ -49,139 +63,20 @@ Decide task type:
 
 Target difficulty = current band + 0.5.
 
-Check if Brainstorming is needed:
+Routing rules:
 
-- band < 5.5 → **force Brainstorming phase** before writing
-- band ≥ 5.5 → direct to prompt
-
-Check if TEEL Drill is appropriate:
-
+- band < 5.5 → **force Brainstorming phase** (`references/modes/brainstorming.md`) before writing
+- band ≥ 5.5 → direct to Full Task
 - `paragraph_structure_weak` or `topic_sentence_weak` in recent errors → suggest TEEL Drill
-- User callback `writing:teel` → TEEL Drill mode
+- Callback `writing:teel` → TEEL Drill mode
 
-Vocabulary injection:
+### S3-S5 — Per Mode
 
-```
-db name=vocab sql="SELECT word, definition FROM words WHERE topics LIKE ? AND mastery IN ('learning','known') AND transfer_level >= 2 ORDER BY is_user_word DESC, priority DESC, srs_due ASC LIMIT 3" params='["%<topic>%"]'
-```
-
----
-
-## Phase: Brainstorming (band < 5.5, mandatory)
-
-> Don't let the learner write before they think.
-
-### [ ] S3a — Brainstorming
-
-```
-tg(type:"force_reply", text:"先不写正文！\n\n用中文或简单英文列出 2 个支持论点：\n题目: <topic>\n\n比如：\n1. 原因/论点1\n2. 原因/论点2")
-```
-
-### [ ] S3b — Translate to IELTS Vocabulary
-
-Anya translates the learner's arguments into IELTS-level vocabulary and collocations:
-
-```
-你的论点很好！用雅思高分表达：
-
-1. "环境污染" → environmental degradation / ecological damage
-   搭配: pose a significant threat to...
-2. "省钱" → cost-effective / financially viable
-   搭配: in the long run, this approach proves to be...
-
-现在带着这些表达开始写 👇
-```
-
-Then proceed to S4.
-
----
-
-## Phase: TEEL Drill (paragraph-level scaffold)
-
-> For learners with `paragraph_structure_weak` or `topic_sentence_weak` errors.
-
-### [ ] S3-TEEL — Step-by-Step Paragraph
-
-Present the TEEL structure with step-by-step force_reply:
-
-**T — Topic Sentence:**
-
-```
-tg(type:"force_reply", text:"📝 T (主题句): 用一句话表达你这段的核心观点\n\n题目: <topic>")
-```
-
-→ Evaluate: Is it a clear, arguable statement? Feedback immediately.
-
-**E — Explain:**
-
-```
-tg(type:"force_reply", text:"📝 E (解释): 为什么你这么认为？用1-2句解释")
-```
-
-→ Evaluate: Does it logically support the topic sentence?
-
-**E — Example:**
-
-```
-tg(type:"force_reply", text:"📝 E (举例): 给一个具体的例子来支持你的观点")
-```
-
-→ Evaluate: Is the example specific (not vague "many people think so")?
-
-**L — Link:**
-
-```
-tg(type:"force_reply", text:"📝 L (总结): 用一句话总结这段，呼应主题句")
-```
-
-→ Evaluate: Does it close the paragraph logically?
-
-### [ ] S5-TEEL — Assemble + Score
-
-Combine all 4 parts into a complete paragraph. Score with 4D criteria.
-
-Then proceed to S6 (Focused Feedback) → S8 (Micro Drill) → S9 (Forced Rewrite).
-
----
-
-## Phase: Full Task (regular training)
-
-### [ ] S3 — Send Prompt
-
-If Task 2:
-
-```
-tg(type:"force_reply", text:"✍️ **Writing Task 2**\n\n<prompt text>\n\n⏱ 目标：250+ 词\n💡 挑战词汇：<injected words>")
-```
-
-If Task 1 — first select chart type:
-
-```
-[KEYBOARD:
-📊 柱状图=writing:bar | 📈 折线图=writing:line | 🥧 饼图=writing:pie
-🗺️ 地图=writing:map | 🔄 流程图=writing:process
-]
-```
-
-Then generate chart description (or `tg(type:"photo")` if image available):
-
-```
-tg(type:"force_reply", text:"✍️ **Writing Task 1**\n\n<chart description>\n\n⏱ 目标：150+ 词\n💡 图表高频词：fluctuate, peak, plateau, account for, respectively")
-```
-
-### [ ] S4 — Wait for Response
-
-Learner writes and submits.
-
-### [ ] S5 — Wait for Response (continued)
-
-Accept the text.
-
----
+Read the corresponding `references/modes/<mode>.md`, then execute its S3-S5. Then continue to the shared S6-S10 below.
 
 ## Shared Steps (All Modes)
 
-### [ ] S6 — 4D Scoring + Diff Highlight
+### S6 — 4D Scoring + Diff Highlight
 
 | Criterion                | Score   |
 | ------------------------ | ------- |
@@ -198,14 +93,14 @@ Highlight specific issues with diff markers:
 ✅ "This is **detrimental** to **the** environment"
 ```
 
-### [ ] S7 — Focused Feedback (1-2 core bottlenecks only)
+### S7 — Focused Feedback (1-2 core bottlenecks only)
 
 Do NOT list 10 errors. Pick the **1-2 most impactful** issues:
 
 - Example: "缺连接词" + "bad 太低级"
 - Show Band-Up: current sentence → +1.0 band version
 
-### [ ] S8 — Micro Drill
+### S8 — Micro Drill
 
 Target the #1 bottleneck with a mini-exercise:
 
@@ -213,15 +108,15 @@ Target the #1 bottleneck with a mini-exercise:
 tg(type:"force_reply", text:"用 detrimental 替换 bad，造一个新句子")
 ```
 
-Verify the micro drill response. If wrong, give one correction and move on.
+Verify the response. If wrong, give one correction and move on.
 
-### [ ] S9 — Forced Rewrite (**不重写完不准下课**)
+### S9 — Forced Rewrite (**不重写完不准下课**)
 
 ```
 tg(type:"force_reply", text:"带着新的连接词和高级词汇，把整个段落重写一遍发给我")
 ```
 
-**AI Compare**: Initial draft vs rewrite.
+**AI Compare**: initial draft vs rewrite.
 
 If improved (≥ +0.5 band on any dimension):
 
@@ -239,7 +134,7 @@ If NOT improved:
 
 → One more rewrite attempt. Max 2 rewrites, then move on with encouragement.
 
-### [ ] S10 — Record + Difficulty Feedback
+### S10 — Record + Difficulty Feedback
 
 ```
 db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_task, band_coherence, band_lexical, band_grammar, band_overall, session_id) VALUES (datetime('now'), 'writing', ?, ?, ?, ?, ?, ?, ?)" params='["<mode>", null, null, null, null, null, "<session_id>"]'
@@ -254,7 +149,14 @@ db name=learner sql="INSERT INTO errors (sample_id, recurrence_key, category, se
 ]
 ```
 
----
+## Telegram Interaction Style
+
+- **`force_reply` for all text input.** Links the answer to the prompt and avoids race conditions.
+- **No text reply alongside `force_reply`.** Send the prompt, then wait.
+- **`react` (🎉)** to celebrate a successful rewrite — lighter than another text message.
+- **`edit`** to update an in-progress scoring card rather than sending a new message.
+- **`<tg-spoiler>`** for model answers / sample paragraphs the learner shouldn't see first.
+- **Diff markers (~strikethrough~ / **bold**)** to highlight before/after fixes inline.
 
 ## Rules
 
@@ -262,10 +164,6 @@ db name=learner sql="INSERT INTO errors (sample_id, recurrence_key, category, se
 2. **Never give a model answer before the learner writes.**
 3. **Brainstorming is mandatory for band < 5.5.** No direct writing allowed.
 4. **Forced Rewrite is mandatory.** 不重写完不准下课. Max 2 rewrite attempts.
-5. **Task 2 topics**: Push beyond comfort zone. Vary: environment, education, health, society.
-6. **Task 1 topics**: Vary chart types. Don't repeat consecutively.
-7. **Force-reply for all input.** Links the answer to the prompt.
-8. **No text reply alongside force-reply.** Avoids race conditions.
-9. **Micro Drill + Forced Redo are mandatory.** No session ends without S8+S9.
-10. **Difficulty feedback keyboard at every session end.**
-11. **Challenge words**: Inject recently learned L2+ vocabulary.
+5. **Challenge words.** Inject recently learned L2+ vocabulary.
+6. **Difficulty feedback keyboard at every session end.**
+7. **Record every session into `learner.db`** (S10).

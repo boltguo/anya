@@ -21,19 +21,8 @@ export function registerSkills(program: Command): void {
 
       console.log(`\n  ${chalk.bold('Installed Skills')} (${skills.length})\n`);
 
-      const byCategory = new Map<string, typeof skills>();
-      for (const skill of skills) {
-        const cat = skill.category || 'general';
-        if (!byCategory.has(cat)) byCategory.set(cat, []);
-        byCategory.get(cat)!.push(skill);
-      }
-
-      for (const [category, catSkills] of byCategory) {
-        console.log(`  ${chalk.dim(category + '/')}`);
-        for (const s of catSkills) {
-          const tags = s.tags.length > 0 ? chalk.dim(` [${s.tags.join(', ')}]`) : '';
-          console.log(`    ${chalk.cyan(s.name)} - ${s.description}${tags}`);
-        }
+      for (const s of skills) {
+        console.log(`    ${chalk.cyan(s.name)} - ${s.description}`);
       }
       console.log('');
     });
@@ -54,9 +43,8 @@ export function registerSkills(program: Command): void {
         process.exit(1);
       }
 
-      console.log(`\n  ${chalk.bold(skill.name)} v${skill.version}`);
+      console.log(`\n  ${chalk.bold(skill.name)}`);
       console.log(`  ${chalk.dim(skill.description)}`);
-      if (skill.tags.length > 0) console.log(`  Tags: ${skill.tags.join(', ')}`);
       console.log(`  Path: ${chalk.dim(skill.filePath)}`);
 
       const files = listSkillFiles(name);
@@ -85,9 +73,6 @@ export function registerSkills(program: Command): void {
       const template = `---
 name: ${name}
 description: TODO - describe what this skill does
-version: 1.0.0
-tags: []
-category: ${opts.category}
 ---
 
 # When to Use

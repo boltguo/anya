@@ -1,9 +1,6 @@
 ---
 name: practice
 description: "Practice entry: paging inline keyboard for IELTS skill drills"
-version: "3.0.0"
-tags: [ielts, practice, menu, telegram]
-category: anya
 ---
 
 # Practice Entry — Paging Inline Keyboard

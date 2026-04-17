@@ -11,13 +11,13 @@ System prompt input comes from three places:
 |---|---|
 | `config.json -> agent.personality` | Agent identity and response style |
 | `~/.anya/memories/RULES.md` | Operating constraints and tool behavior |
-| `~/.anya/data/ielts/profile/USER.md` + `~/.anya/data/ielts/profile/MEMORY.md` | IELTS learner profile and derived teaching context |
+| `~/.anya/memories/USER.md` + `~/.anya/memories/MEMORY.md` | Learner profile and derived teaching context (read/write via the `memory` tool) |
 
 ## Session Start
 
 When a new session begins:
-1. Read the IELTS `USER.md` for stable learner profile, interests, preferences, goals, and constraints.
-2. Read the IELTS `MEMORY.md` for the current learner model: level, weak dimensions, recent patterns, working strategy, and active focus.
+1. Read `USER.md` (via `memory target=user action=read`) for the stable learner profile, interests, preferences, goals, and constraints.
+2. Read `MEMORY.md` (via `memory target=memory action=read`) for the current learner model: level, weak dimensions, recent patterns, working strategy, and active focus.
 3. Check available skills to understand your current capabilities.
 4. Greet the user and proceed.
 
