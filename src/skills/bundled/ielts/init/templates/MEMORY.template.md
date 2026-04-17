@@ -1,34 +1,20 @@
 # Agent Memory — Learner State
 
 ## Status
+
 - initialized: false
 - last_active: (not set)
 - total_sessions: 0
 
-## Path
-- type: (not set)
-- since: (not set)
-- rationale: (not set)
-
-## Current Stage
-- stage: (not set)
-- since: (not set)
-- criteria_met: (not set)
-- next_gate: (not set)
-
-## Daily Load
-- date: (not set)
-- budget: (not set)
-- consumed: 0
-- remaining: (not set)
-
 ## Calibration
+
 - profile_confidence: (not set)
 - based_on: (not set)
-- last_full_assessment: (not set)
-- next_recalibration_trigger: (not set)
+- score_source: (not set)
+- latest_score_update: (not set)
 
 ## IELTS Bands
+
 - Overall: (not set)
 - Listening: (not set)
 - Reading: (not set)
@@ -37,6 +23,7 @@
 - updated: (not set)
 
 ## Adaptive Training Controls
+
 - recommended_difficulty: (not set)
 - recommended_support_level: (not set)
 - speaking_complexity: (not set)
@@ -47,6 +34,7 @@
 - redo_priority: (not set)
 
 ## Vocabulary Profile
+
 - cefr: (not set)
 - receptive_level: (not set)
 - productive_level: (not set)
@@ -56,18 +44,21 @@
 - target_cefr: (not set)
 
 ## Grammar Profile
+
 - mastered: (not set)
 - weak: (not set)
 - unstable_under_pressure: (not set)
 - priority_patterns: (not set)
 
 ## Weak Dimensions
+
 - Writing: (not set)
 - Speaking: (not set)
 - Listening: (not set)
 - Reading: (not set)
 
 ## Listening Profile
+
 - gist_comprehension: (not set)
 - detail_comprehension: (not set)
 - note_completion: (not set)
@@ -78,6 +69,7 @@
 - question_type_risks: (not set)
 
 ## Speaking Profile
+
 - fluency: (not set)
 - pronunciation: (not set)
 - pronunciation_weak: (not set)
@@ -89,6 +81,7 @@
 - best_modes: (not set)
 
 ## Reading Profile
+
 - pace: (not set)
 - skimming: (not set)
 - sentence_parsing: (not set)
@@ -98,6 +91,7 @@
 - timed_stability: (not set)
 
 ## Writing Profile
+
 - task_response: (not set)
 - coherence: (not set)
 - grammar_accuracy: (not set)
@@ -108,33 +102,24 @@
 - revision_dependence: (not set)
 
 ## Error Tendencies
+
 - self_correction_ability: (not set)
 - recurring_error_keys: (not set)
 - fossilized_or_recurrent: (not set)
 
-## Active Driver
-- primary_focus: (not set)
-- secondary_focus: (not set)
-- recommended_modes: (not set)
-- support_level: (not set)
-- topic_bias: (not set)
-- watch_errors: (not set)
-- next_step: (not set)
-- stability_status: (not set)
-- next_micro_action: (not set)
-- reason: (not set)
-- updated_at: (not set)
-
 ## Study Consistency
+
 - streak_days: 0
 - avg_weekly_sessions: 0
 - completion_rate: (not set)
 - fatigue_pattern: (not set)
 
 ## Top Errors
+
 - key (category): count
 
 ## Coaching Strategy
+
 - what_works: (not set)
 - what_to_avoid: (not set)
 - best_topic_hooks: (not set)
@@ -143,6 +128,7 @@
 - revisit_next: (not set)
 
 ## Metacognition
+
 - self_prediction_gap: (not set)
 - self_attribution_accuracy: (not set)
 - weekly_reflection_band: (not set)

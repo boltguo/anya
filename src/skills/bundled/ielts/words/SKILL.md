@@ -1,6 +1,6 @@
 ---
 name: words
-description: 'Vocabulary hub: lookup, learning, spaced review, chunk/pattern/paraphrase support, path-aware seeding, cross-skill transfer'
+description: 'Vocabulary hub: lookup, learning, spaced review, chunk/pattern/paraphrase support, score-aware seeding, cross-skill transfer'
 ---
 
 # Words — Unified Memory System
@@ -93,17 +93,17 @@ Load before executing:
 skill_view name=words file=references/modes/<mode>.md
 ```
 
-## Path-Aware Vocabulary (for cron-word-seed)
+## Score-Aware Vocabulary (for cron-word-seed)
 
-The type of vocabulary seeded depends on the learner's current path:
+The type of vocabulary seeded depends on the learner's current `IELTS Bands.Overall`:
 
-| Path | Seed Priority | Examples |
+| Overall band | Seed Priority | Examples |
 |---|---|---|
-| **A** (Foundation) | Basic chunks + high-frequency collocations | "on the other hand", "in terms of" |
-| **B** (Plateau Break) | Output-oriented expressions + academic chunks | "It is widely acknowledged that...", "contribute to" |
-| **C** (Sprint) | High-register replacements + nuanced hedging | "arguably", "to a certain extent", "notwithstanding" |
+| `< 5.0` | Basic chunks + high-frequency collocations | "on the other hand", "in terms of" |
+| `5.0-6.0` | Output-oriented expressions + useful academic chunks | "It is widely acknowledged that...", "contribute to" |
+| `6.5+` | High-register replacements + nuanced hedging | "arguably", "to a certain extent", "notwithstanding" |
 
-Read MEMORY `Path.type` to determine seed strategy.
+Read MEMORY `IELTS Bands.Overall` to determine seed strategy.
 
 ## Learn Mode: Chunk / Pattern Cards
 
@@ -174,7 +174,7 @@ Reviewing paraphrase groups trains `reading.paraphrase_mapping` and `writing.lex
 Training skills automatically deposit high-value expressions:
 
 1. **Writing feedback** → Chunks and patterns used in band-7+ rewrites are harvested with `source_sample_id`
-2. **Speaking feedback** → Good collocations from examiner-sim are harvested
+2. **Speaking feedback** → Good collocations from successful speaking practice are harvested
 3. **Reading** → Attitude words from attitude-scan mode are harvested as patterns
 4. **Listening** → Academic vocabulary from lecture mode is harvested
 
@@ -192,11 +192,7 @@ Each harvested item uses `origin='auto_harvest'` and links back to its source vi
 
 ## Session Completion
 
-After a learn or review session, mark daily_task completed if applicable:
-
-```
-db name=learner sql="UPDATE daily_tasks SET completed = 1, completed_at = datetime('now') WHERE id = (SELECT id FROM daily_tasks WHERE date = date('now') AND skill = 'words' AND completed = 0 LIMIT 1)"
-```
+After a learn or review session, update word counters and `word_events` only. No task scheduling is required.
 
 ## Rules
 
@@ -212,4 +208,4 @@ db name=learner sql="UPDATE daily_tasks SET completed = 1, completed_at = dateti
 10. **Chunk and pattern cards** use specialized formats, not the standard word card.
 11. **Paraphrase groups** are reviewed as sets, showing register differences.
 12. **Auto-harvested items** must have `source_sample_id` linking back to the training session.
-13. **Path-aware seeding**: A=basic chunks, B=output expressions, C=high-register replacements.
+13. **Score-aware seeding**: lower bands get high-frequency chunks first, higher bands get nuanced replacements and hedging.

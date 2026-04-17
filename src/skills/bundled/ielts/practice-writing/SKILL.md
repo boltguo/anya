@@ -62,7 +62,7 @@ skill_view name=practice-writing file=references/modes/<mode>.md
 ### S1 — Context Load
 
 1. `memory target=user action=read` → interests
-2. `memory target=memory action=read` → current writing band, weak dimensions, Path type, Daily Load remaining
+2. `memory target=memory action=read` → current writing band, weak dimensions, adaptive controls
 3. Recent writing samples + top errors (queries above)
 
 ### S2 — Decision Engine
@@ -82,7 +82,6 @@ Routing rules:
 - `chinglish_transfer` or `lexical_repetition_high` or `word_choice_basic` in recent errors → suggest **Sentence Lab**
 - Callback `writing:teel` → TEEL Drill mode
 - Callback `writing:sentlab` → Sentence Lab mode
-- If Daily Load remaining < mode's load_score → suggest Sentence Lab (load_score=2) instead of Full Task (load_score=4)
 
 ### S3-S5 — Per Mode
 
@@ -205,12 +204,6 @@ Auto-harvest high-value expressions into vocab.db:
 db name=vocab sql="INSERT OR IGNORE INTO words (word, definition, chinese, pos, source, origin, example_en, mastery, item_kind, source_sample_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'practice', 'auto_harvest', ?, 'learning', 'chunk', ?, datetime('now'), datetime('now'))" params='["take ... into account", "to consider", "考虑到", "chunk", "We must take all factors into account.", <sample_id>]'
 ```
 
-Mark daily_task as completed if applicable:
-
-```
-db name=learner sql="UPDATE daily_tasks SET completed = 1, completed_at = datetime('now'), sample_id = ? WHERE id = (SELECT id FROM daily_tasks WHERE date = date('now') AND skill = 'writing' AND completed = 0 LIMIT 1)" params='[<sample_id>]'
-```
-
 Persist difficulty feedback when the learner taps the difficulty button (`feedback_too_hard` / `feedback_just_right` / `feedback_too_easy`):
 
 ```
@@ -257,3 +250,4 @@ Record the gap between prediction and actual score. Store `abs(prediction - actu
 8. **3-layer feedback is mandatory.** Every scoring must separate Task / Logic / Language layers.
 9. **Chinglish and connector overload checks** are mandatory for band 5.5+.
 10. **Auto-harvest** good expressions from rewrites into vocab.db as chunks.
+11. **Do not aggregate MEMORY here.** Record raw evidence; the dedicated `assessment` skill updates MEMORY later.

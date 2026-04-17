@@ -48,7 +48,6 @@ If a column is unfamiliar, call `db name=learner` (no sql) for a full schema dum
 | **Argument Map**      | Understanding essay structure                 | Identify claim/support/counter        | `reading:argmap`      | 3          | `references/modes/argument-map.md`         |
 | **Attitude Scan**     | Author stance detection                       | Find attitude words + judge stance    | `reading:attitude`    | 2          | `references/modes/attitude-scan.md`        |
 | **Ext-Reading**       | Reading stamina / fluency                     | 10-min non-exam text, gist only      | `reading:ext`         | 1          | `references/modes/ext-reading.md`          |
-| **Timed Exam**        | Exam prep (band 6.5+)                         | 900 words + 15-min strict cutoff      | (advanced)            | 4          | `references/modes/standard.md` (15-min)    |
 
 Load before executing:
 
@@ -61,7 +60,7 @@ skill_view name=practice-reading file=references/modes/<mode>.md
 ### S1 — Context Load + Mode Selection
 
 1. `memory target=user action=read` → interests
-2. `memory target=memory action=read` → current reading band, reading pace, Path type, Daily Load remaining
+2. `memory target=memory action=read` → current reading band, reading pace, weak dimensions
 3. Recent reading samples + top errors (queries above)
 
 **Auto Mode Selection** (if no specific `reading:*` callback):
@@ -70,7 +69,6 @@ skill_view name=practice-reading file=references/modes/<mode>.md
 - `sentence_anatomy_fail` or `tfng_logic_error` frequent → **Sentence Anatomy** (also auto-triggered after wrong answers in Standard)
 - `author_attitude_miss` in recent errors → **Attitude Scan**
 - `argument_structure_miss` in recent errors → **Argument Map**
-- If Daily Load remaining < mode's load_score → suggest **Ext-Reading** (load_score=1)
 - Default → **Standard Practice**
 
 ### S2 — Vocabulary Injection
@@ -145,12 +143,6 @@ Plus a mode-specific exit row (see each mode's reference).
 
 ## Session Completion (S10 — All Modes)
 
-After recording the sample, mark daily_task completed and persist difficulty feedback:
-
-```
-db name=learner sql="UPDATE daily_tasks SET completed = 1, completed_at = datetime('now'), sample_id = ? WHERE id = (SELECT id FROM daily_tasks WHERE date = date('now') AND skill = 'reading' AND completed = 0 LIMIT 1)" params='[<sample_id>]'
-```
-
 Persist difficulty feedback when learner taps button:
 
 ```
@@ -166,4 +158,4 @@ db name=learner sql="UPDATE samples SET feedback = json_set(COALESCE(feedback,'{
 5. **Record every session into `learner.db`** (S10) with subcap_scores and performance metadata.
 6. **Argument Map and Attitude Scan** are prioritized when corresponding errors appear.
 7. **Ext-reading is stamina building only.** No scoring, no pressure.
-8. **Load score respected.** Low budget → suggest ext-reading.
+8. **Do not aggregate MEMORY here.** Record raw evidence; the dedicated `assessment` skill updates MEMORY later.

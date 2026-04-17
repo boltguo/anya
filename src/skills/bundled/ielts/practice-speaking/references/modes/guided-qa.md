@@ -57,5 +57,5 @@ db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, band_o
 Difficulty feedback keyboard with this exit row:
 
 ```
-🔁 再来一题=speaking:qa | ⬆️ 试试考官=speaking:exam | 🏠 返回=menu
+🔁 再来一题=speaking:qa | 🔄 试试复述=speaking:retell | 🏠 返回=menu
 ```

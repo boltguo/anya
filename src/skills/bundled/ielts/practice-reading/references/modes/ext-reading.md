@@ -12,7 +12,7 @@
 - `reading:ext` callback
 - Good for low daily load budget (load_score = 1)
 - Ideal for building reading habits without exam pressure
-- Recommended: at least 2x per week in orchestrator schedule
+- Recommended: at least 2x per week as a low-pressure reading habit
 
 ## Load Score: 1
 
@@ -85,7 +85,7 @@ db name=learner sql="INSERT INTO samples (created_at, skill_type, prompt, raw_co
 
 No subcap_scores for ext-reading. No error tracking. Just log completion for streak.
 
-Mark daily_task as completed if applicable.
+No task scheduling is required here. Just log completion.
 
 ## Exit Keyboard
 

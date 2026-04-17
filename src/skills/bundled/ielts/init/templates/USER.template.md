@@ -1,29 +1,35 @@
 # Learner Profile
 
 ## Status
+
 - initialized: false
 
 ## Identity
+
 - Name: (not set)
-- Native language: (not set)
 - Profession: (not set)
 - Hobbies: (not set)
 
 ## Goals
-- IELTS target: (not set)
+
+- English target: (not set)
 - Timeline: (not set)
 - Use case: (not set)
 
 ## Content Profile
+
 - engage: (not set)
 - avoid: (not set)
 - daily_english: (not set)
 
 ## Background
+
+- current_level_estimate: (not set)
 - english_strength: (not set)
 - english_weakness: (not set)
 
 ## Preferences
+
 - Tone: (not set)
 - Study pattern: (not set)
 - Platform: Telegram (mobile)

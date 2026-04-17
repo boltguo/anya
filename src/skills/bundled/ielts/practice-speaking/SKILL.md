@@ -1,9 +1,9 @@
 ---
 name: practice-speaking
-description: 'IELTS speaking: 6-mode layered training with pron_assess, Part2/3 structure feedback, material bank, micro drill, forced redo, subcap profiling'
+description: 'IELTS speaking: 5-mode layered training with pron_assess, structure feedback, material bank, micro drill, forced redo, subcap profiling'
 ---
 
-# Speaking Coach — 6-Mode Training System
+# Speaking Coach — 5-Mode Training System
 
 ## Pedagogical Foundation
 
@@ -53,7 +53,6 @@ Each mode has its own deep workflow. After picking a mode, load the correspondin
 | **Cue Card Build** | 5.0-6.0 | Medium      | `tts` + `force_reply`            | `speaking:cuecard`    | 3          | `references/modes/cue-card-build.md`         |
 | **Role-play**      | 4.5-6.0 | Medium      | `tts` + multi-turn `force_reply` | `speaking:roleplay`   | 3          | `references/modes/roleplay.md`               |
 | **Retell**         | All     | Variable    | `tts` + `pron_assess`            | `speaking:retell`     | 2          | `references/modes/retell.md`                 |
-| **Examiner Sim**   | 5.5+    | Low/None    | `tts` + `pron_assess`            | `speaking:exam`       | 4          | `references/modes/examiner-sim.md`           |
 
 Load before executing:
 
@@ -74,7 +73,7 @@ Every session follows the 10-step universal training loop. The skill-specific S3
 ### S1 — Context Load
 
 1. `memory target=user action=read` → interests, goals
-2. `memory target=memory action=read` → current speaking band, fluency, `pronunciation_weak`, Path type, Daily Load remaining
+2. `memory target=memory action=read` → current speaking band, fluency, `pronunciation_weak`, weak dimensions
 3. Recent speaking samples + top errors (queries above)
 
 ### S2 — Mode Selection
@@ -84,16 +83,15 @@ If callback is `speaking:<mode>` → use that mode directly. Otherwise apply the
 1. `fluency < 4.0` AND `pronunciation_weak` has multiple entries → **Shadowing**
 2. `answer_length` consistently below target → **Guided QA**
 3. Part 2 coverage < 60% in last 2 sessions → **Cue Card Build**
-4. 3 consecutive Examiner Sim sessions → **Retell** or **Role-play** (alternate)
-5. If Daily Load remaining < mode's load_score → suggest **Shadowing** (load_score=1) or **Retell** (load_score=2)
-6. Default → **Examiner Sim**
+4. If the last 2 sessions used the same mode → switch to **Retell** or **Role-play**
+5. Default → **Retell** for `band >= 5.5`, otherwise **Guided QA**
 
 Show the recommended mode + allow the learner to override:
 
 ```
 [KEYBOARD:
 🎯 推荐: 跟读=speaking:shadowing
-🗣️ 问答=speaking:qa | 🎤 考官=speaking:exam
+🗣️ 问答=speaking:qa
 📋 提纲=speaking:cuecard | 🎭 对话=speaking:roleplay
 🔄 复述=speaking:retell
 ]
@@ -176,12 +174,6 @@ Record the gap between prediction and actual score. Store `abs(prediction - actu
 
 ## Session Completion (S10 — All Modes)
 
-After recording the sample, mark daily_task completed and persist difficulty feedback:
-
-```
-db name=learner sql="UPDATE daily_tasks SET completed = 1, completed_at = datetime('now'), sample_id = ? WHERE id = (SELECT id FROM daily_tasks WHERE date = date('now') AND skill = 'speaking' AND completed = 0 LIMIT 1)" params='[<sample_id>]'
-```
-
 Persist difficulty feedback when learner taps button:
 
 ```
@@ -194,7 +186,7 @@ db name=learner sql="UPDATE samples SET feedback = json_set(COALESCE(feedback,'{
 - **TTS every correction.** The learner needs to hear the right pronunciation.
 - **`force_reply` per turn.** Links the answer to the prompt and avoids race conditions.
 - **No text reply alongside `force_reply`.** Send the prompt, then wait.
-- **`pron_assess` for all voice input** in Shadowing and Examiner Sim modes.
+- **`pron_assess` for all voice input** in Shadowing mode and whenever pronunciation is the current bottleneck.
 - **IPA next to every TTS pronunciation fix.**
 - **`react` for lightweight ack** (e.g., 👍 on a correct redo) instead of full text.
 - **`edit` to update an in-progress card** rather than sending a new message.
@@ -221,4 +213,4 @@ Plus a mode-specific exit row (see each mode's reference for its variant).
 6. **Structure feedback is mandatory.** Part 2 → five elements; Part 3 → OEE.
 7. **Subcap scores written every session.** Use only keys from subcap_catalog.md.
 8. **Material bank integration.** Check existing materials before generating prompts.
-9. **Load score respected.** If daily budget nearly consumed, suggest low-intensity modes.
+9. **Do not aggregate MEMORY here.** Record raw evidence; the dedicated `assessment` skill updates MEMORY later.

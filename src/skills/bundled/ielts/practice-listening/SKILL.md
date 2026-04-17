@@ -64,7 +64,7 @@ Auxiliary: `references/tts.md` — voice choices, dialogue mode, rate guidelines
 ### S1 — Context Load
 
 1. `memory target=user action=read` → interests
-2. `memory target=memory action=read` → current listening band, `listening_risk`, Path type, Daily Load remaining
+2. `memory target=memory action=read` → current listening band, weak dimensions, listening profile
 3. Recent listening samples + top errors (queries above)
 
 ### S2 — Mode Selection
@@ -76,7 +76,7 @@ If callback is `listening:<mode>` → use that mode directly. Otherwise apply au
 3. Specific question type consistently wrong → **Question Type Drill**
 4. `note_taking_breakdown` in recent errors → **Note-Taking** mode
 5. Overall stable → rotate **Short Clip** / **Lecture**
-6. If Daily Load remaining < mode's load_score → suggest **Ext-Listening** (load_score=1)
+6. If the learner recently marked tasks as `too_hard`, suggest **Ext-Listening** or **Dictation**
 7. Every week: at least 1 Dictation session (all levels)
 
 Show recommended mode + allow override:
@@ -201,12 +201,6 @@ Plus a mode-specific exit row (see each mode's reference).
 
 ## Session Completion (S10 — All Modes)
 
-After recording the sample, mark daily_task completed and persist difficulty feedback:
-
-```
-db name=learner sql="UPDATE daily_tasks SET completed = 1, completed_at = datetime('now'), sample_id = ? WHERE id = (SELECT id FROM daily_tasks WHERE date = date('now') AND skill = 'listening' AND completed = 0 LIMIT 1)" params='[<sample_id>]'
-```
-
 Persist difficulty feedback when learner taps button:
 
 ```
@@ -223,4 +217,4 @@ db name=learner sql="UPDATE samples SET feedback = json_set(COALESCE(feedback,'{
 6. **Progressive accent exposure**: Standard first, British/Australian for 6.5+.
 7. **Record every session into `learner.db`** (S10) with subcap_scores.
 8. **Ext-listening is input accumulation only.** No scoring, no pressure.
-9. **Load score respected.** Low budget → suggest ext-listening or dictation.
+9. **Do not aggregate MEMORY here.** Record raw evidence; the dedicated `assessment` skill updates MEMORY later.

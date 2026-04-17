@@ -1,458 +1,134 @@
 # Anya
 
-Anya 是一个本地优先的个人 AI Agent runtime。它以 `~/.anya/` 为运行时中心，围绕统一的 `Agent.run()` 内核，提供 Telegram Bot、Cron 主动任务、Skill 驱动工作流，以及面向 IELTS 场景的成套能力。`anya chat` 目前主要用于本地 smoke test，确认链路是否打通。
-
-当前实现重点不是“多 provider 选择器”，而是：
-
-- **单一主 LLM 路径**：统一使用 OpenAI Codex Responses API
-- **本地数据持久化**：配置、记忆、技能、数据库、日志都在 `~/.anya/`
-- **Skill + Tool 架构**：用结构化 skill 描述流程，用 tool 执行动作
-- **Telegram / Cron 一等公民**：适合长期运行的个人 agent
-
----
-
-## 核心特性
-
-- **统一 ReAct Agent Core**：所有入口都复用 `Agent.run()`
-- **单一 OpenAI Provider**：无 provider 选择分支，默认模型为 `gpt-5.4`
-- **本地 SQLite 持久化**：会话、消息、IELTS 数据全部本地保存
-- **Tool Registry**：文件、Shell、网页搜索、数据库、记忆、TTS、图片生成、Telegram 富交互等能力统一暴露
-- **Skill System**：skills 用 Markdown 管理，支持索引注入和按需加载
-- **Telegram Runtime**：支持文本、语音、图片、按钮回调、状态消息、出站队列
-- **Cron Runtime**：支持定时主动执行任务并回写 Telegram 会话历史
-- **IELTS Bundled Skills**：内置听说读写、单词、daily briefing、数据库模板等完整能力集
-
----
-
-## 当前架构摘要
-
-```mermaid
-graph TB
-  subgraph Entry["Entry Layer"]
-    BIN["bin/anya.ts"]
-    CLI["CLI Commands"]
-    TG["Telegram Gateway"]
-    CRON["Cron Scheduler"]
-  end
-
-  subgraph Core["Agent Runtime"]
-    AGENT["Agent.run()"]
-    PROMPT["promptBuilder"]
-    HISTORY["history + compression"]
-    PROVIDER["OpenAIProvider"]
-    TOOLS["Tool Registry"]
-    SKILLS["Skill Loader"]
-  end
-
-  subgraph Data["~/.anya/"]
-    MEM["memories/"]
-    SKDIR["skills/"]
-    STORE["data/store/*.db"]
-    AUDIO["data/audio/"]
-    IMG["data/images/"]
-    LOGS["logs/"]
-    CRONJOBS["cron/jobs.json"]
-  end
-
-  BIN --> CLI
-  CLI --> AGENT
-  TG --> AGENT
-  CRON --> AGENT
-
-  AGENT --> PROMPT
-  AGENT --> HISTORY
-  AGENT --> PROVIDER
-  AGENT --> TOOLS
-  PROMPT --> MEM
-  PROMPT --> SKILLS
-  SKILLS --> SKDIR
-  TOOLS --> STORE
-  TOOLS --> AUDIO
-  TOOLS --> IMG
-```
-
-更完整分析见：
-
-- [`docs/architecture.md`](./docs/architecture.md)
-- [`docs/architecture-diagrams.md`](./docs/architecture-diagrams.md)
-- [`docs/runtime-data-layout.md`](./docs/runtime-data-layout.md)
-
----
+> 用 IELTS 的优质训练内容，提升真实英语能力。
 
 ## 项目定位
 
-Anya 现在更适合被理解为：
+Anya 不是一个“刷题器”，也不应该是一个“考官机器人”。
 
-> 一个围绕 `~/.anya/` 运转的本地 agent runtime，而不是一个只提供聊天入口的 CLI 程序。
+这个项目的更合理定位是：一个运行在 Telegram 上的陪伴式英语私教。它借用 IELTS 在听、说、读、写上的高质量题型设计、训练颗粒度和评分框架，但目标不是把学习者推入持续的模考、定级、算分压力，而是让学习者通过科学训练，真实地变强。
 
-也就是说：
+理想效果是：
 
-- `anya chat` 仍然存在，但主要只是一个测链路是否打通的本地测试入口
-- Telegram gateway 和 Cron scheduler 才是长期运行场景的核心组成部分
-- provider 层不再强调“用户选哪个模型供应商”，而是默认走单一 OpenAI 路径
+- 日常体验像私教陪练，而不是考试监考
+- 训练内容仍然足够专业，保留 IELTS 的方法论价值
+- 英语能力先提升，考试成绩随后自然跟上
+- 最终达到“无心插柳柳成荫”：不是为了分数而学，但去考也能拿高分
 
----
+## 目标中的产品形态
 
-## 安装与初始化
+Anya 应该更像这样：
 
-### 环境要求
+- 第一次进入时，先开始一小段真实练习，而不是先被“测一轮”
+- 系统通过几次自然互动，逐步感知水平，而不是一次性死板定级
+- 默认首页是“今天可以怎么练”，而不是“你现在几分、该走哪条路径”
+- 反馈以“下一步怎么更自然、更清楚、更地道”为主，而不是“你这次是 5.5 还是 6.0”
+- IELTS 被当成高质量训练素材库和能力框架，而不是项目本身的气质
 
-- **Node.js >= 22**
-- **OpenAI / Codex 登录态**：用于 Responses API
-- **Tavily API Key**：可选，用于 `web_search`
-- **Telegram Bot Token**：可选，用于 Telegram gateway
-- **Groq API Key**：可选，用于语音转写 STT
-- **Azure Speech Key**：可选，用于发音评测等语音能力
-- **Gemini API Key**：可选，仅用于图片理解/图片生成相关能力，不是主对话 provider
+一句话说，这个仓库的方向应该是：
 
-### 快速开始
+**IELTS-inspired English coaching, not IELTS-pressure machinery.**
 
-```bash
-# 安装依赖并构建
-pnpm install
-pnpm build
+## Agent 架构
 
-# 初始化运行时目录 ~/.anya/
-anya init
+运行链路可以概括成：
 
-# 本地测通链路
-anya chat "hello"
-```
+`Telegram / CLI 输入 → Agent → tools / skills → SQLite → assessment 汇总 → MEMORY.md → 下一轮按当前水平出题`
 
-初始化后会创建：
+更细一点：
 
-- `config.json`
-- `config.schema.json`
-- `memories/USER.md`
-- `memories/MEMORY.md`
-- `memories/RULES.md`
-- `cron/jobs.json`
-- `skills/.bundled/`
-- `data/`、`logs/`、`run/` 等运行时目录
+1. 用户从 Telegram 或 CLI 进入
+2. `Agent` 读取系统 prompt、`USER.md`、`MEMORY.md`、已安装 skills 索引
+3. 模型根据请求决定调用哪个 skill / tool
+4. 练习类 skill 把原始证据写进 `learner.db` / `vocab.db`
+5. `assessment` 在手动或定时触发时分析这些学习数据，回写 `MEMORY.md`
+6. 后续 `practice-*` skill 再按 `MEMORY` 里的 band / weak dimensions / adaptive controls 控制难度和支架
 
----
+这套结构的关键分工是：
 
-## 命令入口
+- 训练 skill 负责“产生日志和样本”
+- `assessment` 负责“聚合分析并更新 MEMORY”
+- `MEMORY` 负责“给下一轮训练提供难度控制和学习画像”
 
-当前命令入口来自 `bin/anya.ts`，核心命令包括：
+## Skills 职责
 
-```bash
-anya init
-anya chat <message>
-anya doctor
-anya config ...
-anya skills ...
-anya gateway ...
-anya cron ...
-anya sessions ...
-anya usage
-anya dataTransfer ...
-```
-
-说明：
-
-- 不再以“交互式 CLI shell”作为主要产品叙事
-- `chat` 当前主要用于 **本地 smoke test / 测链路是否打通**
-- 长时间运行能力主要由 `gateway` 与 `cron` 提供
-
----
-
-## 单一 Provider 设计
-
-当前代码中，LLM 路径已经收敛为：
-
-- `src/providers/openai.ts`
-- `getProvider()` 恒定返回 `OpenAIProvider`
-
-这意味着：
-
-- 不需要 provider 选择开关
-- 不需要 Gemini / OpenAI 二选一配置逻辑
-- 默认主模型即 `config.provider.model`，默认值为 `gpt-5.4`
-
-### 当前 Provider 职责边界
-
-主 LLM 负责：
-
-- ReAct 对话推理
-- 工具调用
-- 最终回答生成
-
-Gemini 相关配置保留的意义主要是：
-
-- 视觉分析
-- 图片生成
-
-而不是主对话 provider。
-
----
-
-## 配置说明
-
-主配置文件位于：
-
-- `~/.anya/config.json`
-
-关键字段：
-
-| 字段                   | 说明                                     |
-| ---------------------- | ---------------------------------------- |
-| `provider.model`       | 主 LLM 模型，默认 `gpt-5.4`              |
-| `provider.max_tokens`  | 最大输出 token                           |
-| `provider.temperature` | 生成温度                                 |
-| `provider.max_retries` | provider 调用重试次数                    |
-| `tools.enabled`        | 启用的工具列表                           |
-| `telegram.*`           | Telegram 网关配置                        |
-| `stt.*`                | 语音转写配置                             |
-| `tts.*`                | TTS 默认声音配置                         |
-| `azure.*`              | Azure Speech 配置                        |
-| `gemini.*`             | 图片/视觉相关配置                        |
-| `advanced.*`           | 上下文窗口、压缩阈值、循环次数等高级参数 |
-
-### 环境变量覆盖
-
-```bash
-ANYA_MODEL=gpt-5.4
-ANYA_TAVILY_API_KEY=tvly-...
-ANYA_TELEGRAM_BOT_TOKEN=123456:ABC...
-ANYA_GEMINI_API_KEY=...
-ANYA_HOME=/custom/path/.anya
-```
-
----
-
-## Telegram Gateway
-
-Telegram 侧是当前最完整的平台运行形态。
-
-支持：
-
-- 文本消息
-- 语音消息下载与 STT 转写
-- 图片下载与视觉分析
-- callback query
-- inline keyboard / reply keyboard
-- 工具执行状态消息
-- 单轮出站队列串行化
-
-### 基本启动
-
-```bash
-anya gateway start
-anya gateway status
-anya gateway logs -n 100
-anya gateway stop
-```
-
-### 必要配置
-
-在 `config.json` 中启用：
-
-```json
-{
-  "telegram": {
-    "enabled": true,
-    "bot_token": "<your-bot-token>",
-    "allowed_user_ids": [123456789]
-  }
-}
-```
-
----
-
-## Cron Runtime
-
-Cron 用于主动任务执行，比如：
-
-- 定时晨报
-- IELTS 单词播种
-- 周期性复习提醒
-- 自动 briefing 推送
-
-### 常见命令
-
-```bash
-anya cron list
-anya cron add
-anya cron run <id>
-anya cron start
-anya cron stop
-```
-
-Cron job 定义保存在：
-
-- `~/.anya/cron/jobs.json`
-
-执行历史保存在：
-
-- `~/.anya/cron/history/`
-
----
-
-## Skills System
-
-Skill 是 Anya 的领域能力层。当前仓库里最完整的是 IELTS 系列 bundled skills。
-
-### Skill 加载方式
-
-1. `anya init` 把仓库中的 bundled skills 复制到 `~/.anya/skills/.bundled`
-2. `loadSkills()` 递归扫描 `SKILL.md`
-3. 系统 prompt 中只先注入 skill index
-4. 真正执行前，再按需加载 skill 正文或附属模板/参考文件
-
-### 典型 skill 附属资源
-
-- `templates/*.md`
-- `templates/*.sql`
-- `references/*.md`
-- `menu.json`
-
-这套设计很适合像 IELTS 这种：
-
-- 有清晰流程
-- 有数据库模板
-- 有固定提示格式
-- 需要跨 session 持续学习的垂类场景
-
----
-
-## IELTS 能力概览
-
-当前 bundled IELTS skills 包括：
+当前真正可用、带 `SKILL.md` 的 IELTS skills 有这些：
 
 - `init`
-- `words`
-- `practice-reading`
-- `practice-listening`
-- `practice-speaking`
+  首次 onboarding。收集最小用户档案，做轻量水平校准，写入 `USER.md` / `MEMORY.md`，然后把用户送进训练菜单。
+- `practice`
+  训练总入口。负责展示训练菜单，把用户路由到听说读写或词汇模块。
 - `practice-writing`
+  写作训练。负责 brainstorming、TEEL、sentence-lab、full-task、rewrite loop、错误记录和写作样本落库。
+- `practice-speaking`
+  口语训练。负责 shadowing、guided QA、cue card、role-play、retell、发音反馈和口语样本落库。
+- `practice-reading`
+  阅读训练。负责 flash-skim、sentence anatomy、argument map、attitude scan、ext-reading 和阅读样本落库。
+- `practice-listening`
+  听力训练。负责 sound drill、dictation、short clip、question type、note-taking、ext-listening 和听力样本落库。
+- `words`
+  词汇系统。负责 lookup、learn、review、chunk/pattern/paraphrase group、SRS 事件和 `vocab.db` 更新。
 - `assessment`
+  专门的学习数据分析器。它负责读取 `learner.db` 里的最近练习数据，重新估算 band、weak dimensions、profile，并更新 `MEMORY.md`。
 - `database`
+  数据层参考 skill。提供 `learner.db` / `vocab.db` 的 schema 和常用 SQL 写法，方便其他 skill 一致地读写数据库。
 - `cron-briefing`
+  每日学习推送。根据当前 band、薄弱项、兴趣和近期学习状态生成 briefing、文章、音频和轻量 follow-up。
 - `cron-word-seed`
+  静默词库补货。根据当前水平往 `vocab.db` 里补 `queued_new` 词项。
 - `cron-word-review`
+  每日单词复习推送。只推已经进入学习系统的词，不引入未学新词。
+- `cron-assessment-light`
+  日常静默同步。定时调用 `assessment` 的轻量模式，把近期练习结果同步进 `MEMORY.md`。
+- `cron-assessment-deep`
+  周度深度重算。定时调用 `assessment` 的深度模式，更完整地刷新 `MEMORY.md`。
 
-其中核心运行依赖通常包括：
+## 代码结构
 
-- `memory` tool
-- `db` tool
-- `tts` tool
-- `tg` tool
-- `clarify` tool
-- `pron_assess` tool
+- `src/agent`
+  Agent 主循环、prompt 拼装、上下文压缩、历史记录
+- `src/adapters/telegram`
+  Telegram Bot、菜单、语音/图片消息接入
+- `src/tools`
+  `db`、`memory`、`tts`、`pron_assess`、`web_search`、`image_gen` 等工具
+- `src/storage`
+  SQLite 会话与消息存储
+- `src/skills/bundled/ielts/init`
+  初始化、用户档案、轻量水平校准
+- `src/skills/bundled/ielts/practice*`
+  听说读写四项训练技能
+- `src/skills/bundled/ielts/words`
+  词汇与词块系统
+- `src/skills/bundled/ielts/assessment`
+  学习数据分析、MEMORY 同步、light/deep assessment
+- `src/skills/bundled/ielts/database`
+  learner/vocab SQLite schema 与查询参考
+- `src/cron`
+  每日 briefing、词汇推送、assessment 定时同步
 
-专项流程图见：[`docs/architecture-diagrams.md`](./docs/architecture-diagrams.md)
+## 数据分工
 
----
+项目里最重要的几个数据面分别是：
 
-## 数据目录
+- `USER.md`
+  稳定用户档案：身份、目标、兴趣、学习偏好。
+- `MEMORY.md`
+  派生学习状态：IELTS bands、weak dimensions、adaptive controls、profile blocks。这个文件不是手工评分表，而是训练控制面板。
+- `learner.db`
+  练习事实数据：`samples`、`errors`、`subcap_scores` 等。这里存原始训练证据。
+- `vocab.db`
+  词汇与 SRS 数据：`words`、`word_events`、`paraphrase_groups` 等。
+- `state.db`
+  Agent 会话历史和消息存档。
 
-Anya 的真正运行中心在：
+当前推荐的数据职责是：
 
-- `~/.anya/`
+- 练习 skill 只写 `learner.db` / `vocab.db`
+- `assessment` 专门分析数据库并更新 `MEMORY.md`
+- 训练难度由 `MEMORY.md` 驱动，而不是每个 skill 各自维护一套水平状态
 
-简化结构如下：
+## 总结
 
-```text
-~/.anya/
-├── config.json
-├── config.schema.json
-├── auth.json
-├── memories/
-├── skills/
-├── cron/
-├── data/
-│   ├── store/
-│   ├── ielts/
-│   ├── search/
-│   ├── audio/
-│   └── images/
-├── logs/
-└── run/
-```
+Anya 最有前途的地方，不是把 IELTS 做得更像考试，而是把 IELTS 的优质训练方法，做成一个低压力、长期主义、真实有效的英语成长系统。
 
-详细说明见：[`docs/runtime-data-layout.md`](./docs/runtime-data-layout.md)
-
----
-
-## 代码结构速览
-
-```text
-bin/                    # CLI 入口与命令包装
-src/agent/              # Agent 核心、prompt、history、compression、error recovery
-src/adapters/telegram/  # Telegram 网关与单轮 session adapter
-src/commands/           # CLI 命令实现
-src/config/             # 配置默认值、schema、loader
-src/cron/               # jobs 与 scheduler
-src/lib/                # paths、logger、auth、tts、stt、vision 等基础设施
-src/providers/          # OpenAI provider 与 SSE/transform 实现
-src/skills/             # skill loader/parser 与 bundled skills
-src/storage/            # SQLite session store
-src/tools/              # 所有内置工具
-docs/                   # 架构与运行文档
-```
-
----
-
-## 开发
-
-```bash
-pnpm install
-pnpm build
-pnpm typecheck
-pnpm test
-```
-
-开发时建议优先阅读：
-
-1. `bin/anya.ts`
-2. `src/agent/Agent.ts`
-3. `src/agent/promptBuilder.ts`
-4. `src/providers/openai.ts`
-5. `src/tools/registry.ts`
-6. `src/adapters/telegram/TelegramAdapter.ts`
-7. `src/adapters/telegram/SessionAdapter.ts`
-8. `src/cron/scheduler.ts`
-9. `src/storage/sessionStore.ts`
-10. `src/lib/paths.ts`
-
----
-
-## 文档索引
-
-- [`docs/architecture.md`](./docs/architecture.md)
-- [`docs/architecture-diagrams.md`](./docs/architecture-diagrams.md)
-- [`docs/runtime-data-layout.md`](./docs/runtime-data-layout.md)
-
-如果你现在关注的是“这个项目到底怎么跑起来”，优先看：
-
-1. `README.md`
-2. `docs/architecture.md`
-3. `docs/runtime-data-layout.md`
-   | CLI | commander | Mature, clean API |
-   | Logging | pino | Fastest JSON logger for Node |
-   | Build | tsup | One-command TypeScript bundling |
-
-## Development
-
-```bash
-# Clone
-git clone https://github.com/aouos/anya.git
-cd anya
-
-# Install
-pnpm install
-
-# Build
-pnpm build
-
-# Link globally (for local testing)
-pnpm link --global
-
-# Watch mode
-pnpm dev
-```
-
-## License
-
-MIT
+如果这个方向成立，那么高分不会消失，只是它不再被放在学习体验的正中央。

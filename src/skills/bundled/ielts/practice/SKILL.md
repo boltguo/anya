@@ -1,9 +1,9 @@
 ---
 name: practice
-description: "Practice entry: dynamic today's tasks + paging inline keyboard for IELTS skill drills"
+description: "Practice entry: direct training hub for IELTS-inspired English drills"
 ---
 
-# Practice Entry — Dynamic Training Hub
+# Practice Entry — Direct Training Hub
 
 ## When to Use
 
@@ -13,47 +13,15 @@ description: "Practice entry: dynamic today's tasks + paging inline keyboard for
 
 **NOT this skill** if the learner specifies a type (e.g. "练口语") — routes directly.
 
-## Dynamic Today's Tasks (Primary View)
+## Entry Logic
 
-When practice is triggered, check for today's orchestrator-generated tasks first:
+When practice is triggered:
 
-1. Query today's tasks:
+1. Read `MEMORY.md`
+2. If `IELTS Bands.Overall` is missing, assume a temporary mid-level start (`5.0`) and proceed
+3. Show the static training menu immediately
 
-```
-db name=learner sql="SELECT id, task_type, skill, mode, callback, load_score, completed FROM daily_tasks WHERE date = date('now') ORDER BY CASE task_type WHEN 'primary' THEN 1 WHEN 'review' THEN 2 WHEN 'consolidation' THEN 3 END"
-```
-
-2. Query today's consumed load:
-
-```
-db name=learner sql="SELECT COALESCE(SUM(load_score), 0) as consumed FROM samples WHERE created_at >= date('now') AND load_score > 0"
-```
-
-3. Read MEMORY for Daily Load budget.
-
-4. **If tasks exist**, show the dynamic training hub:
-
-```
-🎯 今日训练  (负荷 ▓▓▓░░░░░░░ {{consumed}}/{{budget}})
-
-🔴 主项 · {{primary_desc}} {{primary_done}}
-🟡 复习 · {{review_desc}} {{review_done}}
-🟢 巩固 · {{consolidation_desc}} {{consolidation_done}}
-
-{{load_warning}}
-
-[KEYBOARD:
-🔴 {{primary_label}}={{primary_cb}} | 🟡 {{review_label}}={{review_cb}}
-🟢 {{consolidation_label}}={{consolidation_cb}}
-📚 自选菜单=nav:menu_full | 📖 延展轨=nav:menu_ext
-📊 画像=assessment | 🎯 驱动详情=report_focus
-]
-```
-
-- `{{done}}`: ✅ if completed, empty otherwise
-- `{{load_warning}}`: if consumed ≥ budget × 0.8, show "⚠️ 负荷接近上限 — 建议做延展轨或复习"
-
-5. **If no tasks exist** (orchestrator hasn't run yet today), fall back to the static menu (`nav:main`).
+The learner should be able to start without passing through assessment, scheduling, or mock flows.
 
 ## Static Menu (Fallback / Full Menu)
 
@@ -83,9 +51,8 @@ Each button is `"Label|callback_data"`:
 
 ## Rules
 
-1. **Dynamic hub is the default view.** Only fall back to static menu if no daily_tasks exist.
+1. **Direct practice is the default view.** No mandatory assessment, no mandatory schedule.
 2. **Menu is pure data** — lives in `templates/menu.json`, not in this file.
 3. **One message, edit in-place** — no new messages for page transitions.
 4. **`nav:` = zero LLM cost** — handled entirely by the adapter.
-5. **Completed tasks** show ✅ but remain clickable (learner can redo).
-6. **Load warnings** appear when near budget limit — never block the learner, just advise.
+5. **Use MEMORY scores only as difficulty control.** Do not present them as a test result unless the learner asks.

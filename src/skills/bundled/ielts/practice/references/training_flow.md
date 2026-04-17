@@ -130,7 +130,6 @@ All next-step buttons use callback prefix:
 | `listening`                                                             | Start new listening exercise  |
 | `speaking:shadowing`                                                    | Speaking shadowing mode       |
 | `speaking:qa`                                                           | Speaking guided QA mode       |
-| `speaking:exam`                                                         | Speaking examiner sim mode    |
 | `speaking:retell`                                                       | Speaking retell mode          |
 | `speaking:roleplay`                                                     | Speaking role-play mode       |
 | `speaking:cuecard`                                                      | Speaking cue card build mode  |
@@ -150,13 +149,11 @@ All next-step buttons use callback prefix:
 | `word_save`                                                             | Save word to vocab.db         |
 | `word_review`                                                           | Trigger SRS review            |
 | `word_history`                                                          | Show word usage history       |
-| `report_detail`                                                         | Detailed assessment report    |
-| `report_focus`                                                          | Show current active driver    |
 | `menu`                                                                  | Return to practice menu       |
 
 ## Error Recording
 
-All errors use taxonomy keys from `assessment/references/error_taxonomy.md`:
+All errors use taxonomy keys from `../assessment/references/error_taxonomy.md`:
 
 ```
 db name=learner sql="INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction) VALUES (?, ?, ?, ?, ?, ?)" params='[<id>, "<key>", "<cat>", "<sev>", "...", "..."]'

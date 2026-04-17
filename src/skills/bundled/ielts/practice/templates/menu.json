@@ -4,8 +4,8 @@
     "buttons": [
       ["✍️ 写作|nav:writing", "🗣️ 口语|nav:speaking"],
       ["📖 阅读|nav:reading", "🎧 听力|nav:listening"],
-      ["📚 单词|words", "📋 测评|assessment"],
-      ["← 返回今日任务|practice"]
+      ["📚 单词|words", "📖 延展轨|nav:menu_ext"],
+      ["← 返回训练菜单|practice"]
     ]
   },
   "menu_ext": {
@@ -13,7 +13,7 @@
     "buttons": [
       ["📖 泛读|reading:ext", "🎧 泛听|listening:ext"],
       ["🗣️ 影子跟读|speaking:shadowing"],
-      ["← 返回今日任务|practice"]
+      ["← 返回训练菜单|practice"]
     ]
   },
   "speaking": {
@@ -21,7 +21,7 @@
     "buttons": [
       ["🎙️ 跟读|speaking:shadowing", "🗣️ 问答|speaking:qa"],
       ["🃏 话题卡|speaking:cuecard", "🎭 角色扮演|speaking:roleplay"],
-      ["📖 复述|speaking:retell", "👨‍🏫 模考|speaking:exam"],
+      ["📖 复述|speaking:retell"],
       ["🤖 自动选择|speaking"],
       ["← 返回|nav:menu_full"]
     ]
