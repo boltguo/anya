@@ -243,5 +243,5 @@ db name=vocab sql="SELECT word, definition FROM words WHERE topics LIKE ? AND ma
 10. **Vocabulary data only in `vocab` db** — never store word data in MEMORY.md.
 11. **Subcap scores** must use keys from `assessment/references/subcap_catalog.md` — no ad-hoc keys.
 12. **Rewrite chains** use `parent_sample_id` to link a rewrite to its original. The `prompt_hash` field groups all rewrites of the same prompt for trend analysis.
-13. **Load scores** are written per sample. The orchestrator reads `SUM(load_score)` for today to enforce the daily budget.
-14. **Daily tasks** are written by the orchestrator and marked completed by training skills after session recording.
+13. **Load scores** are written per sample. Read `SUM(load_score)` for today to enforce the daily budget.
+14. **Daily tasks** are marked completed by training skills after session recording.

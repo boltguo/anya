@@ -1,34 +1,94 @@
 /**
  * @module lib/tgFormat
- * @description Converts Markdown (LLM output) to Telegram MarkdownV2 format.
+ * @description Convert LLM Markdown output to Telegram-compatible HTML.
  *
- * Uses the `telegramify-markdown` library (remark-based) for robust AST-level
- * conversion instead of fragile regex transforms. Unsupported tags (e.g.
- * images, HTML) are escaped so they render as plain text.
+ * Telegram's HTML parse_mode supports a small set of tags:
+ *   <b> <i> <u> <s> <code> <pre> <a> <blockquote> <tg-spoiler> <tg-emoji>
+ *
+ * Pipeline:
+ *   markdown → marked (standard HTML) → post-process (map/strip to TG subset).
+ *
+ * LLMs should keep writing Markdown. Telegram-only constructs (spoiler,
+ * expandable quote, custom emoji) can be embedded as raw HTML in the markdown
+ * source — they pass through untouched.
  */
 
-import telegramifyMarkdown from 'telegramify-markdown';
+import { marked } from 'marked';
+
+/** Telegram-supported tag whitelist (lowercase). */
+const ALLOWED_TAGS = new Set([
+  'b', 'i', 'u', 's', 'code', 'pre', 'a',
+  'blockquote', 'tg-spoiler', 'tg-emoji',
+]);
 
 /**
- * Convert LLM Markdown output to Telegram MarkdownV2.
- *
- * @param md - Raw markdown string from LLM output.
- * @returns Telegram MarkdownV2 formatted string.
+ * Convert markdown (plus inline Telegram HTML) to Telegram HTML.
+ * Output is ready for `parse_mode: 'HTML'`.
  */
-export function markdownToTelegramV2(md: string): string {
-  return telegramifyMarkdown(md, 'escape');
-}
+export function markdownToTelegramHtml(md: string): string {
+  let html = marked.parse(md, { gfm: true, async: false }) as string;
 
-/**
- * Prepare a reply for Telegram: convert to MarkdownV2 with fallback to plain text.
- *
- * This is the primary send function used by the Telegram adapter.
- */
-export function prepareReply(content: string): { text: string; parseMode: 'MarkdownV2' | undefined } {
-  try {
-    const v2 = markdownToTelegramV2(content);
-    return { text: v2, parseMode: 'MarkdownV2' };
-  } catch {
-    return { text: content, parseMode: undefined };
-  }
+  // 1. Protect <pre><code>...</code></pre> from subsequent transforms.
+  const codeBlocks: string[] = [];
+  html = html.replace(
+    /<pre>\s*<code([^>]*)>([\s\S]*?)<\/code>\s*<\/pre>/g,
+    (_match, attrs: string, body: string) => {
+      codeBlocks.push(`<pre><code${attrs}>${body.replace(/\n+$/, '')}</code></pre>`);
+      return `\x00CB${codeBlocks.length - 1}\x00`;
+    },
+  );
+
+  // 2. Headings → <b>…</b> + newline.
+  html = html.replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/g, '<b>$1</b>\n');
+
+  // 3. Inline tag aliases.
+  html = html.replace(/<strong>([\s\S]*?)<\/strong>/g, '<b>$1</b>');
+  html = html.replace(/<em>([\s\S]*?)<\/em>/g, '<i>$1</i>');
+  html = html.replace(/<del>([\s\S]*?)<\/del>/g, '<s>$1</s>');
+
+  // 4. Unordered list → bullet lines.
+  html = html.replace(/<ul>\s*([\s\S]*?)\s*<\/ul>/g, (_m, inner: string) => {
+    return inner
+      .replace(/<li>\s*([\s\S]*?)\s*<\/li>/g, '• $1\n')
+      .replace(/\n\s*\n/g, '\n')
+      .trimEnd() + '\n';
+  });
+
+  // 5. Ordered list → numbered lines.
+  html = html.replace(/<ol>\s*([\s\S]*?)\s*<\/ol>/g, (_m, inner: string) => {
+    let n = 0;
+    return inner
+      .replace(/<li>\s*([\s\S]*?)\s*<\/li>/g, (_, item: string) => `${++n}. ${item}\n`)
+      .replace(/\n\s*\n/g, '\n')
+      .trimEnd() + '\n';
+  });
+
+  // 6. Blockquote: strip inner <p> wrappers, keep attrs (e.g. "expandable").
+  html = html.replace(
+    /<blockquote([^>]*)>\s*([\s\S]*?)\s*<\/blockquote>/g,
+    (_m, attrs: string, inner: string) => {
+      const text = inner.replace(/<p>([\s\S]*?)<\/p>/g, '$1').trim();
+      return `<blockquote${attrs}>${text}</blockquote>`;
+    },
+  );
+
+  // 7. <br> / <hr>.
+  html = html.replace(/<br\s*\/?>/g, '\n');
+  html = html.replace(/<hr\s*\/?>/g, '\n━━━━━━\n');
+
+  // 8. Strip <p> wrappers — keep content plus paragraph break.
+  html = html.replace(/<p>([\s\S]*?)<\/p>/g, '$1\n');
+
+  // 9. Strip any remaining tags not in the Telegram whitelist.
+  html = html.replace(/<\/?([a-zA-Z][a-zA-Z0-9-]*)(?:\s[^>]*)?>/g, (full, tag: string) => {
+    return ALLOWED_TAGS.has(tag.toLowerCase()) ? full : '';
+  });
+
+  // 10. Restore code blocks.
+  html = html.replace(/\x00CB(\d+)\x00/g, (_m, i: string) => codeBlocks[+i]);
+
+  // 11. Collapse excessive blank lines, trim edges.
+  html = html.replace(/\n{3,}/g, '\n\n').trim();
+
+  return html;
 }

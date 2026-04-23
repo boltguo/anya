@@ -7,7 +7,7 @@
  * No interactive prompts — use `anya config` for API keys.
  */
 
-import { writeFileSync, copyFileSync, existsSync } from 'node:fs';
+import { writeFileSync, copyFileSync, existsSync, cpSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
@@ -18,9 +18,29 @@ import {
   USER_MD_PATH,
   MEMORY_MD_PATH,
   CRON_JOBS_PATH,
+  SKILLS_DIR,
+  RULES_PATH,
   isInitialized,
 } from '../lib/paths.js';
 import { DEFAULT_CONFIG } from '../config/defaults.js';
+
+/**
+ * Resolve an asset bundled with the CLI. Looks in the two layouts we ship:
+ *   - dist/<rel>  (production: postbuild copies assets next to the bin)
+ *   - src/<rel>   (dev: running via tsx against source)
+ * Returns the first path that exists, or null.
+ */
+function resolveAsset(__dirname: string, rel: string): string | null {
+  const candidates = [
+    join(__dirname, '..', rel),           // dist/<rel> relative to dist/bin/
+    join(__dirname, '..', 'src', rel),    // src/<rel> relative to dist/bin/ (dev layout)
+    join(__dirname, '..', '..', rel),     // src/<rel> relative to src/commands/ (tsx dev)
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
 
 /**
  * `anya init` — Non-interactive setup.
@@ -36,7 +56,6 @@ export async function runInit(): Promise<void> {
     console.log(chalk.dim('  ~/.anya/ already exists. Skipping existing files.\n'));
   }
 
-  // Resolve __dirname once for all template lookups
   const __dirname = dirname(fileURLToPath(import.meta.url));
 
   // 1. Create directory structure
@@ -52,51 +71,29 @@ export async function runInit(): Promise<void> {
   }
 
   // 3. Copy config schema
-  try {
-    for (const rel of ['../src/config/schema.json', '../config/schema.json']) {
-      const src = join(__dirname, rel);
-      if (existsSync(src)) {
-        copyFileSync(src, CONFIG_SCHEMA_PATH);
-        break;
-      }
-    }
+  const schemaSrc = resolveAsset(__dirname, 'config/schema.json');
+  if (schemaSrc) {
+    copyFileSync(schemaSrc, CONFIG_SCHEMA_PATH);
     console.log(chalk.dim('  [ok] config.schema.json'));
-  } catch { /* non-critical */ }
+  } else {
+    console.log(chalk.yellow('  [warn] config.schema.json template not found'));
+  }
 
-  // 4. Memory files
-  for (const { label, dest, template, fallback } of [
-    {
-      label: 'USER.md',
-      dest: USER_MD_PATH,
-      template: 'USER.template.md',
-      fallback: '# User Profile\n\n_Anya will learn about you over time._\n',
-    },
-    {
-      label: 'MEMORY.md',
-      dest: MEMORY_MD_PATH,
-      template: 'MEMORY.template.md',
-      fallback: '# Agent Notes\n\n_Compressed notes and current context._\n',
-    },
+  // 4. Memory templates — RULES.md, USER.md, MEMORY.md all live under
+  //    src/config/ and are treated as infrastructure. The IELTS init skill
+  //    handles runtime onboarding; it does not own these files.
+  for (const { label, dest, template } of [
+    { label: 'RULES.md',  dest: RULES_PATH,     template: 'RULES.template.md' },
+    { label: 'USER.md',   dest: USER_MD_PATH,   template: 'USER.template.md' },
+    { label: 'MEMORY.md', dest: MEMORY_MD_PATH, template: 'MEMORY.template.md' },
   ]) {
     if (!existsSync(dest)) {
-      let copied = false;
-      try {
-        for (const rel of [
-          `../src/config/${template}`,
-          `../config/${template}`,
-        ]) {
-          const src = join(__dirname, rel);
-          if (existsSync(src)) {
-            copyFileSync(src, dest);
-            copied = true;
-            break;
-          }
-        }
-      } catch {
-        copied = false;
-      }
-      if (!copied) {
-        writeFileSync(dest, fallback, 'utf-8');
+      const src = resolveAsset(__dirname, `config/${template}`);
+      if (src) {
+        copyFileSync(src, dest);
+      } else {
+        console.log(chalk.yellow(`  [warn] ${template} not found — skipping ${label}`));
+        continue;
       }
     }
     console.log(chalk.dim(`  [ok] ${label}`));
@@ -105,51 +102,23 @@ export async function runInit(): Promise<void> {
 
   // 5. Cron jobs
   if (!existsSync(CRON_JOBS_PATH)) {
-    try {
-
-      let written = false;
-      for (const rel of ['../src/cron/default_jobs.json', '../cron/default_jobs.json']) {
-        const src = join(__dirname, rel);
-        if (existsSync(src)) { copyFileSync(src, CRON_JOBS_PATH); written = true; break; }
-      }
-      if (!written) writeFileSync(CRON_JOBS_PATH, '[]', 'utf-8');
-    } catch {
+    const src = resolveAsset(__dirname, 'cron/default_jobs.json');
+    if (src) {
+      copyFileSync(src, CRON_JOBS_PATH);
+    } else {
       writeFileSync(CRON_JOBS_PATH, '[]', 'utf-8');
     }
   }
   console.log(chalk.dim('  [ok] cron/'));
 
-  // 6. RULES file
-  const { RULES_PATH } = await import('../lib/paths.js');
-  for (const { label, dest, template } of [
-    { label: 'RULES.md', dest: RULES_PATH, template: 'RULES.template.md' },
-  ]) {
-    if (!existsSync(dest)) {
-      try {
-        for (const rel of [`../src/config/${template}`, `../config/${template}`]) {
-          const src = join(__dirname, rel);
-          if (existsSync(src)) { copyFileSync(src, dest); break; }
-        }
-      } catch { /* non-critical */ }
-    }
-    console.log(chalk.dim(`  [ok] ${label}`));
+  // 6. Bundled skills
+  const skillsSrc = resolveAsset(__dirname, 'skills/bundled');
+  if (skillsSrc) {
+    cpSync(skillsSrc, join(SKILLS_DIR, '.bundled'), { recursive: true, force: true });
+    console.log(chalk.dim('  [ok] skills/'));
+  } else {
+    console.log(chalk.yellow('  [warn] bundled skills not found'));
   }
-
-  // 7. Copy bundled skills
-  try {
-    const { cpSync } = await import('node:fs');
-    const __dir = dirname(fileURLToPath(import.meta.url));
-    const { SKILLS_DIR } = await import('../lib/paths.js');
-
-    for (const rel of ['../src/skills/bundled', '../skills/bundled']) {
-      const src = join(__dir, rel);
-      if (existsSync(src)) {
-        cpSync(src, join(SKILLS_DIR, '.bundled'), { recursive: true, force: true });
-        console.log(chalk.dim('  [ok] skills/'));
-        break;
-      }
-    }
-  } catch { /* non-critical */ }
 
   // Done
   console.log();

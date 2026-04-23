@@ -20,7 +20,7 @@ import PQueue from 'p-queue';
 import type { Adapter } from '../../agent/types.js';
 import type { AnyaConfig } from '../../config/defaults.js';
 import { agentLogger } from '../../lib/logger.js';
-import { markdownToTelegramV2 } from '../../lib/tgFormat.js';
+import { markdownToTelegramHtml } from '../../lib/tgFormat.js';
 import { stripMarkdown, splitMarkdownForTelegram } from './markdown.js';
 import type { SendMessageOptions, PendingApproval, PendingChoice } from './types.js';
 
@@ -109,12 +109,10 @@ export class TelegramSessionAdapter implements Adapter {
   /**
    * Send the agent's final text reply to the user.
    *
-   * Converts markdown to MarkdownV2 via telegramify-markdown.
-   * Falls back to plain text (stripped markdown) if MarkdownV2 parsing fails.
+   * Converts markdown to Telegram HTML via marked + whitelist post-process.
+   * Falls back to plain text (stripped markdown) if HTML parsing fails.
    * Long messages are automatically split at safe boundaries.
    * Skips sending if a `tg` tool already sent content (dedup).
-   *
-   * After sending, cleans up the tool status message.
    */
   async reply(content: string): Promise<void> {
     await this.outboundQueue.onIdle();
@@ -128,17 +126,20 @@ export class TelegramSessionAdapter implements Adapter {
 
       for (let idx = 0; idx < segments.length; idx++) {
         const segment = segments[idx];
-        const formatted = markdownToTelegramV2(segment);
+        const formatted = markdownToTelegramHtml(segment);
         const rp = idx === 0 ? replyParams : undefined;
 
         const msg = await this.bot.api.sendMessage(this.chatId, formatted, {
-          parse_mode: 'MarkdownV2',
+          parse_mode: 'HTML',
           reply_parameters: rp,
-        }).catch((err) => {
-          agentLogger.warn({ msg: 'mdv2_parse_fallback', error: err?.message, formattedLen: formatted.length, segmentIdx: idx });
+        }).catch(async (err) => {
+          agentLogger.warn({ msg: 'tg_html_parse_fallback', error: err?.message, formattedLen: formatted.length, segmentIdx: idx });
           return this.bot.api.sendMessage(this.chatId, stripMarkdown(segment), {
             reply_parameters: rp,
-          }).catch(() => null);
+          }).catch((err2) => {
+            agentLogger.error({ msg: 'tg_reply_dropped', error: err2?.message, segmentIdx: idx });
+            return null;
+          });
         });
         if (msg) this.trackMessage(msg.message_id);
       }

@@ -29,3 +29,25 @@ for (const fp of walkJs('dist')) {
     console.log('  Fixed node:sqlite import in', path.relative('dist', fp));
   }
 }
+
+// Copy runtime assets that init.ts and the skills loader look up relative
+// to the bin: RULES.template.md, config.schema.json, default cron jobs,
+// and the bundled skills tree.
+const assetCopies = [
+  { from: 'src/config/RULES.template.md',  to: 'dist/config/RULES.template.md' },
+  { from: 'src/config/USER.template.md',   to: 'dist/config/USER.template.md' },
+  { from: 'src/config/MEMORY.template.md', to: 'dist/config/MEMORY.template.md' },
+  { from: 'src/config/schema.json',        to: 'dist/config/schema.json' },
+  { from: 'src/cron/default_jobs.json',    to: 'dist/cron/default_jobs.json' },
+  { from: 'src/skills/bundled',            to: 'dist/skills/bundled', dir: true },
+];
+for (const { from, to, dir } of assetCopies) {
+  if (!fs.existsSync(from)) continue;
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  if (dir) {
+    fs.cpSync(from, to, { recursive: true, force: true });
+  } else {
+    fs.copyFileSync(from, to);
+  }
+  console.log('  Copied asset', from, '→', to);
+}

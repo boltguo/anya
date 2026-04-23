@@ -2,8 +2,7 @@
  * @module lib/ffmpeg
  * @description Shared FFmpeg audio conversion utilities.
  *
- * Centralizes all audio format conversions used across:
- * - TTS: webm → ogg (Telegram sendVoice requires .ogg opus)
+ * Currently used for:
  * - Pronunciation Assessment: ogg → wav (Azure Speech works best with WAV)
  *
  * Automatically resolves ffmpeg from multiple PATH locations.
@@ -59,40 +58,6 @@ export function getFFmpegPath(): string | null {
 }
 
 // ── Conversion Functions ─────────────────────────────────────────────────────
-
-/**
- * Convert WebM/Opus to OGG/Opus (for Telegram sendVoice).
- *
- * @param inputPath - Path to input .webm file
- * @returns Path to .ogg file, or null if conversion failed
- */
-export function convertToOgg(inputPath: string): string | null {
-  const ffmpeg = getFFmpegPath();
-  if (!ffmpeg) return null;
-
-  const oggPath = inputPath.replace(/\.\w+$/, '.ogg');
-  if (inputPath === oggPath) return inputPath;
-
-  try {
-    execFileSync(ffmpeg, [
-      '-i', inputPath,
-      '-acodec', 'libopus',
-      '-ac', '1',
-      '-b:a', '64k',
-      '-vbr', 'off',
-      oggPath,
-      '-y',
-    ], { stdio: 'pipe', timeout: 30000 });
-
-    if (existsSync(oggPath) && statSync(oggPath).size > 0) {
-      agentLogger.info({ msg: 'ffmpeg_converted', from: inputPath, to: oggPath, bytes: statSync(oggPath).size });
-      return oggPath;
-    }
-  } catch (err) {
-    agentLogger.warn({ msg: 'ffmpeg_convert_failed', error: (err as Error).message });
-  }
-  return null;
-}
 
 /**
  * Convert OGG/Opus to WAV (for Azure Speech pronunciation assessment).

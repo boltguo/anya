@@ -366,22 +366,7 @@ export class TelegramAdapter {
       // Always answer callback query FIRST to dismiss Telegram loading spinner
       await ctx.answerCallbackQuery().catch(() => {});
 
-      if (data.startsWith('approval_')) {
-        const sepIdx = data.indexOf(':');
-        const approvalId = data.substring(0, sepIdx);
-        const action = data.substring(sepIdx + 1);
-        const pending = this.pendingApprovals.get(approvalId);
-        if (pending) {
-          this.pendingApprovals.delete(approvalId);
-          pending.resolve(action as 'allow' | 'deny' | 'always');
-
-          const statusText = action === 'allow' ? 'Allowed' : action === 'always' ? 'Always Allowed' : 'Denied';
-          await ctx.editMessageText(
-            ctx.callbackQuery.message?.text + `\n\n-> ${statusText}`
-          ).catch(() => {});
-        }
-      }
-      else if (data.startsWith('choice_')) {
+      if (data.startsWith('choice_')) {
         const sepIdx = data.indexOf(':');
         const choiceId = data.substring(0, sepIdx);
         const pending = this.pendingChoices.get(choiceId);

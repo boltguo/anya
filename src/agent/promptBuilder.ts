@@ -89,7 +89,7 @@ export function buildSystemPrompt(config: AnyaConfig): string {
   }
 
   if (enabled.includes('tg')) {
-    caps.push('- **Rich Media**: On Telegram, use the `tg` tool with type "photo" or "audio" to send images/audio with captions. Use `<tg-spoiler>text</tg-spoiler>` in HTML to hide text (tap to reveal — great for learning/quiz scenarios).');
+    caps.push('- **Rich Media**: On Telegram, use the `tg` tool with type "photo" or "audio" to send images/audio with captions. Your reply is rendered via markdown → Telegram HTML, so write markdown normally. You may embed three Telegram-native tags inline when needed: `<tg-spoiler>text</tg-spoiler>` (hidden, tap to reveal — good for quiz answers), `<blockquote expandable>long text</blockquote>` (collapsed quote, tap to expand — good for long feedback/transcripts), `<tg-emoji emoji-id="ID">😀</tg-emoji>` (custom emoji).');
   }
 
   if (config.gemini?.api_key) {

@@ -42,7 +42,7 @@ Each button is `"Label|callback_data"`:
 
 ## Menu Pages
 
-- `main` → `nav:menu_full` — 全技能自选菜单
+- `main` — 训练主菜单（入口）
 - `writing` → 写作模式选择
 - `speaking` → 口语模式选择
 - `listening` → 听力模式选择

@@ -19,7 +19,6 @@ export interface CronJob {
   schedule: string; // cron expression (e.g. "0 9 * * *")
   prompt: string;
   deliver_to: 'cli' | 'telegram';
-  attached_skills?: string[];
   enabled: boolean;
   created_at: string;
 }

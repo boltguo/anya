@@ -7,7 +7,28 @@
       "Bash(node dist/bin/anya.js --version)",
       "Bash(node dist/bin/anya.js --help)",
       "Bash(anya --version)",
-      "Bash(anya --help)"
+      "Bash(anya --help)",
+      "Bash(git -C /Users/bolt/agent/anya status --short src/skills/bundled/ielts/)",
+      "Read(//Users/bolt/.anya/skills/.bundled/**)",
+      "Bash(git -C /Users/bolt/agent/anya ls-files src/skills/bundled/ielts/)",
+      "Bash(ANYA_HOME=/tmp/anya_init_test rm -rf /tmp/anya_init_test)",
+      "Bash(node /Users/bolt/agent/anya/dist/bin/anya.js init)",
+      "Read(//tmp/anya_init_test/**)",
+      "Read(//tmp/anya_init_test/memories/**)",
+      "Bash(rm -rf /tmp/anya_init_test)",
+      "Bash(ANYA_HOME=/tmp/anya_init_test node /Users/bolt/agent/anya/dist/bin/anya.js init)",
+      "Read(//private/tmp/anya_init_test/memories/**)",
+      "Read(//private/tmp/anya_init_test/skills/.bundled/ielts/init/**)",
+      "Bash(find /Users/bolt/agent/anya/src -name \"*.ts\" -exec grep -l \"\\\\/\\\\/ \" {} \\\\;)",
+      "Bash(xargs -I {} bash -c 'if grep -q \"^[[:space:]]*\\\\/\\\\/[[:space:]]*\\(const\\\\|function\\\\|class\\\\|type\\\\|interface\\\\|let\\\\|var\\)\" {} 2>/dev/null; then echo {}; fi')",
+      "Bash(find /Users/bolt/agent/anya/src -name \"*.ts\" -exec wc -l {} +)",
+      "Bash(node --input-type=module -e \"import { marked } from 'marked'; console.log\\(typeof marked.parse\\); const r = marked.parse\\('**hi** _there_'\\); console.log\\(r instanceof Promise ? 'async' : 'sync', r\\);\")",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(npx tsx --eval ' *)",
+      "Bash(pnpm remove *)"
+    ],
+    "additionalDirectories": [
+      "/private/tmp/anya_init_test"
     ]
   }
 }

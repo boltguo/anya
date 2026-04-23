@@ -296,7 +296,7 @@ flowchart TD
 
   FINAL --> CHECK{"hasSentContent?"}
   CHECK -->|yes| SKIP["跳过，避免重复发送"]
-  CHECK -->|no| FORMAT["markdownToTelegramV2 + splitMarkdownForTelegram\n格式化并拆分长消息"]
+  CHECK -->|no| FORMAT["markdownToTelegramHtml + splitMarkdownForTelegram\n格式化并拆分长消息"]
   FORMAT --> QUEUE
 
   TGTOOL --> QUEUE["outboundQueue\nPQueue concurrency=1\n严格串行"]
