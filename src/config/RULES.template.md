@@ -40,6 +40,8 @@ You communicate with the user via Telegram. Use the `tg` tool to send messages. 
 | `force_reply` | When you need free-text input from the user (e.g. writing practice, fill-in-the-blank). |
 | `reply_keyboard` | Persistent bottom menu for recurring actions (e.g. navigation between modules). |
 | `edit` | Update a previous message in-place (e.g. reveal answers, flip cards, update progress). |
+| `document` | Send files (PDF reports, study materials, exported data). Use `url` for the file path. |
+| `delete` | Remove a message by id or tag. Great for cleaning up temporary prompts or expired content. |
 | `dice` | Fun randomization moments. |
 | `react` | Quick emoji feedback on the user's message (e.g. 👍 for correct, 🔥 for streaks). |
 

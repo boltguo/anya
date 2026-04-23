@@ -51,6 +51,12 @@ export class TelegramAdapter {
    * history and let status messages collide.
    */
   private chatQueue = new Map<number, Promise<void>>();
+  /**
+   * Tracks active quiz/polls so we can correlate poll_answer events.
+   * Key = poll_id, Value = { chatId, options, correctIndex }.
+   * Entries auto-expire after 24h to prevent memory leaks.
+   */
+  activePolls = new Map<string, { chatId: number; options: string[]; correctIndex: number }>();
 
   constructor(config: AnyaConfig) {
     if (!config.telegram.bot_token) {
@@ -145,7 +151,7 @@ export class TelegramAdapter {
     agentLogger.info({ msg: 'tg_incoming', chatId: ctx.chat!.id, userId, input: input.substring(0, 200) });
 
     const sessionAdapter = new TelegramSessionAdapter(
-      ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices,
+      ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls,
     );
     const agent = new Agent(this.config, sessionAdapter);
 
@@ -444,7 +450,7 @@ export class TelegramAdapter {
           console.log(`[gateway] callback: ${selectedLabel} (${data})`);
 
           this.enqueuePerChat(chatId, async () => {
-            const sessionAdapter = new TelegramSessionAdapter(ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices);
+            const sessionAdapter = new TelegramSessionAdapter(ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls);
             const agent = new Agent(this.config, sessionAdapter);
 
             try {
@@ -463,6 +469,56 @@ export class TelegramAdapter {
           });
         }
       }
+    });
+
+    // ── Poll answer handler (quiz feedback) ──
+
+    this.bot.on('poll_answer', async (ctx) => {
+      const answer = ctx.pollAnswer;
+      const pollId = answer.poll_id;
+      const poll = this.activePolls.get(pollId);
+      if (!poll) return; // Unknown poll (expired or not tracked)
+
+      const userId = answer.user?.id;
+      const allowedUsers = this.config.telegram.allowed_user_ids;
+      if (allowedUsers.length > 0 && userId && !allowedUsers.includes(userId)) return;
+
+      const selectedIdx = answer.option_ids?.[0];
+      if (selectedIdx === undefined) return; // User retracted answer
+
+      const selectedOption = poll.options[selectedIdx] || `Option ${selectedIdx}`;
+      const isCorrect = selectedIdx === poll.correctIndex;
+      const correctOption = poll.options[poll.correctIndex] || `Option ${poll.correctIndex}`;
+
+      const input = isCorrect
+        ? `[Quiz answer] User answered: "${selectedOption}" ✅ Correct`
+        : `[Quiz answer] User answered: "${selectedOption}" ❌ Wrong (correct: "${correctOption}")`;
+
+      agentLogger.info({ msg: 'tg_poll_answer', chatId: poll.chatId, userId, pollId, selectedIdx, isCorrect });
+
+      this.enqueuePerChat(poll.chatId, async () => {
+        // Create a minimal context-like object — poll_answer has no message context,
+        // so we send directly via bot.api
+        const sessionKey = `tg:${poll.chatId}`;
+        const sessionAdapter = new TelegramSessionAdapter(
+          ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls,
+        );
+        // Override chatId since poll_answer ctx doesn't have ctx.chat
+        (sessionAdapter as any).chatId = poll.chatId;
+        const agent = new Agent(this.config, sessionAdapter);
+
+        try {
+          const result: RunResult = await agent.run(input, { sessionKey });
+          if (!result.tgSent && result.content) {
+            await sessionAdapter.reply(result.content);
+          }
+        } catch (err) {
+          agentLogger.error({ msg: 'tg_poll_answer_error', chatId: poll.chatId, error: (err as Error).message });
+        }
+      });
+
+      // Clean up after processing
+      this.activePolls.delete(pollId);
     });
 
     agentLogger.info({ msg: 'tg_bot_starting' });

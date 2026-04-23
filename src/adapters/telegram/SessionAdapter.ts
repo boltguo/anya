@@ -31,6 +31,7 @@ export class TelegramSessionAdapter implements Adapter {
   private config: AnyaConfig;
   private pendingApprovals: Map<string, PendingApproval>;
   private pendingChoices: Map<string, PendingChoice>;
+  private activePolls: Map<string, { chatId: number; options: string[]; correctIndex: number }>;
 
   // Maps user-defined tags to Telegram message_id for later reference.
   private taggedMessages = new Map<string, number>();
@@ -54,12 +55,14 @@ export class TelegramSessionAdapter implements Adapter {
     config: AnyaConfig,
     pendingApprovals: Map<string, PendingApproval>,
     pendingChoices: Map<string, PendingChoice>,
+    activePolls?: Map<string, { chatId: number; options: string[]; correctIndex: number }>,
   ) {
     this.ctx = ctx;
     this.bot = bot;
     this.config = config;
     this.pendingApprovals = pendingApprovals;
     this.pendingChoices = pendingChoices;
+    this.activePolls = activePolls ?? new Map();
   }
 
   private get chatId(): number {
@@ -180,7 +183,7 @@ export class TelegramSessionAdapter implements Adapter {
 
   showToolCall(toolName: string, _args: Record<string, unknown>): void {
     const label = TelegramSessionAdapter.TOOL_LABEL[toolName] || `⚙️ ${toolName}`;
-    this.statusText = `⏳ ${label}...`;
+    this.statusText = `${label}...`;
     this.enqueue(() => this.flushStatus());
   }
 
@@ -406,6 +409,14 @@ export class TelegramSessionAdapter implements Adapter {
 
       this.trackMessage(msg.message_id);
       this.hasSentContent = true;
+
+      // Register poll for answer tracking
+      this.activePolls.set(msg.poll!.id, {
+        chatId: this.chatId,
+        options,
+        correctIndex,
+      });
+
       return { messageId: msg.message_id, pollId: msg.poll!.id };
     });
   }
@@ -547,6 +558,44 @@ export class TelegramSessionAdapter implements Adapter {
   async sendChatAction(action: string = 'typing'): Promise<void> {
     return this.enqueue(async () => {
       await this.bot.api.sendChatAction(this.chatId, action as any).catch(() => {});
+    });
+  }
+
+  /** Send a document (file) with optional caption. */
+  async sendDocument(
+    fileUrl: string,
+    opts: { caption?: string; tag?: string; replyTo?: number | string; parseMode?: string } = {},
+  ): Promise<number | null> {
+    return this.enqueue(async () => {
+      const rp = this.resolveReplyParams(opts.replyTo);
+      const source = isAbsolute(fileUrl) ? new InputFile(fileUrl) : fileUrl;
+      const msg = await this.bot.api.sendDocument(this.chatId, source, {
+        caption: opts.caption,
+        parse_mode: (opts.parseMode as any) || undefined,
+        reply_parameters: rp,
+      }).catch((err) => {
+        agentLogger.error({ msg: 'tg_send_document_error', error: err?.message });
+        return null;
+      });
+      if (msg) {
+        this.trackMessage(msg.message_id);
+        if (opts.tag) this.taggedMessages.set(opts.tag, msg.message_id);
+        return msg.message_id;
+      }
+      return null;
+    });
+  }
+
+  /** Delete a message by ID or tag. */
+  async deleteMsg(messageId: number | string): Promise<boolean> {
+    return this.enqueue(async () => {
+      const msgId = typeof messageId === 'string'
+        ? this.taggedMessages.get(messageId) ?? Number(messageId)
+        : messageId;
+      if (!msgId || isNaN(msgId)) return false;
+      return this.bot.api.deleteMessage(this.chatId, msgId)
+        .then(() => true)
+        .catch(() => false);
     });
   }
 

@@ -64,6 +64,7 @@ function parseStringArray(raw: unknown): string[] {
 //   photo          → Photo with optional caption
 //   audio          → Audio file with optional caption
 //   voice          → Voice-bubble audio from a local OGG/Opus path
+//   document       → Send a file (PDF, ZIP, etc.) with optional caption
 //   keyboard       → Message with inline buttons (callback-based)
 //   quiz           → Native poll with auto-scoring
 //   force_reply    → Forces user's keyboard open for free-text input
@@ -71,6 +72,7 @@ function parseStringArray(raw: unknown): string[] {
 //   remove_keyboard→ Remove the bottom keyboard
 //   edit           → Edit an existing message's text/buttons
 //   edit_keyboard  → Edit only the buttons of an existing message
+//   delete         → Delete a message by id or tag
 //   dice           → Send animated dice/emoji
 //   react          → Add emoji reaction to a message
 //   pin            → Pin a message to the top of the chat
@@ -80,11 +82,11 @@ function parseStringArray(raw: unknown): string[] {
 
 register({
   name: 'tg',
-  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, photo, audio, voice, keyboard (inline buttons), quiz (auto-scored poll), force_reply, reply_keyboard (bottom menu), edit, dice, react, pin, action. Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
+  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, photo, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), force_reply, reply_keyboard (bottom menu), edit, delete, dice, react, pin, action. Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
   parameters: {
     type: 'object',
     properties: {
-      type:       { type: 'string', description: 'Message type: text | photo | audio | voice | keyboard | quiz | force_reply | reply_keyboard | remove_keyboard | edit | edit_keyboard | dice | react | pin | action' },
+      type:       { type: 'string', description: 'Message type: text | photo | audio | voice | document | keyboard | quiz | force_reply | reply_keyboard | remove_keyboard | edit | edit_keyboard | delete | dice | react | pin | action' },
       text:       { type: 'string', description: 'Message text/caption (HTML format). Use <b>bold</b>, <i>italic</i>, <code>code</code>, <pre>block</pre>, <tg-spoiler>hidden</tg-spoiler>.' },
       url:        { type: 'string', description: 'For photo/audio: URL or file path of the media to send.' },
       buttons:    { type: 'string', description: 'JSON 2D array. For keyboard: [["label|callback_data",...]], for reply_keyboard: [["label",...]].' },
@@ -234,13 +236,30 @@ register({
         return JSON.stringify({ ok: true });
       }
 
+      case 'document': {
+        let replyTo: number | string | undefined = args.reply_to as string | undefined;
+        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const msgId = await tg.sendDocument(String(args.url || ''), {
+          caption: args.text as string,
+          replyTo, tag: args.tag as string,
+          parseMode: (args.parse_mode as string) || 'HTML',
+        });
+        return JSON.stringify({ ok: true, message_id: msgId });
+      }
+
+      case 'delete': {
+        const ref = args.message_id as string;
+        const deleted = await tg.deleteMsg(isNaN(Number(ref)) ? ref : Number(ref));
+        return JSON.stringify({ ok: deleted });
+      }
+
       case 'action': {
         await tg.sendChatAction(String(args.action || 'typing'));
         return JSON.stringify({ ok: true });
       }
 
       default:
-        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, photo, audio, voice, keyboard, quiz, force_reply, reply_keyboard, remove_keyboard, edit, edit_keyboard, dice, react, pin, action.` });
+        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, photo, audio, voice, document, keyboard, quiz, force_reply, reply_keyboard, remove_keyboard, edit, edit_keyboard, delete, dice, react, pin, action.` });
     }
   },
 });
