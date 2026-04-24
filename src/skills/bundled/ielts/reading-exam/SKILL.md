@@ -48,3 +48,7 @@ Before converting raw /40 to band, load: `skill_view name=ielts-band-descriptors
 5. **Academic vs GT mapping per `Goals.exam_type`.**
 6. **Subcap + error keys canonical.**
 7. **No MEMORY writes.**
+
+## Persist
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.

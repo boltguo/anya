@@ -32,6 +32,8 @@ Pulls items near the edge of knowledge (not `mastered`) and tests in mixed forma
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`skill_type='vocab'`, `prompt='testme-batch'`, `load_score=2`, `feedback={items, per_q_results}`).
 - Update `words` counters + `srs_due`.
 - `word_events` rows.

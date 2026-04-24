@@ -1,11 +1,11 @@
 ---
 name: listening-mapdrill
-description: "Section-2 map-labelling drill — direction words, relative position, ordinal counting."
+description: "Section-2 direction and spatial-relation drill — direction words, relative position, ordinal counting. Text-based."
 ---
 
 # Listening MapDrill
 
-Direction vocabulary + spatial encoding under time pressure. 3-5 unlabelled targets.
+Direction vocabulary + spatial encoding under time pressure. Pure text — no images.
 
 ## When to Use
 
@@ -15,22 +15,23 @@ Direction vocabulary + spatial encoding under time pressure. 3-5 unlabelled targ
 
 ## Workflow
 
-1. Generate / pick a simple map image (8-12 labelled landmarks + 3-5 A/B/C targets). Use `image_gen` if no fit.
-2. `tg(type:"photo", url:<map>, text:"听完把 A / B / C 映射到地点")`.
-3. `tts` description (60-90 sec, British voice). Must use ≥ 6 direction/position phrases (opposite / next to / behind / past / at the corner of / on your left / the second ... on the ...).
-4. `force_reply` for answers `A:reception B:cafe ...`.
-5. Grade per spot. Misses classified:
+1. Describe a scene layout in text (campus / shopping mall / park / neighbourhood): list 8-12 named landmarks with relative positions (e.g. "图书馆在行政楼的东面，体育馆在图书馆对面"). Present as a numbered list.
+2. `tts` a 60-90 sec audio description of a route / tour through the scene (British voice). Must use ≥ 6 direction/position phrases: opposite / next to / behind / past / at the corner of / on your left / the second ... on the ...
+3. Ask 3-5 questions via `quiz`: "The speaker says the café is _____ the library" with 4 positional options.
+4. Grade per question. Error classification:
    - adjacent spot → `paraphrase_miss`
    - flipped left/right → `distractor_trap`
    - wrong ordinal → `number_confusion`
    - missed direction word → `function_word_miss`
-6. Reveal answers with evidence lines.
-7. If ≥ 2 errors, one quiz on a direction-word meaning.
-8. Difficulty keyboard.
+5. Reveal answers with the key audio phrases quoted.
+6. If ≥ 2 errors, one extra quiz on a direction-word meaning.
+7. Difficulty keyboard.
 
 ## Persist
 
-- 1 `samples` row (`load_score=2`, `feedback={acc, spots_n}`).
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
+- 1 `samples` row (`load_score=2`, `feedback={acc, questions_n}`).
 - `subcap_scores.listening.discourse_marker` + `.academic_vocab` where applicable.
 - `errors` with canonical keys.
 
@@ -38,8 +39,9 @@ Queries: `support/ielts-data-contract/references/queries.md`.
 
 ## Rules
 
-1. **Unambiguous image.** Messy maps kill the drill.
-2. **≥ 6 direction phrases per description.**
-3. **Play audio once.**
-4. **Grade spot + phrase level.**
+1. **No images.** Describe the scene layout entirely in text.
+2. **≥ 6 direction phrases per audio description.**
+3. **Play audio once.** User listens then answers quiz questions.
+4. **Grade both position and phrase-level understanding.**
 5. **Quiz only on ≥ 2 errors.**
+6. **Listening tasks must use `tts` first.** Generate audio, then send via `tg(type=voice)`. Never show the direction script as text.

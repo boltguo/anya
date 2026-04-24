@@ -36,6 +36,8 @@ Question mix: TFNG or YNNG (3) + heading match (2) + completion / short (3) + MC
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`load_score=3`, `feedback={reading_time_sec, wpm, word_count, q_accuracy, question_types, overtime}`).
 - `subcap_scores.reading.pace` (dominant) + `.gist` + `.paraphrase_mapping`.
 - `errors` + `speed_too_slow` if overtime.

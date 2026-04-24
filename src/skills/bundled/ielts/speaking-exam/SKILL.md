@@ -49,3 +49,7 @@ Before scoring, load the rubric: `skill_view name=ielts-band-descriptors file=re
 5. **`parent_sample_id`** chains Part 2/3 to Part 1.
 6. **Subcap + error keys canonical.**
 7. **No MEMORY writes** — `learner-state` aggregates.
+
+## Persist
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.

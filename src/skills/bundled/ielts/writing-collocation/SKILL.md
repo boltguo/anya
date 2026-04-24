@@ -29,6 +29,8 @@ Each topic has a seed bank of 8-12 items stored in `study.db` with `item_kind='c
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`load_score=2`, `feedback={topic, bank_used, bank_ok}`).
 - `subcap_scores.writing.lexical_sophistication` emphasised.
 - `errors`: `collocation_error`, `word_choice`, `register_mismatch`.

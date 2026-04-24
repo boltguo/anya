@@ -33,6 +33,8 @@ After the group: wrap card with avg accuracy trend + top issue. Difficulty keybo
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row per sentence (`load_score=1`, `feedback={first_acc, second_acc, weak_word}`).
 - `subcap_scores.speaking.pronunciation_intelligibility` = avg second-attempt score mapped to band.
 - 1 `errors` row per distinct issue + `root:language`.

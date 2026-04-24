@@ -35,6 +35,8 @@ If bank thin (< 10), generate + save with `origin='vocab-topic-seed'`.
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`load_score=1`, `feedback={topic, items_shown, recall_correct, missed_list}`).
 - Update `words` counters + `srs_due` per item.
 - `word_events` rows.

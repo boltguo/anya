@@ -34,3 +34,8 @@ Queries: `support/ielts-data-contract/references/queries.md`.
 4. **One upgrade.** More is noise.
 5. **Skip `pron_assess`** when pronunciation isn't flagged weak.
 6. **Persist every session** even if abandoned.
+7. **Short voice (< 30 sec)**: Don't grade yet. Encourage: "再多说一点，想到什么说什么 👇" with another `force_reply`. Concatenate both transcripts for grading.
+
+## Persist
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.

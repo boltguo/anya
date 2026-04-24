@@ -47,3 +47,7 @@ Before converting raw /40 to band, load: `skill_view name=ielts-band-descriptors
 4. **3-min transfer window** after S4.
 5. **Subcap + error keys canonical.**
 6. **No MEMORY writes.**
+
+## Persist
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.

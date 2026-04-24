@@ -44,3 +44,7 @@ Before scoring, load the rubric: `skill_view name=ielts-band-descriptors file=re
 6. **Auto-harvest** to vocab.
 7. **Subcap + error keys canonical.**
 8. **No MEMORY writes.**
+
+## Persist
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.

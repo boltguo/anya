@@ -32,6 +32,8 @@ Removes blank-page freeze. Structure is given; learner focuses on sentence produ
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`load_score=2`, `feedback={sections_completed, hints_used, assembled}`).
 - `subcap_scores`.
 - `errors` (focus on sentence-level, not structural — structure is given).

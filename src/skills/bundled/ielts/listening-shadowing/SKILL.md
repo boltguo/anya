@@ -36,6 +36,8 @@ Different from `speaking-shadowing` (phoneme accuracy). Here the goal is to stay
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`load_score=2`, `feedback={keep_pct, ratio, best, worst}`).
 - `subcap_scores.listening.connected_speech` from keep_pct + ratio.
 - `errors`: `connected_speech_fail` if keep_pct < 60% OR ratio > 1.3.

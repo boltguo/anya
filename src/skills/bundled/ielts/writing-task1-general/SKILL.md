@@ -32,6 +32,8 @@ Complaint / Application / Request for info / Apology / Invitation / Thank-you / 
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`feedback={word_count, time_sec, register, bullets_covered, opening_correct, closing_correct}`).
 - `subcap_scores` all 7 writing keys.
 - `errors`: `register_mismatch`, `formality_level`, `hedging`, `directness`.

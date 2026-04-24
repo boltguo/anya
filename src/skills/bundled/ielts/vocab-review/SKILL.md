@@ -31,6 +31,8 @@ Spaced review across all `item_kind`s. Card format is kind-specific; scheduling 
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 See `support/ielts-data-contract/references/queries.md` for the update SQL.
 
 ## Rules

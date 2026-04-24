@@ -34,6 +34,8 @@ Less intimidating than writing from scratch. Teaches the exact deltas between ba
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`load_score=3`, `prompt_hash=<sample_hash>`, `redo_count=1`, `feedback={source_band, target_band, delta_achieved}`).
 - `subcap_scores`: `writing.lexical_sophistication` + `.cohesion_logic` + `.connector_density` emphasized.
 - Auto-harvest the teaching-point chunk.

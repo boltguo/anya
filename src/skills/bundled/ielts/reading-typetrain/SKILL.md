@@ -35,6 +35,8 @@ Single-type specialist. One type per session.
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`load_score=2`, `feedback={type, acc, q_count, errors_by_type}`).
 - `subcap_scores`: `reading.gist` for Heading / Gist; `.paraphrase_mapping` for Completion / Short Answer; `.argument_structure` for Matching Features; `.author_attitude` for MCQ-on-stance.
 - `errors`: `tfng_logic_error`, `heading_mismatch`, `keyword_matching_error`, `inference_error`, `detail_location_fail`.

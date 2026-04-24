@@ -33,6 +33,8 @@ Breaks word-by-word translation habit. Forces big-picture reading.
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`load_score=2`, `feedback={skim_sec, gist_correct, function_correct, trap_correct, wpm}`).
 - `subcap_scores.reading.gist` + `.pace` + `.argument_structure`.
 - `errors`: `speed_too_slow` if overtime by > 20%; `keyword_matching_error` for trap miss.
@@ -45,3 +47,6 @@ Queries: `support/ielts-data-contract/references/queries.md`.
 2. **Time the skim** — compute wpm from word count / skim window.
 3. **One main-idea + 3-4 function + 1 trap.**
 4. **Reveal with spoilers** for interactive debrief.
+5. **Telegram hiding**: Send passage inside `<blockquote expandable>`, then after skim time use `tg(type=edit)` to replace passage message with "📖 已隐藏". If edit fails, send a long separator message to push the passage out of view.
+6. **Never re-send the full passage** until grading is complete.
+

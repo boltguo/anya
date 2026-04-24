@@ -30,6 +30,8 @@ Relative clause with reduction · Participle phrase (-ing/-ed) · Cleft sentence
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`load_score=2`, `feedback={structure, ok_count}`).
 - `subcap_scores.writing.grammar_accuracy` slightly updated.
 - `errors`: `clause_structure`, `parallel_structure`, `conditional_error` per attempt.

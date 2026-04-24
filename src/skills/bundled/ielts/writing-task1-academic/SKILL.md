@@ -30,6 +30,8 @@ Rotate across: line / bar / pie / table / map / process. Don't repeat same type 
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row + rewrite rows (`parent_sample_id`, same `prompt_hash`).
 - `feedback={word_count, time_sec, chart_type, has_overview}`.
 - `subcap_scores` all 7 writing keys.

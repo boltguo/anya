@@ -40,3 +40,7 @@ Queries: `support/ielts-data-contract/references/queries.md`.
 5. **Feedback after, not during.**
 6. **Register is enforced** — note mismatches in errors.
 7. **Persist entire transcript** for future `speaking-explain`.
+
+## Persist
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.

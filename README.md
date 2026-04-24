@@ -235,43 +235,125 @@ sequenceDiagram
 
 ---
 
-## Skills 职责
+## Skills 技能包
 
-当前真正可用、带 `SKILL.md` 的 IELTS skills 有这些：
+共 50 个 skill，覆盖建档、定级、四科训练、词汇 SRS、诊断分析、教练和定时任务。所有 skill 定义在 `src/skills/bundled/`。
 
-- `init`
-  首次 onboarding。收集最小用户档案，做轻量水平校准，写入 `USER.md` / `MEMORY.md`，然后把用户送进训练菜单。
-- `practice`
-  训练总入口。负责展示训练菜单，把用户路由到听说读写或词汇模块。
-- `practice-writing`
-  写作训练。负责 brainstorming、TEEL、sentence-lab、full-task、rewrite loop、错误记录和写作样本落库。
-- `practice-speaking`
-  口语训练。负责 shadowing、guided QA、cue card、role-play、retell、发音反馈和口语样本落库。
-- `practice-reading`
-  阅读训练。负责 flash-skim、sentence anatomy、argument map、attitude scan、ext-reading 和阅读样本落库。
-- `practice-listening`
-  听力训练。负责 sound drill、dictation、short clip、question type、note-taking、ext-listening 和听力样本落库。
-- `words`
-  词汇系统。负责 lookup、learn、review、chunk/pattern/paraphrase group、SRS 事件和 `vocab.db` 更新。
-- `assessment`
-  专门的学习数据分析器。它负责读取 `learner.db` 里的最近练习数据，重新估算 band、weak dimensions、profile，并更新 `MEMORY.md`。
-- `database`
-  数据层参考 skill。提供 `learner.db` / `vocab.db` 的 schema 和常用 SQL 写法，方便其他 skill 一致地读写数据库。
-- `cron-briefing`
-  每日学习推送。根据当前 band、薄弱项、兴趣和近期学习状态生成 briefing、文章、音频和轻量 follow-up。
-- `cron-word-seed`
-  静默词库补货。根据当前水平往 `vocab.db` 里补 `queued_new` 词项。
-- `cron-word-review`
-  每日单词复习推送。只推已经进入学习系统的词，不引入未学新词。
+```
+用户消息 → Agent → ielts-router → 具体 skill
+                                      ↓
+                                  study.db (写入练习数据)
+                                      ↓
+                            每日 cron → learner-state → MEMORY.md (聚合刷新)
+```
+
+### 🔧 系统
+
+| Skill | 说明 |
+|-------|------|
+| `profile-manager` | 建档与资料更新。首次运行收集用户目标、背景、偏好，写入 USER.md |
+| `ielts-router` | 训练中心主菜单。解析自由文本练习请求，路由到对应 skill |
+| `learner-state` | **数据驱动的水平刷新**。查询 study.db 最近 14 天数据，EMA 平滑计算 bands，写入 MEMORY.md |
+| `placement-quick` | 10 分钟快速定级：口语 30s + 听写 2 句 + 阅读 150 词 + 写作 50 词 |
+| `placement-full` | 40-50 分钟深度定级：四科完整测试 + 置信度评估 + 2 周计划 |
+
+### 🗣️ 口语 Speaking
+
+| Skill | 说明 |
+|-------|------|
+| `speaking-exam` | 完整雅思口语模考：Part 1 + Part 2 + Part 3，四维评分 |
+| `speaking-freetalk` | 60-120 秒自由独白，重点反馈流利度 + 一个语言升级点 |
+| `speaking-repeat` | 听后复述：播放片段一次，用自己的话复述 |
+| `speaking-roleplay` | 场景对话（机场/餐厅/面试/诊所），Anya 扮演对方 |
+| `speaking-shadowing` | 语音跟读：TTS → 语音重复 → 发音评估 → 一个定点修复 |
+| `speaking-explain` | 口语失分解释：引用原始表达，分析具体扣分原因 |
+| `speaking-azure-score` | [内部] Azure 发音评估接口封装，被其他口语 skill 调用 |
+
+### 🎧 听力 Listening
+
+| Skill | 说明 |
+|-------|------|
+| `listening-exam` | 完整雅思听力模考：4 section，40 题，band 报告 |
+| `listening-dictation` | 句子听写：盲听 → 提示 → 逐词 diff → 中文释义 → 重做 |
+| `listening-shadowing` | 片段级影子跟读：节奏 + 关键词保留 + 语调捕捉 |
+| `listening-prediction` | 先预测答案类型，再听 + 作答，双重评分 |
+| `listening-mapdrill` | Section 2 地图标注练习：方位词、相对位置、序数 |
+| `listening-numberdrill` | 数字/日期/时间/拼写专项（13 vs 30、double-0、人名拼写） |
+| `listening-explain` | 听力失分解释：引用原文 + 陷阱类型分析 |
+
+### 📖 阅读 Reading
+
+| Skill | 说明 |
+|-------|------|
+| `reading-exam` | 完整雅思阅读模考：3 篇文章，40 题，60 分钟 |
+| `reading-timed` | 单篇限时练习（15-20 分钟），训练做题节奏 |
+| `reading-untimed` | 无限时精读：主旨 + 段落功能 + 释义 + 作者立场 |
+| `reading-skim-drill` | 90 秒略读后隐藏文章，凭记忆回答主旨 + 功能题 |
+| `reading-typetrain` | 单一题型专项（TFNG / Heading / Matching / Completion / MCQ） |
+| `reading-vocab-extract` | 阅读后词汇收割：提取生词/短语/释义对存入 study.db |
+| `reading-explain` | 阅读失分解释：引用原文证据 + 陷阱类型分析 |
+
+### ✍️ 写作 Writing
+
+| Skill | 说明 |
+|-------|------|
+| `writing-exam` | 完整雅思写作模考：Task 1 (20min) + Task 2 (40min) + 四维评分 |
+| `writing-task2` | Task 2 议论文练习（观点/讨论/问题解决/利弊/双问题） |
+| `writing-task1-academic` | 学术 Task 1：图表/地图/流程图，强制 overview |
+| `writing-task1-general` | GT Task 1 书信：正式/半正式/非正式语域训练 |
+| `writing-guided` | 脚手架式写作：给大纲，学员填充句子（适合低分段） |
+| `writing-rewrite` | 升级改写：把 Band 5/6 段落改到 Band 7 水平 |
+| `writing-sentence-drill` | 单一语法结构练习（条件句/强调句/倒装/分词…） |
+| `writing-collocation` | 主题搭配练习：用 4+ 个短语写 100 词段落 |
+| `writing-explain` | 写作失分解释：任务/逻辑/语言三层分析 |
+
+### 📚 词汇 Vocabulary
+
+| Skill | 说明 |
+|-------|------|
+| `vocab-review` | SRS 间隔复习：覆盖单词/短语/句型/释义组 |
+| `vocab-contextual` | 从最近练习中提取 5-8 个生词，带原句上下文学习 |
+| `vocab-testme` | 主动回忆测验：针对临界掌握词汇 |
+| `vocab-topic` | 主题聚类学习：一个话题 8-12 个词，展示 → 隐藏 → 回忆 |
+
+### 📊 诊断与分析
+
+| Skill | 说明 |
+|-------|------|
+| `analysis-exam` | 考试结果分析：band 拆解、历史对比、稳定性评估 |
+| `analysis-weakness` | 跨会话弱点检测：高频错误 + 最弱子能力 |
+| `analysis-study` | 学习行为分析：总时长、连续性、科目覆盖、不均衡检测 |
+| `analysis-recommend` | 把诊断结论转化为一个具体的下一步行动推荐 |
+
+### 💬 教练 Coaching
+
+| Skill | 说明 |
+|-------|------|
+| `coach-passive` | 被动教练：回答学员主动提出的进度/计划/方法问题 |
+| `coach-proactive` | 主动教练：根据触发条件决定是否提醒、鼓励或刷新学习计划 |
+
+### ⏰ 定时任务 Cron
+
+| Skill | 触发时间 | 说明 |
+|-------|---------|------|
+| `ielts-cron-briefing` | 每天 08:30 | 每日学习包：今日任务 + 复习词 + 听力句 |
+| `ielts-cron-word-seed` | 每天 07:15 | 静默维护：保持 `queued_new` 词汇库存 ≥ 8 |
+| `ielts-cron-word-review` | 每天 21:00 | SRS 复习推送：挑一个到期词推送到 Telegram |
+| `learner-state` | 每天 23:30 | 静默维护：聚合 study.db → EMA 平滑 → 刷新 MEMORY.md |
+
+### 📦 支撑包 Support
+
+| Skill | 说明 |
+|-------|------|
+| `ielts-band-descriptors` | 官方雅思评分标准：四科 band descriptors + raw-to-band 换算表 |
+| `ielts-data-contract` | study.db 规范：schema、查询模板、post-practice 写入协议 |
 
 ## 代码结构
 
 - [bin/](bin/)
-  CLI 外壳。`anya.ts` 是入口，`bin/commands/*.ts` 用 commander 注册各子命令，仅负责参数解析和输出格式化。
-- [src/index.ts](src/index.ts)
-  可编程 API 导出（`Agent`、`loadConfig`、`registerTool` 等），供外部项目 `import` 使用。
+  CLI 外壳。`anya.ts` 是入口，`bin/commands/*.ts` 用 commander 注册各子命令。
 - [src/agent/](src/agent/)
-  Agent 主循环、prompt 拼装（`promptBuilder`）、上下文引擎与压缩（`contextEngine` / `contextCompressor`）、历史管理、错误分类器。
+  Agent 主循环、prompt 拼装、上下文压缩、历史管理、错误分类器。
 - [src/providers/](src/providers/)
   LLM provider 抽象，当前只有 OpenAI Codex 实现。
 - [src/adapters/telegram/](src/adapters/telegram/)
@@ -279,48 +361,78 @@ sequenceDiagram
 - [src/tools/](src/tools/)
   Agent 可调用的工具：`db`、`memory`、`file`、`shell`、`skill`、`clarify`、`tts`、`pron_assess`、`web_search`、`image_gen`、`telegram`，以及 `registry` 负责装配。
 - [src/commands/](src/commands/)
-  CLI 命令的真正实现（`runInit` / `runChat` / `runConfigMenu` / `runGatewayStart-Stop-Status-Logs` / `runUsage`），供 [bin/](bin/) 调用。
+  CLI 命令实现（chat / config / gateway / usage 等）。
 - [src/config/](src/config/)
-  配置默认值、JSON schema、loader，以及 `RULES.template.md`（写入 `~/.anya/memories/`）。
+  配置默认值、JSON schema、loader。
 - [src/storage/](src/storage/)
   `db` 基础连接 + `sessionStore` 会话/消息档案。
 - [src/lib/](src/lib/)
-  通用库：`paths`（`ANYA_HOME` 等路径）、`auth`（Codex OAuth）、`pidfile`（守护进程）、`ffmpeg`、`stt`、`tts`、`vision`、`tgFormat`、`logger`、`usage`、`approval`。
-- [src/skills/bundled/ielts/init/](src/skills/bundled/ielts/init/)
-  初始化、用户档案、轻量水平校准。
-- [src/skills/bundled/ielts/practice/](src/skills/bundled/ielts/practice/) 及 `practice-*`
-  训练总入口 + 听说读写四项训练技能。
-- [src/skills/bundled/ielts/words/](src/skills/bundled/ielts/words/)
-  词汇与词块系统。
-- [src/skills/bundled/ielts/assessment/](src/skills/bundled/ielts/assessment/)
-  学习数据分析，重算 band / weak dimensions，回写 `MEMORY.md`。
-- [src/skills/bundled/ielts/database/](src/skills/bundled/ielts/database/)
-  `learner.db` / `vocab.db` 的 schema 与查询参考。
+  通用库：paths、auth、pidfile、ffmpeg、stt、tts、vision、tgFormat、logger、usage、approval。
+- [src/skills/bundled/](src/skills/bundled/)
+  IELTS 技能包（上述 50 个 skill）。
 - [src/cron/](src/cron/)
-  调度器 + 默认任务（`default_jobs.json`），目前负责每日 briefing、词汇补货和词汇复习推送。
-- [scripts/postbuild.cjs](scripts/postbuild.cjs)
-  打包后处理：为 `dist/bin/anya.js` 加 shebang，修正 `node:sqlite` import。
+  调度器 + 默认任务。
 
 ## 数据分工
 
-项目里最重要的几个数据面分别是：
+### 数据文件
 
-- `USER.md`
-  稳定用户档案：身份、目标、兴趣、学习偏好。
-- `MEMORY.md`
-  派生学习状态：IELTS bands、weak dimensions、adaptive controls、profile blocks。这个文件不是手工评分表，而是训练控制面板。
-- `learner.db`
-  练习事实数据：`samples`、`errors`、`subcap_scores` 等。这里存原始训练证据。
-- `vocab.db`
-  词汇与 SRS 数据：`words`、`word_events`、`paraphrase_groups` 等。
-- `state.db`
-  Agent 会话历史和消息存档。
+| 文件 | 说明 |
+|------|------|
+| `USER.md` | 稳定用户档案：身份、目标、兴趣、学习偏好。由 `profile-manager` 管理 |
+| `MEMORY.md` | 派生学习状态：IELTS bands、weak dimensions、adaptive controls。**由 study.db 数据聚合驱动**，每日 cron 通过 `learner-state` 刷新 |
+| `study.db` | **唯一的练习事实数据库**。所有练习记录、错误、词汇、进度都存在这里 |
+| `state.db` | Agent 会话历史和消息存档 |
 
-当前推荐的数据职责是：
+### 数据职责
 
-- 练习 skill 只写 `learner.db` / `vocab.db`
-- `assessment` 专门分析数据库并更新 `MEMORY.md`
-- 训练难度由 `MEMORY.md` 驱动，而不是每个 skill 各自维护一套水平状态
+- 练习 skill 只写 `study.db`，不直接改 `MEMORY.md`
+- `learner-state` 每日聚合 study.db → EMA 平滑 → 刷新 MEMORY.md
+- 训练难度由 `MEMORY.md` 驱动，skill 读取后自适应
+
+### study.db 表结构
+
+Schema 定义在 `src/skills/bundled/support/ielts-data-contract/templates/study.sql`。
+
+#### 练习与评估
+
+| 表 | 说明 |
+|----|------|
+| `samples` | **每次练习的核心记录**。skill_type、band 四维评分、时长、难度、mode（study/exam/placement） |
+| `errors` | **每次练习的具体错误**。关联 sample_id，带 recurrence_key（追踪高频错误）、类别、严重度 |
+| `subcap_scores` | **子能力评分**。如 `speaking.fluency = 5.5`。用于弱点定位 |
+| `sample_words` | 练习中涉及的词汇（曝光/使用） |
+| `mock_sessions` | **完整考试记录**。placement / mock 的四科 band + 稳定性评分 |
+
+#### 词汇与 SRS
+
+| 表 | 说明 |
+|----|------|
+| `words` | **词汇本**。释义、中文、IPA、例句、音频。SRS：mastery、间隔、ease、到期。5 种 item_kind |
+| `word_events` | 词汇事件日志。每次复习/查询/使用一行 |
+| `paraphrase_groups` | 同义替换分组，按话题聚类 |
+| `paraphrase_members` | 同义替换组成员词，带语域标注 |
+
+#### 任务与进度
+
+| 表 | 说明 |
+|----|------|
+| `daily_tasks` | **每日任务清单**。由 cron 生成，标记完成状态 |
+| `band_trend` | **每日 band 趋势**。每天每科一行，由 learner-state 写入 |
+| `activity_log` | **每日活动汇总**。会话数、总时长、涉及科目、复习词数 |
+| `stage_transitions` | 学习阶段变迁记录 |
+
+#### Mastery 生命周期
+
+```
+queued_new → learning → known → mastered
+```
+
+#### Transfer Level（迁移层级）
+
+```
+0 seeded → 1 seen → 2 active-check pass → 3 spoke → 4 wrote
+```
 
 ## 总结
 

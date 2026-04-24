@@ -38,6 +38,8 @@ Opinion / Discussion / Problem-solution / Adv-Disadv / Two-part question. Detect
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row + rewrites (`parent_sample_id`, same `prompt_hash`).
 - `feedback={word_count, time_sec, essay_type, position_clear, counter_arg_present, awl_rate}`.
 - `subcap_scores`: all 7 writing keys, emphasising `argument_depth` + `cohesion_logic`.

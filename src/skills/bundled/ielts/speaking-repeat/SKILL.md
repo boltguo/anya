@@ -38,3 +38,7 @@ Queries: `support/ielts-data-contract/references/queries.md`.
 4. **One upgrade per session.**
 5. **Harvest good paraphrases.**
 6. **Persist every session** even if retell is short.
+
+## Persist
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.

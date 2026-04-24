@@ -37,6 +37,8 @@ Per-phase tally + top learning point + follow-up drill suggestion.
 
 ## Persist
 
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+
 - 1 `samples` row (`load_score=2`, `feedback={phases_json}`).
 - `subcap_scores` per phase: `reading.gist`, `.argument_structure`, `.paraphrase_mapping`, `.author_attitude`.
 - `errors` per wrong phase.
