@@ -6,7 +6,7 @@
 
 这次重构的目标，不是继续给现有 `practice-*` 和 `assessment` 里叠模式，而是把整个 IELTS 能力升级成两层清晰结构：
 
-- `ielts/`：用户可感知的 Hermes skill 包，负责路由、画像、状态、初测、教练、听说读写词汇能力。
+- `ielts/`：用户可感知的 Hermes skill 包，负责路由、画像、状态、初测、分析、推荐、教练、听说读写词汇能力。
 - `support/`：内部支持层，负责数据契约、定时任务、词汇维护等，不直接承担教学界面。
 
 这次目录采用你现在更偏好的“完整平铺前缀结构”：
@@ -52,6 +52,7 @@
 - `assessment` 同时承担初测、校准、状态维护、分析、推荐，已经过载。
 - `init` 混合了建档、初测、导流，后续很难扩成 `quick/full placement` 两条线。
 - `words` 是大系统，但目前仍是单块 skill，不利于拆出 review、contextual、topic、testme。
+- 缺少独立 analysis 面：考试成绩分析、学习行为分析、薄弱项识别、下一步推荐都还被 `assessment` 隐式吸收，无法单独演进。
 - `database` 和 `cron-*` 本质是 support 能力，不应继续和教学 skill 放在同一层。
 
 ### 2.2 当前结构为什么不能继续直接扩
@@ -77,20 +78,20 @@
 
 ## 3. 现有结构 vs 新结构
 
-| 现在已有             | 新结构归属                                                                                                                                                                                          | 调整原因                                   |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `init`               | `profile-manager` + `placement-quick` + `placement-full` + `ielts-router`                                                                                                                           | 建档、初测、导流应拆开                     |
-| `practice`           | `ielts-router` + `coach-passive`                                                                                                                                                                    | 用户说“开始练”本质是路由和被动教练响应     |
-| `practice-speaking`  | `speaking-exam` + `speaking-freetalk` + `speaking-shadowing` + `speaking-repeat` + `speaking-roleplay` + `speaking-explain` + `speaking-azure-score`                                                | 口语内部模式差异大，必须拆                 |
-| `practice-listening` | `listening-exam` + `listening-dictation` + `listening-shadowing` + `listening-prediction` + `listening-numberdrill` + `listening-mapdrill` + `listening-explain`                                    | 听力应按能力点和题型拆开                   |
-| `practice-reading`   | `reading-exam` + `reading-timed` + `reading-untimed` + `reading-typetrain` + `reading-skim-drill` + `reading-vocab-extract` + `reading-explain`                                                     | 阅读要区分考试、计时、专项、讲解、抽词     |
-| `practice-writing`   | `writing-exam` + `writing-task1-academic` + `writing-task1-general` + `writing-task2` + `writing-guided` + `writing-rewrite` + `writing-sentence-drill` + `writing-collocation` + `writing-explain` | 写作要按 task 和训练模式拆开               |
-| `words`              | `vocab-review` + `vocab-contextual` + `vocab-topic` + `vocab-testme`                                                                                                                                | 词汇至少拆成复习、抽词、话题、主动测试     |
-| `assessment`         | `learner-state` + `placement-quick` + `placement-full` + `coach-proactive` + `coach-passive`                                                                                                        | 评估、状态、推荐、主动提醒不能继续混成一块 |
-| `database`           | `support/ielts-data-contract`                                                                                                                                                                       | 属于内部数据契约                           |
-| `cron-briefing`      | `support/ielts-cron-briefing`                                                                                                                                                                       | 属于内部自动化                             |
-| `cron-word-seed`     | `support/ielts-cron-word-seed`                                                                                                                                                                      | 属于内部自动化                             |
-| `cron-word-review`   | `support/ielts-cron-word-review`                                                                                                                                                                    | 属于内部自动化                             |
+| 现在已有             | 新结构归属                                                                                                                                                                                          | 调整原因                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `init`               | `profile-manager` + `placement-quick` + `placement-full` + `ielts-router`                                                                                                                           | 建档、初测、导流应拆开                           |
+| `practice`           | `ielts-router` + `coach-passive`                                                                                                                                                                    | 用户说“开始练”本质是路由和被动教练响应           |
+| `practice-speaking`  | `speaking-exam` + `speaking-freetalk` + `speaking-shadowing` + `speaking-repeat` + `speaking-roleplay` + `speaking-explain` + `speaking-azure-score`                                                | 口语内部模式差异大，必须拆                       |
+| `practice-listening` | `listening-exam` + `listening-dictation` + `listening-shadowing` + `listening-prediction` + `listening-numberdrill` + `listening-mapdrill` + `listening-explain`                                    | 听力应按能力点和题型拆开                         |
+| `practice-reading`   | `reading-exam` + `reading-timed` + `reading-untimed` + `reading-typetrain` + `reading-skim-drill` + `reading-vocab-extract` + `reading-explain`                                                     | 阅读要区分考试、计时、专项、讲解、抽词           |
+| `practice-writing`   | `writing-exam` + `writing-task1-academic` + `writing-task1-general` + `writing-task2` + `writing-guided` + `writing-rewrite` + `writing-sentence-drill` + `writing-collocation` + `writing-explain` | 写作要按 task 和训练模式拆开                     |
+| `words`              | `vocab-review` + `vocab-contextual` + `vocab-topic` + `vocab-testme`                                                                                                                                | 词汇至少拆成复习、抽词、话题、主动测试           |
+| `assessment`         | `learner-state` + `placement-quick` + `placement-full` + `analysis-exam` + `analysis-study` + `analysis-weakness` + `analysis-recommend` + `coach-proactive` + `coach-passive`                      | 初测、状态、分析、推荐、主动提醒不能继续混成一块 |
+| `database`           | `support/ielts-data-contract`                                                                                                                                                                       | 属于内部数据契约                                 |
+| `cron-briefing`      | `support/ielts-cron-briefing`                                                                                                                                                                       | 属于内部自动化                                   |
+| `cron-word-seed`     | `support/ielts-cron-word-seed`                                                                                                                                                                      | 属于内部自动化                                   |
+| `cron-word-review`   | `support/ielts-cron-word-review`                                                                                                                                                                    | 属于内部自动化                                   |
 
 这张表的结论很直接：
 
@@ -135,6 +136,30 @@ ielts/
 │   └── assets/
 │       ├── placement-full-blueprint.md                           # 完整初测蓝图；如何覆盖听说读写词汇
 │       └── placement-full-output.md                              # 完整初测输出格式；更详细的诊断结果
+
+├── analysis-exam/                                                # 考试成绩分析；band 拆解、历史对比、分项表现变化
+│   ├── SKILL.md                                                  # 读取 exam 结果，输出按科目/按时间的考试分析
+│   └── assets/
+│       ├── exam-metrics.md                                       # 考试分析指标；overall、单科、题型、时间管理等
+│       └── history-compare-template.md                           # 历史对比模板；本次 vs 上次/近三次
+
+├── analysis-study/                                               # 学习行为分析；学习时长、频率、覆盖面、坚持度
+│   ├── SKILL.md                                                  # 读取日常 session，输出学习行为层面的分析
+│   └── assets/
+│       ├── study-metrics.md                                      # 学习行为指标；总时长、连续天数、模块覆盖、活跃度
+│       └── consistency-rules.md                                  # 一致性规则；是否稳定学习、是否偏科、是否断档
+
+├── analysis-weakness/                                            # 薄弱项识别；跨 session 统计错误模式
+│   ├── SKILL.md                                                  # 聚合 speaking/listening/reading/writing/vocab 的错误，识别核心瓶颈
+│   └── assets/
+│       ├── weakness-detection-rules.md                           # 薄弱项识别规则；高频错误、重复错误、长期未改善项
+│       └── error-taxonomy.md                                     # 错误分类体系；便于跨 skill 统一统计
+
+├── analysis-recommend/                                           # 下一步推荐；基于诊断结果派发练习
+│   ├── SKILL.md                                                  # 根据 exam + study + weakness 的结果，推荐下一步最该做的事
+│   └── assets/
+│       ├── recommendation-rules.md                               # 推荐逻辑；按目标分、考试日期、弱项、可用时间来派发
+│       └── next-step-map.md                                      # 问题 -> skill 的映射，如 hesitation -> speaking-shadowing
 
 ├── coach-proactive/                                              # 主动教练；监控状态并主动打断、提醒、推荐下一步
 │   ├── SKILL.md                                                  # 当 learner state 或表现触发阈值时主动介入
@@ -420,8 +445,8 @@ surfaces:
 ### 5.1 建议固定字段
 
 - `package`：`ielts` 或 `support`
-- `track`：`router / profile / state / placement / coach / speaking / listening / reading / writing / vocab / support`
-- `role`：`exam / practice / explain / eval / infra / cron / contract`
+- `track`：`router / profile / state / placement / analysis / coach / speaking / listening / reading / writing / vocab / support`
+- `role`：`exam / practice / explain / eval / analysis / recommend / infra / cron / contract`
 - `mode`：更细的模式，例如 `shadowing / repeat / timed / typetrain / mapdrill / rewrite`
 - `visibility`：`public / guided / internal / hidden`
 
@@ -480,6 +505,10 @@ surfaces:
 
 - `placement-quick`
 - `placement-full`
+- `analysis-exam`
+- `analysis-study`
+- `analysis-weakness`
+- `analysis-recommend`
 - `coach-proactive`
 - `coach-passive`
 - `speaking-explain`
@@ -517,7 +546,7 @@ surfaces:
 ### Step 3：把旧 skill 逐步迁入新结构
 
 - `init` -> `profile-manager + placement-quick/full + ielts-router`
-- `assessment` -> `learner-state + coach-proactive + coach-passive`
+- `assessment` -> `learner-state + analysis-exam + analysis-study + analysis-weakness + analysis-recommend + coach-proactive + coach-passive`
 - `practice-speaking` -> `speaking-*`
 - `practice-listening` -> `listening-*`
 - `practice-reading` -> `reading-*`
@@ -539,8 +568,9 @@ surfaces:
 
 1. 先做 manifest 设计和 loader 升级。
 2. 再把 `ielts-router / profile-manager / learner-state` 这三个核心基础 skill 做出来。
-3. 然后优先拆 `reading / listening / writing / vocab`。
-4. 最后再处理 support 层和 cron 迁移。
+3. 然后把 `analysis-exam / analysis-study / analysis-weakness / analysis-recommend` 这组分析链路做出来，先把“分析 -> 推荐 -> 导流”立住。
+4. 再优先拆 `reading / listening / writing / vocab`。
+5. 最后再处理 support 层和 cron 迁移。
 
 当前最不该先做的事是：
 
@@ -555,6 +585,7 @@ surfaces:
 这次重构的本质，不是把 `practice-reading` 拆成几个子 skill 这么简单，而是把整个 IELTS 系统正式升级成：
 
 - 一个完整的 `ielts/` Hermes skill 包
+- 一个明确可演进的 analysis 层，负责考试分析、学习分析、弱项识别和下一步推荐
 - 一个独立的 `support/` 内部支持层
 - 一套明确的运行时 manifest 语义
 

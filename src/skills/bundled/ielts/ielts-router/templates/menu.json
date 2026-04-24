@@ -1,0 +1,88 @@
+{
+  "main": {
+    "text": "📚 IELTS 训练中心\n\n选一个方向开始，每个菜单都能返回上一层。",
+    "buttons": [
+      ["🗣️ 口语|nav:speaking", "🎧 听力|nav:listening"],
+      ["📖 阅读|nav:reading", "✍️ 写作|nav:writing"],
+      ["📚 词汇|nav:vocab", "🎓 完整考试|nav:exam"],
+      ["📊 诊断分析|nav:analysis", "💬 教练聊聊|coach-passive"]
+    ]
+  },
+
+  "speaking": {
+    "text": "🗣️ 口语训练 — 选择模式\n\n每个模式都针对不同的口语子能力；选完进去就不再切模式。",
+    "buttons": [
+      ["🎙️ 跟读 shadowing|speaking-shadowing", "🔁 复述 repeat|speaking-repeat"],
+      ["💬 自由表达|speaking-freetalk", "🎭 情景对话|speaking-roleplay"],
+      ["🎓 完整口语模考|speaking-exam"],
+      ["🔍 讲解上次录音|speaking-explain"],
+      ["← 返回|nav:main"]
+    ]
+  },
+
+  "listening": {
+    "text": "🎧 听力训练 — 选择模式\n\n分题型和分能力两种入口。",
+    "buttons": [
+      ["✏️ 听写|listening-dictation", "🎯 听前预判|listening-prediction"],
+      ["🎙️ 听力跟读|listening-shadowing", "🔢 数字日期拼写|listening-numberdrill"],
+      ["🗺️ 地图题|listening-mapdrill"],
+      ["🎓 完整听力模考|listening-exam"],
+      ["🔍 讲解上次错题|listening-explain"],
+      ["← 返回|nav:main"]
+    ]
+  },
+
+  "reading": {
+    "text": "📖 阅读训练 — 选择模式\n\n计时和非计时分开；题型专项单列。",
+    "buttons": [
+      ["⏱️ 限时单篇|reading-timed", "🐢 非限时精读|reading-untimed"],
+      ["📋 题型专项|reading-typetrain", "⚡ 略读主旨|reading-skim-drill"],
+      ["🔖 抽生词到词汇|reading-vocab-extract"],
+      ["🎓 完整阅读模考|reading-exam"],
+      ["🔍 讲解上次错题|reading-explain"],
+      ["← 返回|nav:main"]
+    ]
+  },
+
+  "writing": {
+    "text": "✍️ 写作训练 — 选择模式\n\n按 Task 拆开；单项训练和整篇分开。",
+    "buttons": [
+      ["📊 Task1 图表|writing-task1-academic", "✉️ Task1 书信|writing-task1-general"],
+      ["💬 Task2|writing-task2", "🧩 带提纲写|writing-guided"],
+      ["🔁 样文改写|writing-rewrite", "🔬 句子专项|writing-sentence-drill"],
+      ["📚 搭配专项|writing-collocation"],
+      ["🎓 完整写作模考|writing-exam"],
+      ["🔍 讲解上次作文|writing-explain"],
+      ["← 返回|nav:main"]
+    ]
+  },
+
+  "vocab": {
+    "text": "📚 词汇训练 — 选择模式\n\n复习 / 抽词 / 话题 / 主动测试。",
+    "buttons": [
+      ["🔄 间隔复习|vocab-review", "🧠 考考我|vocab-testme"],
+      ["📖 题源抽词|vocab-contextual", "🎯 话题成组|vocab-topic"],
+      ["← 返回|nav:main"]
+    ]
+  },
+
+  "exam": {
+    "text": "🎓 完整模考 — 选择科目\n\n模考会走完 exam 流程并给出 band 估分。",
+    "buttons": [
+      ["🗣️ 口语 Full|speaking-exam", "🎧 听力 Full|listening-exam"],
+      ["📖 阅读 Full|reading-exam", "✍️ 写作 Full|writing-exam"],
+      ["📝 快速水平测试|placement-quick", "📋 完整基线评估|placement-full"],
+      ["← 返回|nav:main"]
+    ]
+  },
+
+  "analysis": {
+    "text": "📊 诊断分析 — 看清楚现在的状态再决定下一步\n\n每项只读取已有数据，不做新题。",
+    "buttons": [
+      ["🧭 当前水平 (MEMORY)|learner-state", "📋 模考分析|analysis-exam"],
+      ["📅 学习行为|analysis-study", "🔍 弱点诊断|analysis-weakness"],
+      ["🎯 下一步建议|analysis-recommend"],
+      ["← 返回|nav:main"]
+    ]
+  }
+}

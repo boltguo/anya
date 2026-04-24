@@ -25,7 +25,9 @@
       "Bash(node --input-type=module -e \"import { marked } from 'marked'; console.log\\(typeof marked.parse\\); const r = marked.parse\\('**hi** _there_'\\); console.log\\(r instanceof Promise ? 'async' : 'sync', r\\);\")",
       "Bash(node --input-type=module -e ' *)",
       "Bash(npx tsx --eval ' *)",
-      "Bash(pnpm remove *)"
+      "Bash(pnpm remove *)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('ielts-router/templates/menu.json'\\)\\); print\\('pages:', list\\(d.keys\\(\\)\\)\\); print\\('main btns:', len\\(d['main']['buttons']\\)\\)\")",
+      "Bash(python3)"
     ],
     "additionalDirectories": [
       "/private/tmp/anya_init_test"
