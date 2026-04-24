@@ -30,6 +30,10 @@ description: "Full IELTS Writing mock: Task 1 (20m) + Task 2 (40m) + 4-criterion
 
 Queries: `support/ielts-data-contract/references/queries.md`.
 
+## Scoring Reference
+
+Before scoring, load the rubric: `skill_view name=ielts-band-descriptors file=references/writing-rubric.md`
+
 ## Rules
 
 1. **60 min strict**, no cross-over.

@@ -37,10 +37,15 @@ do_push() {
   echo ""
   echo "✓ Skills pushed"
 
+  # Typecheck first — fail fast on compile errors
+  echo ""
+  echo "🔍 Type checking..."
+  cd "$PROJECT_DIR"
+  pnpm typecheck || { echo "❌ Type errors found. Fix them before deploying."; exit 1; }
+
   # Build
   echo ""
   echo "🔨 Building..."
-  cd "$PROJECT_DIR"
   npx tsup --no-dts 2>&1 | tail -1
 
   # Restart gateway

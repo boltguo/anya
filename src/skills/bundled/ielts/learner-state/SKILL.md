@@ -21,7 +21,9 @@ Analysis only. Reads `study.db`, recomputes bands + weak dims + streak, writes `
 3. Refresh weak dimensions only when evidence is clear (≥ 3 matching errors OR subcap ≤ 4.5 with n ≥ 3).
 4. Update streak + top errors + profile blocks (deep mode only).
 5. Write MEMORY via `memory` tool.
-6. Cron → `[SILENT]`. User → short summary + `[🎯 next_best | 💬 coach-passive | 🏠 nav:main]`.
+6. **Upsert `band_trend`** — one row per section for today's date with the recomputed band estimate.
+7. **Upsert `activity_log`** — aggregate today's sessions count, total minutes (from `duration_seconds`), sections touched, words reviewed.
+8. Cron → `[SILENT]`. User → short summary + `[🎯 next_best | 💬 coach-passive | 🏠 nav:main]`.
 
 Canonical keys from `analysis-weakness/assets/subcap-catalog.md` and `error-taxonomy.md`. Queries in `support/ielts-data-contract/references/queries.md`.
 

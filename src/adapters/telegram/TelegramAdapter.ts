@@ -21,7 +21,7 @@ import { loadSkills } from '../../skills/loader.js';
 import { createSession } from '../../storage/sessionStore.js';
 import { transcribeAudio } from '../../lib/stt.js';
 import { analyzeImage } from '../../lib/vision.js';
-import { AUDIO_CACHE_DIR, VOICE_DIR, IMAGE_RECEIVED_DIR } from '../../lib/paths.js';
+import { AUDIO_CACHE_DIR, VOICE_DIR, IMAGE_RECEIVED_DIR, USER_MD_PATH } from '../../lib/paths.js';
 import type { AnyaConfig } from '../../config/defaults.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -148,6 +148,16 @@ export class TelegramAdapter {
     const sessionKey = `tg:${ctx.chat!.id}`;
     const typingInterval = startTypingIndicator(ctx);
 
+    // Auto-detect uninitialized user and hint the LLM to run onboarding
+    if (!input.includes('/command: profile-manager')) {
+      try {
+        const userMd = fs.existsSync(USER_MD_PATH) ? fs.readFileSync(USER_MD_PATH, 'utf-8') : '';
+        if (!userMd || userMd.includes('initialized: false')) {
+          input = `[SYSTEM: The user has not completed onboarding yet (initialized=false). Run the "profile-manager" skill to collect their profile before doing anything else.]\n\n${input}`;
+        }
+      } catch { /* ignore read errors */ }
+    }
+
     agentLogger.info({ msg: 'tg_incoming', chatId: ctx.chat!.id, userId, input: input.substring(0, 200) });
 
     const sessionAdapter = new TelegramSessionAdapter(
@@ -189,7 +199,6 @@ export class TelegramAdapter {
     const skills = loadSkills();
     const botCommands: Array<{ command: string; description: string }> = [
       { command: 'new', description: '🔄 New conversation' },
-      { command: 'kill', description: '💀 Force stop & clear' },
     ];
 
     // Map skill names to short command names — only for skills with command: true
@@ -201,9 +210,6 @@ export class TelegramAdapter {
       botCommands.push({ command: cmd, description: desc });
       skillCommandMap.set(cmd, skill.name);
     }
-
-    // Register commands with Telegram (shows menu when user types '/')
-    await this.bot.api.setMyCommands(botCommands);
 
     // ── Bot commands ──
 
@@ -237,6 +243,79 @@ export class TelegramAdapter {
       await ctx.reply(`💀 Stopped.${extra}\nSession cleared — send a message to start over.`);
       agentLogger.info({ msg: 'tg_kill', chatId: ctx.chat.id, cancelled });
     });
+
+    this.bot.command('restart', async (ctx) => {
+      const userId = ctx.from?.id;
+      const allowedUsers = this.config.telegram.allowed_user_ids;
+      if (allowedUsers.length > 0 && userId && !allowedUsers.includes(userId)) {
+        await ctx.reply('⛔ Unauthorized.');
+        return;
+      }
+
+      agentLogger.info({ msg: 'tg_restart_command', chatId: ctx.chat.id, userId });
+      await ctx.reply('🔄 Restarting gateway...');
+
+      // Spawn a detached process to restart after this process exits.
+      // Uses the same entry point: `anya gateway start`
+      const { spawn } = await import('node:child_process');
+      const { openSync } = await import('node:fs');
+      const { LOGS_DIR } = await import('../../lib/paths.js');
+      const logFd = openSync(path.join(LOGS_DIR, 'gateway.log'), 'a');
+
+      const anyaBin = process.argv[1];
+      const child = spawn(process.execPath, [anyaBin, 'gateway', 'start', '--foreground'], {
+        detached: true,
+        stdio: ['ignore', logFd, logFd],
+        env: { ...process.env },
+      });
+      child.unref();
+
+      agentLogger.info({ msg: 'tg_restart_spawned', newPid: child.pid });
+
+      // Give the reply time to send, then exit this process
+      setTimeout(() => {
+        process.exit(0);
+      }, 500);
+    });
+
+    // ── Command aliases: short Telegram commands → existing skills ──
+    // No separate SKILL.md needed — just a mapping table.
+    const commandAliases: Array<{ cmd: string; description: string; skill: string }> = [
+      { cmd: 'practice', description: '📝 Start practice', skill: 'ielts-router' },
+      { cmd: 'init',     description: '🎯 Initialize study profile', skill: 'profile-manager' },
+    ];
+
+    for (const alias of commandAliases) {
+      // Remove from skillCommandMap if the target skill has command: true
+      // to avoid duplicate registration
+      for (const [existingCmd, existingSkill] of skillCommandMap) {
+        if (existingSkill === alias.skill) {
+          skillCommandMap.delete(existingCmd);
+          break;
+        }
+      }
+      botCommands.push({ command: alias.cmd, description: alias.description });
+    }
+
+    // Append restart and kill last so they appear at the bottom of the menu
+    botCommands.push(
+      { command: 'restart', description: '♻️ Restart gateway' },
+      { command: 'kill', description: '💀 Force stop & clear' },
+    );
+
+    // Register commands with Telegram (shows menu when user types '/')
+    await this.bot.api.setMyCommands(botCommands);
+
+    // Register alias handlers
+    for (const alias of commandAliases) {
+      this.bot.command(alias.cmd, async (ctx) => {
+        agentLogger.info({ msg: 'tg_alias_command', chatId: ctx.chat.id, cmd: alias.cmd, skill: alias.skill });
+        const sessionKey = `tg:${ctx.chat.id}`;
+        await createSession(sessionKey);
+        const input = `[/command: ${alias.skill}] Run the "${alias.skill}" skill now.`;
+        this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
+      });
+    }
 
     // Dynamic skill commands — route to agent as "Run skill: <name>"
     for (const [cmd, skillName] of skillCommandMap) {
@@ -504,7 +583,7 @@ export class TelegramAdapter {
           ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls,
         );
         // Override chatId since poll_answer ctx doesn't have ctx.chat
-        (sessionAdapter as any).chatId = poll.chatId;
+        sessionAdapter.setChatIdOverride(poll.chatId);
         const agent = new Agent(this.config, sessionAdapter);
 
         try {

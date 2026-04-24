@@ -71,10 +71,8 @@ export async function textToSpeech(
   const maxLen = 8000;
   if (text.length > maxLen) text = text.substring(0, maxLen);
 
-  // Use SSML only when needed (custom rate or explicit ssml), otherwise plain text
-  const needsSsml = !!opts?.ssml || (rate !== DEFAULT_RATE && rate !== '0%');
-  const body = opts?.ssml || (needsSsml ? buildSsml(text, voice, rate) : text);
-  const contentType = needsSsml ? 'application/ssml+xml' : 'text/plain';
+  // Always use SSML — Azure TTS REST API requires SSML for Neural voices.
+  const body = opts?.ssml || buildSsml(text, voice, rate);
 
   const timestamp = Date.now();
   const outputFormat = wantOpus ? 'ogg-48khz-16bit-mono-opus' : 'audio-24khz-96kbitrate-mono-mp3';
@@ -84,19 +82,15 @@ export async function textToSpeech(
   fs.mkdirSync(TTS_DIR, { recursive: true });
 
   try {
-    agentLogger.info({ msg: 'tts_start', voice, rate, format: wantOpus ? 'opus' : 'mp3', ssml: needsSsml, textLen: text.length });
+    agentLogger.info({ msg: 'tts_start', voice, rate, format: wantOpus ? 'opus' : 'mp3', textLen: text.length });
 
     const url = `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`;
     const headers: Record<string, string> = {
       'Ocp-Apim-Subscription-Key': speechKey,
-      'Content-Type': contentType,
+      'Content-Type': 'application/ssml+xml',
       'X-Microsoft-OutputFormat': outputFormat,
       'User-Agent': 'Anya-TTS',
     };
-    // Plain text mode needs voice specified via header
-    if (!needsSsml) {
-      headers['X-Microsoft-Speech-Voice'] = voice;
-    }
     const response = await fetch(url, {
       method: 'POST',
       headers,
@@ -129,7 +123,7 @@ export async function textToSpeech(
       bytes: fileSize,
       durationSec,
     });
-    trackTts(countBillableChars(text, needsSsml ? body : undefined), durationSec);
+    trackTts(countBillableChars(text, body), durationSec);
     return { success: true, filePath: outputPath, durationSec };
   } catch (err) {
     const error = err as Error;

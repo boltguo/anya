@@ -88,13 +88,11 @@ export interface AnyaConfig {
 
   ui: {
     show_tool_calls: boolean;
-    show_thinking: boolean;
   };
 
   advanced: {
     context_window: number;
     compress_threshold: number;
-    session_history_limit: number;
     max_history_messages: number;
     log_level: string;
     max_react_loops: number;
@@ -148,12 +146,11 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   tts: { voice: 'en-US-AriaNeural', rate: '+0%' },
   azure: { speech_key: '', speech_region: 'eastasia' },
   cron: { enabled: false },
-  ui: { show_tool_calls: true, show_thinking: false },
+  ui: { show_tool_calls: true },
 
   advanced: {
     context_window: 1000000,
     compress_threshold: 0.8,
-    session_history_limit: 50,
     max_history_messages: 200,
     log_level: 'info',
     max_react_loops: 20,

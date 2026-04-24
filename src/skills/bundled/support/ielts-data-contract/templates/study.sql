@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS samples (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at          TEXT NOT NULL,
     skill_type          TEXT NOT NULL,
+    mode                TEXT NOT NULL DEFAULT 'study',  -- 'study' | 'exam' | 'placement'
+    completed           INTEGER NOT NULL DEFAULT 1,     -- 0 = abandoned, 1 = finished
+    duration_seconds    INTEGER,                        -- wall-clock time for this practice
     prompt              TEXT NOT NULL DEFAULT '',
     raw_content         TEXT NOT NULL DEFAULT '',
     band_task           REAL,
@@ -16,6 +19,8 @@ CREATE TABLE IF NOT EXISTS samples (
     band_lexical        REAL,
     band_grammar        REAL,
     band_overall        REAL,
+    raw_score           INTEGER,                        -- e.g. 32 out of 40 for R/L
+    max_score           INTEGER,                        -- e.g. 40
     audio_path          TEXT,
     session_id          TEXT NOT NULL DEFAULT '',
     feedback            TEXT NOT NULL DEFAULT '',
@@ -72,11 +77,17 @@ CREATE TABLE IF NOT EXISTS mock_sessions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at      TEXT NOT NULL,
     type            TEXT NOT NULL,
+    assessment_type TEXT NOT NULL DEFAULT 'mock-exam', -- 'placement-quick' | 'placement-full' | 'mock-exam' | 'reassess'
+    duration_seconds INTEGER,
+    completed       INTEGER NOT NULL DEFAULT 1,
+    module          TEXT NOT NULL DEFAULT 'academic',  -- 'academic' | 'general'
     band_listening  REAL,
     band_reading    REAL,
     band_writing    REAL,
     band_speaking   REAL,
     band_overall    REAL,
+    listening_raw   INTEGER,
+    reading_raw     INTEGER,
     stability_score REAL,
     notes           TEXT DEFAULT ''
 );
@@ -149,10 +160,34 @@ CREATE TABLE IF NOT EXISTS paraphrase_members (
     PRIMARY KEY (group_id, word_id)
 );
 
+-- ─── Progress tracking (derived / cache) ───────────────────────────────────
+
+-- Rolling per-section band estimate, one row per (section, date)
+CREATE TABLE IF NOT EXISTS band_trend (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    date          TEXT NOT NULL,                       -- YYYY-MM-DD
+    section       TEXT NOT NULL,                       -- listening | reading | writing | speaking | overall
+    band_estimate REAL NOT NULL,
+    sample_count  INTEGER,                             -- how many sessions fed into this estimate
+    source        TEXT DEFAULT 'learner-state',        -- 'learner-state' | 'placement' | 'mock'
+    UNIQUE(date, section)
+);
+
+-- Daily activity summary — written by cron or learner-state after each session
+CREATE TABLE IF NOT EXISTS activity_log (
+    date             TEXT PRIMARY KEY,               -- YYYY-MM-DD
+    sessions_count   INTEGER DEFAULT 0,
+    minutes_total    INTEGER DEFAULT 0,
+    sections_touched TEXT DEFAULT '',                 -- comma-separated: 'speaking,writing'
+    words_reviewed   INTEGER DEFAULT 0,
+    new_words_added  INTEGER DEFAULT 0
+);
+
 -- ─── Indexes ───────────────────────────────────────────────────────────────
 
 CREATE INDEX IF NOT EXISTS idx_samples_created       ON samples(created_at);
 CREATE INDEX IF NOT EXISTS idx_samples_skill         ON samples(skill_type);
+CREATE INDEX IF NOT EXISTS idx_samples_mode          ON samples(mode);
 CREATE INDEX IF NOT EXISTS idx_samples_parent        ON samples(parent_sample_id);
 CREATE INDEX IF NOT EXISTS idx_samples_hash          ON samples(prompt_hash);
 CREATE INDEX IF NOT EXISTS idx_errors_sample         ON errors(sample_id);
@@ -162,6 +197,7 @@ CREATE INDEX IF NOT EXISTS idx_subcap_sample         ON subcap_scores(sample_id)
 CREATE INDEX IF NOT EXISTS idx_subcap_key            ON subcap_scores(subcap_key);
 CREATE INDEX IF NOT EXISTS idx_daily_date            ON daily_tasks(date);
 CREATE INDEX IF NOT EXISTS idx_mock_created          ON mock_sessions(created_at);
+CREATE INDEX IF NOT EXISTS idx_mock_type             ON mock_sessions(assessment_type);
 CREATE INDEX IF NOT EXISTS idx_stage_changed         ON stage_transitions(changed_at);
 CREATE INDEX IF NOT EXISTS idx_words_mastery         ON words(mastery);
 CREATE INDEX IF NOT EXISTS idx_words_srs_due         ON words(srs_due);
@@ -171,3 +207,5 @@ CREATE INDEX IF NOT EXISTS idx_words_user_priority   ON words(is_user_word, prio
 CREATE INDEX IF NOT EXISTS idx_words_item_kind       ON words(item_kind);
 CREATE INDEX IF NOT EXISTS idx_word_events_word      ON word_events(word);
 CREATE INDEX IF NOT EXISTS idx_paraphrase_group      ON paraphrase_members(group_id);
+CREATE INDEX IF NOT EXISTS idx_trend_section_date    ON band_trend(section, date DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_date         ON activity_log(date DESC);

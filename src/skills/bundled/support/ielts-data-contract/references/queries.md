@@ -24,8 +24,11 @@ db name=study sql="SELECT COALESCE(SUM(load_score),0) AS consumed FROM samples W
 ## Samples — writes
 
 ```
-# record a practice session
-db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, band_overall, session_id, feedback, parent_sample_id, redo_count, prompt_hash, load_score, session_window) VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" params='["writing", "Describe the chart...", "<essay>", 5.5, "sess-123", "{}", null, 0, "abc123def456", 3.0, "morning"]'
+# record a practice session (include mode, completed, duration_seconds)
+db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, band_overall, session_id, feedback, parent_sample_id, redo_count, prompt_hash, load_score, session_window, mode, completed, duration_seconds) VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" params='["writing", "Describe the chart...", "<essay>", 5.5, "sess-123", "{}", null, 0, "abc123def456", 3.0, "morning", "study", 1, 720]'
+
+# mode values: 'study' (default), 'exam' (mock/placement), 'placement'
+# completed: 1 = finished, 0 = abandoned
 ```
 
 See `references/prompt-hash.md` for how to compute the 12-char `prompt_hash`.
@@ -66,8 +69,10 @@ db name=study sql="UPDATE daily_tasks SET completed = 1, completed_at = datetime
 ## Mock sessions / stage transitions
 
 ```
-# record a full mock
-db name=study sql="INSERT INTO mock_sessions (created_at, type, band_listening, band_reading, band_writing, band_speaking, band_overall, stability_score, notes) VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?)" params='["full", 6.5, 6.0, 5.5, 6.0, 6.0, 0.35, ""]'
+# record a full mock (include assessment_type, duration_seconds, completed)
+db name=study sql="INSERT INTO mock_sessions (created_at, type, band_listening, band_reading, band_writing, band_speaking, band_overall, stability_score, notes, assessment_type, duration_seconds, completed) VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" params='["full", 6.5, 6.0, 5.5, 6.0, 6.0, 0.35, "", "mock-exam", 7200, 1]'
+
+# assessment_type values: 'placement-quick', 'placement-full', 'mock-exam', 'reassess'
 
 # record stage change
 db name=study sql="INSERT INTO stage_transitions (changed_at, from_stage, to_stage, from_path, to_path, reason, snapshot_path) VALUES (datetime('now'), ?, ?, ?, ?, ?, ?)" params='["diagnose", "breakthrough", "B", "B", "primary_stable_2w", "memory_snapshots/2026-W16.md"]'
@@ -112,6 +117,26 @@ db name=study sql="INSERT INTO paraphrase_members (group_id, word_id, register) 
 
 # read group
 db name=study sql="SELECT pg.topic, pm.register, w.word, w.definition, w.example_en FROM paraphrase_groups pg JOIN paraphrase_members pm ON pg.id = pm.group_id JOIN words w ON pm.word_id = w.word WHERE pg.id = ?" params='[1]'
+```
+
+## Band trend (time-series)
+
+```
+# upsert today's band for a section (learner-state calls this per section)
+db name=study sql="INSERT INTO band_trend (date, section, band_estimate, sample_count, source) VALUES (date('now'), ?, ?, ?, ?) ON CONFLICT(date, section) DO UPDATE SET band_estimate = excluded.band_estimate, sample_count = excluded.sample_count, source = excluded.source" params='["speaking", 6.0, 5, "learner-state"]'
+
+# read last 30 days for charts
+db name=study sql="SELECT date, section, band_estimate FROM band_trend WHERE date >= date('now', '-30 days') ORDER BY date ASC, section"
+```
+
+## Activity log (daily aggregation)
+
+```
+# upsert today's activity (learner-state calls this)
+db name=study sql="INSERT INTO activity_log (date, sessions_count, minutes_total, sections_touched, words_reviewed) VALUES (date('now'), ?, ?, ?, ?) ON CONFLICT(date) DO UPDATE SET sessions_count = excluded.sessions_count, minutes_total = excluded.minutes_total, sections_touched = excluded.sections_touched, words_reviewed = excluded.words_reviewed" params='[3, 45, "speaking,writing", 12]'
+
+# weekly summary
+db name=study sql="SELECT date, sessions_count, minutes_total, sections_touched, words_reviewed FROM activity_log WHERE date >= date('now', '-7 days') ORDER BY date ASC"
 ```
 
 ## Item-kind contract for `words`

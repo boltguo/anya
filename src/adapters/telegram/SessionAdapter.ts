@@ -65,8 +65,16 @@ export class TelegramSessionAdapter implements Adapter {
     this.activePolls = activePolls ?? new Map();
   }
 
+  /** Allows overriding chatId for contexts without ctx.chat (e.g., poll_answer). */
+  private _overrideChatId?: number;
+
   private get chatId(): number {
-    return this.ctx.chat!.id;
+    return this._overrideChatId ?? this.ctx.chat!.id;
+  }
+
+  /** Override chatId for contexts without chat (e.g., poll_answer). */
+  setChatIdOverride(id: number): void {
+    this._overrideChatId = id;
   }
 
   // ── Queue infrastructure ──────────────────────────────────────────────────
@@ -567,7 +575,8 @@ export class TelegramSessionAdapter implements Adapter {
     opts: { caption?: string; tag?: string; replyTo?: number | string; parseMode?: string } = {},
   ): Promise<number | null> {
     return this.enqueue(async () => {
-      const rp = this.resolveReplyParams(opts.replyTo);
+      const replyTo = opts.replyTo;
+      const rp = replyTo ? { message_id: replyTo as number } : undefined;
       const source = isAbsolute(fileUrl) ? new InputFile(fileUrl) : fileUrl;
       const msg = await this.bot.api.sendDocument(this.chatId, source, {
         caption: opts.caption,

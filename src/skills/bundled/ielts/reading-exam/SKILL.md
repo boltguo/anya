@@ -35,6 +35,10 @@ Band-mapping + full workflow in `references/workflow.md`.
 
 Queries: `support/ielts-data-contract/references/queries.md`.
 
+## Scoring Reference
+
+Before converting raw /40 to band, load: `skill_view name=ielts-band-descriptors file=references/score-conversion.md`
+
 ## Rules
 
 1. **60 min clock is real.**

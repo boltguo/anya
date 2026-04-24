@@ -64,12 +64,10 @@ export const PartialAnyaConfigSchema = z.object({
   cron: z.object({ enabled: z.boolean().optional() }).optional(),
   ui: z.object({
     show_tool_calls: z.boolean().optional(),
-    show_thinking: z.boolean().optional(),
   }).optional(),
   advanced: z.object({
     context_window: z.number().optional(),
     compress_threshold: z.number().optional(),
-    session_history_limit: z.number().optional(),
     max_history_messages: z.number().optional(),
     log_level: z.string().optional(),
     max_react_loops: z.number().optional(),

@@ -213,7 +213,6 @@ export class Agent {
           role: 'assistant',
           content: response.content || undefined,
           toolCalls: response.toolCalls,
-          _rawParts: response.rawModelParts,
         };
         messages.push(assistantMsg);
         newMessages.push(assistantMsg);

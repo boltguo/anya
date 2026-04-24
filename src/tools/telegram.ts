@@ -109,6 +109,11 @@ register({
     const tg = getTgAdapter(context);
     const type = String(args.type);
 
+    // Normalize literal \n sequences the LLM sometimes emits in JSON args
+    if (typeof args.text === 'string') {
+      args.text = (args.text as string).replace(/\\n/g, '\n');
+    }
+
     switch (type) {
       case 'text': {
         let replyTo: number | string | undefined = args.reply_to as string | undefined;

@@ -29,13 +29,7 @@ export interface Message {
   toolCallId?: string;
   /** Name of the tool that produced this result (present when role='tool'). */
   toolName?: string;
-  /**
-   * Raw provider-specific parts for round-tripping.
-   * Preserves opaque fields like Gemini's `thought_signature` that must be
-   * echoed back verbatim. Transient — not persisted to the database.
-   * @internal
-   */
-  _rawParts?: unknown[];
+
 }
 
 /**
@@ -53,22 +47,6 @@ export interface ToolCall {
   args: Record<string, unknown>;
 }
 
-/**
- * Result of executing a tool.
- *
- * Returned by the tool dispatcher and appended to the conversation
- * history as a `role: 'tool'` message.
- */
-export interface ToolResult {
-  /** ID of the tool call this result corresponds to. */
-  toolCallId: string;
-  /** Name of the tool that produced this result. */
-  toolName: string;
-  /** Serialized result content (typically JSON). */
-  content: string;
-  /** Whether the tool execution resulted in an error. */
-  isError?: boolean;
-}
 
 /**
  * Structured result from {@link dispatch}.
@@ -94,12 +72,7 @@ export interface LLMResponse {
   content?: string;
   /** Tool calls the model wants to execute. */
   toolCalls?: ToolCall[];
-  /**
-   * Raw model response parts for round-tripping.
-   * Used to preserve provider-specific metadata (e.g., Gemini's thought
-   * signatures) that must be included in subsequent requests.
-   */
-  rawModelParts?: unknown[];
+
   /** Token usage statistics for this API call. */
   usage?: {
     /** Total input tokens (includes cached). */
@@ -172,7 +145,7 @@ export interface Adapter {
  * JSON Schema definition for a tool's input parameters.
  *
  * Follows the OpenAPI/JSON Schema specification subset supported by
- * Gemini's function calling API.
+ * the LLM provider's function calling API.
  */
 export interface ToolParameterSchema {
   type: 'object';

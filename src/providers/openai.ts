@@ -74,24 +74,48 @@ export class OpenAIProvider implements LLMProvider {
     return pRetry(async () => {
       const startTime = Date.now();
 
-      const response = await fetch(`${CODEX_BASE_URL}/responses`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentToken}`,
-        },
-        body: JSON.stringify(body),
-      });
+      // 60s timeout to prevent hanging on network issues
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60_000);
+
+      let response: Response;
+      try {
+        response = await fetch(`${CODEX_BASE_URL}/responses`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentToken}`,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch (fetchErr) {
+        clearTimeout(timeout);
+        const isAbort = (fetchErr as Error).name === 'AbortError';
+        const errMsg = isAbort
+          ? 'Codex API request timed out after 60s'
+          : `Codex API fetch failed: ${(fetchErr as Error).message}`;
+        agentLogger.error({
+          msg: 'api_fetch_error', provider: 'openai',
+          error: errMsg, aborted: isAbort,
+          elapsed_ms: Date.now() - startTime,
+        });
+        throw new Error(errMsg);
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (!response.ok) {
         const errText = await response.text();
-        const apiErr = new Error(`Codex API error (${response.status}): ${errText}`);
+        const apiErr = new Error(`Codex API error (${response.status}): ${errText.substring(0, 500)}`);
         const classified = classifyApiError(apiErr);
 
         agentLogger.error({
           msg: 'api_error', provider: 'openai',
           status: response.status, reason: classified.reason,
           retryable: classified.retryable,
+          body: errText.substring(0, 200),
+          elapsed_ms: Date.now() - startTime,
         });
 
         if (classified.reason === 'auth' && !authRefreshed) {

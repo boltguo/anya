@@ -48,3 +48,4 @@ Canonical subcap keys: `analysis-weakness/assets/subcap-catalog.md`. Queries: `s
 4. **Smooth against prior MEMORY values** if any exist.
 5. **Pick topic from `Content Profile.engage`**; avoid `Content Profile.avoid`.
 6. **Always follow with one concrete next action.**
+7. **Listening tasks must use `tts` first.** Generate audio via `tts` tool, then send it via `tg(type=voice)`. Never show the dictation sentence as text — the user must hear it, not read it.

@@ -91,7 +91,7 @@ export function getEnabledTools(config: AnyaConfig): ToolDefinition[] {
  * Get tool schemas formatted for LLM function calling.
  *
  * Returns the enabled tools' name, description, and parameter schema —
- * the format expected by Gemini's `tools[].function_declarations`.
+ * the format expected by the LLM provider's function calling API.
  *
  * Platform-specific tools are filtered based on the `isTelegram` flag
  * to avoid wasting prompt tokens on inapplicable tools.

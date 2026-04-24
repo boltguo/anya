@@ -36,6 +36,10 @@ Full workflow + report template in `references/workflow.md`.
 
 Queries: `support/ielts-data-contract/references/queries.md`. Subcap keys: `analysis-weakness/assets/subcap-catalog.md`.
 
+## Scoring Reference
+
+Before scoring, load the rubric: `skill_view name=ielts-band-descriptors file=references/speaking-rubric.md`
+
 ## Rules
 
 1. **Pacing is real** — strict 1-min Part 2 prep.

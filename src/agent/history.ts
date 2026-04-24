@@ -5,7 +5,7 @@
  * Two concerns live here:
  *  - **Truncation**: cap long histories without severing an assistant
  *    (toolCalls) → tool(results) pair.
- *  - **Sanitization**: enforce Gemini's strict turn ordering so the provider
+ *  - **Sanitization**: enforce strict turn ordering so the provider
  *    does not reject the payload. Invalid sequences are dropped with a warn
  *    log rather than crashing.
  */
@@ -31,9 +31,9 @@ export function truncateHistory(history: Message[], maxHistory: number): Message
 }
 
 /**
- * Sanitize conversation history to comply with Gemini's strict turn ordering.
+ * Sanitize conversation history to comply with strict turn ordering.
  *
- * Gemini requires:
+ * Requirements:
  *   1. Conversation starts with 'user' (after system)
  *   2. assistant with toolCalls is immediately followed by matching tool results
  *   3. No orphaned tool messages

@@ -11,11 +11,6 @@ export interface SendMessageOptions {
   tag?: string;
 }
 
-export interface InlineButtonRow {
-  label: string;
-  data: string;
-}
-
 export interface PendingApproval {
   resolve: (value: 'allow' | 'deny' | 'always') => void;
 }

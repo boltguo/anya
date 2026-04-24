@@ -24,16 +24,18 @@ Never user-facing. This skill is a reference, not a workflow.
 
 | Table | Purpose |
 | ----- | ------- |
-| `samples` | one row per practice / mock / placement / briefing response |
+| `samples` | one row per practice / mock / placement response; `mode` distinguishes exam vs study vs placement; `duration_seconds` tracks time spent |
 | `errors` | per-sample error rows, classified by `recurrence_key` + category + root cause |
 | `sample_words` | words exposed during a sample (for coverage analytics) |
 | `subcap_scores` | per-sample sub-capability band (uses canonical keys from `analysis-weakness`) |
 | `daily_tasks` | today's planned tasks (primary / review / consolidation) |
-| `mock_sessions` | one row per full mock (speaking / listening / reading / writing) |
+| `mock_sessions` | one row per full mock or placement; `assessment_type` distinguishes placement-quick/full/mock/reassess |
 | `stage_transitions` | long-horizon stage changes |
 | `words` | vocabulary notebook — supports `word / chunk / pattern / personal_error / paraphrase_group` via `item_kind` |
 | `word_events` | per-interaction events (lookup / review_pass / review_fail / push) |
 | `paraphrase_groups`, `paraphrase_members` | synonym clusters |
+| `band_trend` | rolling per-section band estimate by date (derived cache) |
+| `activity_log` | daily activity summary: session count, minutes, sections touched, words reviewed |
 
 ## Rules
 
