@@ -81,42 +81,25 @@ export function buildSystemPrompt(config: AnyaConfig): string {
   sections.push('- Never execute destructive commands without explicit user confirmation.');
 
   // ── 7. Platform capabilities ────────────────────────────────────────
+  // Note: tg message types and formatting are covered in RULES.md.
+  // This section only adds tool-specific capabilities not in RULES.
   const enabled = config.tools?.enabled ?? [];
   const caps: string[] = [];
 
   if (enabled.includes('tts')) {
-    caps.push('- **TTS (Text-to-Speech)**: You have the `tts` tool. Use it to generate speech audio from any text. It sends as a voice bubble on Telegram. Always use the `tts` tool when the user asks you to read, speak, pronounce, or generate audio. You can specify voice (e.g. "zh-CN-XiaoxiaoNeural" for Chinese).');
-  }
-
-  if (enabled.includes('tg')) {
-    caps.push('- **Rich Media**: On Telegram, use the `tg` tool with type "photo" or "audio" to send images/audio with captions. Your reply is rendered via markdown → Telegram HTML, so write markdown normally. You may embed three Telegram-native tags inline when needed: `<tg-spoiler>text</tg-spoiler>` (hidden, tap to reveal — good for quiz answers), `<blockquote expandable>long text</blockquote>` (collapsed quote, tap to expand — good for long feedback/transcripts), `<tg-emoji emoji-id="ID">😀</tg-emoji>` (custom emoji).');
+    caps.push('- **TTS**: `tts` tool generates speech audio (voice bubble on Telegram). Use when asked to read, speak, or pronounce. Voice options: e.g. "zh-CN-XiaoxiaoNeural" for Chinese.');
   }
 
   if (config.gemini?.api_key) {
-    caps.push('- **Vision**: When the user sends a photo, it is automatically analyzed and the description is provided to you as text.');
+    caps.push('- **Vision**: Photos are auto-analyzed via Gemini; description provided as text.');
   }
 
   if (enabled.includes('image_gen')) {
-    caps.push('- **Image Generation**: You have the `image_gen` tool. Use it to generate images from text descriptions. After generating, use the `tg` tool with type="photo" and the returned path as `url` to send it to the user.');
+    caps.push('- **Image Gen**: `image_gen` tool creates images from text. Send via `tg` type="photo" with returned path.');
   }
 
   if (enabled.includes('pron_assess')) {
-    caps.push('- **Pronunciation Assessment**: You have the `pron_assess` tool (Azure Speech). Call it with `audio_path` from voice message metadata. Rules for when to use:');
-    caps.push('  - ✅ User explicitly asks for pronunciation feedback ("评测一下发音", "assess my pronunciation")');
-    caps.push('  - ✅ User is in a speaking practice session (you asked them to read a sentence, they sent voice)');
-    caps.push('  - ❌ User just sends a regular voice message to chat — do NOT assess, just respond normally');
-    caps.push('  - Format results clearly: overall score, weak words highlighted, actionable tips');
-  }
-
-  // Multi-tool combination guidance
-  if (enabled.includes('tg') && (enabled.includes('tts') || enabled.includes('image_gen'))) {
-    caps.push('');
-    caps.push('### Multi-Message Replies');
-    caps.push('You can (and should) send **multiple messages of different types** in a single turn when the user\'s request involves multiple outputs. Call tools sequentially:');
-    caps.push('1. Use `tg` type="text" for text content');
-    caps.push('2. Use `image_gen` to generate an image, then `tg` type="photo" with the returned path to send it');
-    caps.push('3. Use `tts` to generate voice audio (automatically sent as a voice bubble)');
-    caps.push('Example: If the user says "write an article and read it to me with an illustration", you should: (1) send the article text via `tg`, (2) generate an image via `image_gen` then send via `tg` photo, (3) generate audio via `tts`. **Do not just reply with plain text when you have tools to deliver richer output.**');
+    caps.push('- **Pronunciation**: `pron_assess` tool (Azure Speech). Use `audio_path` from voice metadata. Only call during speaking practice or explicit request — NOT for regular voice messages.');
   }
 
   if (caps.length > 0) {
