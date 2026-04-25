@@ -39,7 +39,7 @@ const assetCopies = [
   { from: 'src/config/MEMORY.template.md', to: 'dist/config/MEMORY.template.md' },
   { from: 'src/config/schema.json',        to: 'dist/config/schema.json' },
   { from: 'src/cron/default_jobs.json',    to: 'dist/cron/default_jobs.json' },
-  { from: 'src/skills/bundled',            to: 'dist/skills/bundled', dir: true },
+  { from: 'src/skills/bundled',            to: 'dist/skills', dir: true },
 ];
 for (const { from, to, dir } of assetCopies) {
   if (!fs.existsSync(from)) continue;

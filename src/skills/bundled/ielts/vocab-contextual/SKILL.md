@@ -13,6 +13,17 @@ Every word is tied to a session the learner remembers. Beats rote lists.
 - Callback `vocab-contextual`
 - Recent sessions had clusters of unknown words (after `reading-vocab-extract` ran)
 
+## Adaptive Binding
+
+Read MEMORY and apply:
+
+| MEMORY parameter | Controls |
+|---|---|
+| `Vocabulary Profile.cefr` | Only introduce words at or one level above this CEFR; skip C2 words for B1 learners |
+| `Vocabulary Profile.weak_domains` | Prioritize words from these domains |
+| `IELTS Bands.Overall` | `< 5.0` → accept L1 production check; `5.0+` → require English sentence |
+| `Adaptive Training Controls.recommended_support_level` | `high` → show Chinese gloss immediately; `low` → spoiler-hide gloss |
+
 ## Workflow
 
 1. Scan last 7 days: recent `samples` with usable `raw_content` + linked `errors` (paraphrase / word_choice). Also pull `queued_new` words with `source_sample_id` in the last 14 days.

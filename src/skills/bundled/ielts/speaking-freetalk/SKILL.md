@@ -14,6 +14,17 @@ Low-pressure, no 4-criterion report. Goal: get the learner talking.
 - Coach suggests a light warm-up / re-entry
 - `streak_break` re-entry task
 
+## Adaptive Binding
+
+Read MEMORY and apply:
+
+| MEMORY parameter | Controls |
+|---|---|
+| `IELTS Bands.Speaking` | `< 5.0` → simple daily topics, accept 30s; `5.0-6.0` → opinion topics; `6.0+` → abstract/hypothetical |
+| `Adaptive Training Controls.speaking_complexity` | Guide topic abstraction level if set |
+| `Vocabulary Profile.cefr` | Feedback vocabulary ceiling (don't use C2 feedback for a B1 learner) |
+| `Weak Dimensions.Speaking` | Focus feedback on the weakest dimension |
+
 ## Workflow
 
 1. Offer 3 topic choices aligned with `Content Profile.engage` (plus `🎲 给我一个`).

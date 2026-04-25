@@ -112,7 +112,7 @@ export async function runInit(): Promise<void> {
   console.log(chalk.dim('  [ok] cron/'));
 
   // 6. Bundled skills
-  const skillsSrc = resolveAsset(__dirname, 'skills/bundled');
+  const skillsSrc = resolveAsset(__dirname, 'skills');
   if (skillsSrc) {
     cpSync(skillsSrc, join(SKILLS_DIR, '.bundled'), { recursive: true, force: true });
     console.log(chalk.dim('  [ok] skills/'));

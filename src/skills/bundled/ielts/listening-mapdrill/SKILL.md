@@ -13,6 +13,17 @@ Direction vocabulary + spatial encoding under time pressure. Pure text — no im
 - Callback `listening-mapdrill`
 - Section 2 of recent mocks had map errors
 
+## Adaptive Binding
+
+Read MEMORY and apply:
+
+| MEMORY parameter | Controls |
+|---|---|
+| `IELTS Bands.Listening` | `< 5.0` → 6-8 landmarks, 40-60s audio; `5.0-6.0` → 8-10, 60-90s; `6.0+` → 10-12, 90s+ |
+| `Adaptive Training Controls.listening_passage_length` | Override audio duration if set |
+| `Vocabulary Profile.cefr` | Cap direction vocabulary complexity |
+| TTS rate | `< 5.0 → rate="-10%"` · `5.0-5.5 → rate="-5%"` · `> 5.5 → rate="+0%"` |
+
 ## Workflow
 
 1. Describe a scene layout in text (campus / shopping mall / park / neighbourhood): list 8-12 named landmarks with relative positions (e.g. "图书馆在行政楼的东面，体育馆在图书馆对面"). Present as a numbered list.

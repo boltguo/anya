@@ -19,6 +19,18 @@ For blank-page-freeze below 5.5 use `writing-guided`.
 
 Opinion / Discussion / Problem-solution / Adv-Disadv / Two-part question. Detect type from the stem; confirm interpretation in feedback if unclear.
 
+## Adaptive Binding
+
+Read MEMORY and apply:
+
+| MEMORY parameter | Controls |
+|---|---|
+| `IELTS Bands.Writing` | `< 5.5` → concrete/personal prompts; `5.5-6.5` → standard academic; `6.5+` → nuanced/abstract |
+| `Adaptive Training Controls.writing_prompt_scope` | Override prompt abstraction if set |
+| `Vocabulary Profile.cefr` | Feedback uses vocabulary at learner level; don't correct B1 word to C2 |
+| `Grammar Profile.weak` | Prioritize these patterns in feedback |
+| `Weak Dimensions.Writing` | Focus top-2 fixes on the weakest writing subcap |
+
 ## Workflow
 
 1. Pick topic aligned with `Content Profile.engage`. Start clock.

@@ -32,9 +32,8 @@ Owner of `USER.md`. Collects or corrects profile fields. On first-run (or `/prof
 ## Rules
 
 1. **Never ask for a field already set.**
-2. **One question per turn.** Even if a bundle contains 3 questions, send only one `tg` call (keyboard or force_reply), then **return immediately and wait for the user's answer** before sending the next question. Never send multiple `tg(keyboard)` or `tg(force_reply)` calls in the same tool-call batch.
-3. **Buttons are shortcuts, not required.** Accept free text.
-4. **Dates are stored as ISO `YYYY-MM-DD`.** Convert relative dates before writing.
+2. **One question per turn.** Send one `tg` call (keyboard or force_reply), then **stop and wait**. The user's reply triggers the next loop iteration.
+3. **Buttons are shortcuts, not required.** The user can always type free text instead.
+4. **Dates are stored as ISO `YYYY-MM-DD`.** Convert relative dates. "还没定" → `(not set)`.
 5. **Do NOT compute bands.** That's `learner-state`.
-6. **Only Mode 1 chains placement.** Update and lookup modes do not.
-7. **After sending a question, stop.** Do not continue the ReAct loop to send the next question. The user's reply will trigger the next loop iteration.
+6. **Only first-run mode chains placement.** Update and lookup modes do not.

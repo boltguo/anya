@@ -5,6 +5,17 @@ description: "90-second skim then hide the passage, answer main-idea + function 
 
 # Reading Skim Drill
 
+## Adaptive Binding
+
+Read MEMORY and apply:
+
+| MEMORY parameter | Controls |
+|---|---|
+| `IELTS Bands.Reading` | Match scaling table below |
+| `Adaptive Training Controls.reading_text_length` | Override word count if set (e.g. `200`) |
+| `Vocabulary Profile.cefr` | Cap passage vocabulary at this CEFR level |
+| `Weak Dimensions.Reading` | Focus questions on the weakest reading subcap |
+
 Breaks word-by-word translation habit. Forces big-picture reading.
 
 ## When to Use

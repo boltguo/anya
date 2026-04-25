@@ -18,7 +18,7 @@ import { textToSpeech } from '../lib/tts.js';
 
 register({
   name: 'tts',
-  description: `Generate speech audio via Azure TTS. On Telegram, sends as a voice bubble.
+  description: `Generate speech audio via Azure TTS. Returns the file path — use tg(type="voice", url=filePath) to send it.
 
 **Simple mode**: pass \`text\` + optional \`voice\`/\`rate\`.
 **Dialogue mode**: pass \`segments\` JSON array for multi-voice audio with pauses.
@@ -92,11 +92,6 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
         return JSON.stringify({ success: false, error: result.error });
       }
 
-      const adapter = context.adapter as any;
-      if (typeof adapter.sendVoice === 'function') {
-        await adapter.sendVoice(result.filePath);
-        return JSON.stringify({ success: true, sent: true, filePath: result.filePath, durationSec: result.durationSec });
-      }
       return JSON.stringify({ success: true, filePath: result.filePath, durationSec: result.durationSec });
     }
 
@@ -116,11 +111,6 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
       return JSON.stringify({ success: false, error: result.error });
     }
 
-    const adapter = context.adapter as any;
-    if (typeof adapter.sendVoice === 'function') {
-      await adapter.sendVoice(result.filePath);
-      return JSON.stringify({ success: true, sent: true, filePath: result.filePath, durationSec: result.durationSec });
-    }
     return JSON.stringify({ success: true, filePath: result.filePath, durationSec: result.durationSec });
   },
 });

@@ -31,6 +31,23 @@ import type { PendingApproval, PendingChoice } from './types.js';
 import { formatTgError, startTypingIndicator } from './errors.js';
 import { isNavCallback, getNavPage, getMainMenu } from './skillMenu.js';
 
+/** Fetch with retry + timeout for Telegram file downloads. */
+async function fetchWithRetry(url: string, maxAttempts = 3, timeoutMs = 15_000): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      if (res.ok) return res;
+      agentLogger.warn({ msg: 'fetch_retry', attempt, status: res.status, url: url.substring(0, 60) });
+    } catch (err) {
+      lastError = err as Error;
+      agentLogger.warn({ msg: 'fetch_retry', attempt, error: (err as Error).message });
+    }
+    if (attempt < maxAttempts) await new Promise(r => setTimeout(r, 1000 * attempt));
+  }
+  throw lastError ?? new Error(`Download failed after ${maxAttempts} attempts`);
+}
+
 /**
  * TelegramAdapter — the top-level bot manager.
  *
@@ -353,9 +370,7 @@ export class TelegramAdapter {
       try {
         const file = await ctx.getFile();
         const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.bot_token}/${file.file_path}`;
-        const response = await fetch(fileUrl);
-        if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-
+        const response = await fetchWithRetry(fileUrl);
         const buffer = Buffer.from(await response.arrayBuffer());
         audioPath = path.join(VOICE_DIR, `voice_${Date.now()}.ogg`);
         fs.mkdirSync(VOICE_DIR, { recursive: true });
@@ -405,11 +420,7 @@ export class TelegramAdapter {
         }
 
         const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.bot_token}/${file.file_path}`;
-        const response = await fetch(fileUrl);
-        if (!response.ok) {
-          await ctx.reply('❌ Image download failed.');
-          return;
-        }
+        const response = await fetchWithRetry(fileUrl);
 
         const buffer = Buffer.from(await response.arrayBuffer());
         const ext = path.extname(file.file_path) || '.jpg';

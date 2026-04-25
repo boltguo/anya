@@ -23,6 +23,18 @@ Kills the three most common mid-band listening errors: function words dropped, s
 | 5.5-6.5 | 18-25 words, academic phrasing |
 | 6.5+ | 20-30 words, ≥ 1 connected-speech feature |
 
+## Adaptive Binding
+
+Before generating sentences, read MEMORY and apply:
+
+| MEMORY parameter | Controls |
+|---|---|
+| `IELTS Bands.Listening` | Match Sentence Scaling table below |
+| `Adaptive Training Controls.listening_sentence_length` | Override word count if set (e.g. `12-18`) |
+| `Adaptive Training Controls.recommended_support_level` | `high` → show spoiler hints by default; `low` → blind first pass |
+| `Vocabulary Profile.cefr` | Cap vocabulary at this CEFR level (don't exceed) |
+| TTS rate | `< 5.0 → rate="-10%"` · `5.0-5.5 → rate="-5%"` · `> 5.5 → rate="+0%"` |
+
 ## Workflow
 
 Per sentence (3-5 total):

@@ -14,6 +14,17 @@ Each round targets exactly one pronunciation issue. Always calls `pron_assess`.
 - `fluency < 4.0` AND `pronunciation_weak` has ≥ 2 entries
 - `speaking.pronunciation_intelligibility ≤ 5.0` after placement
 
+## Adaptive Binding
+
+Before generating sentences, read MEMORY and apply:
+
+| MEMORY parameter | Controls |
+|---|---|
+| `IELTS Bands.Speaking` | Match sentence scaling: `<4.5` simple daily · `4.5-5.5` one subordinate · `5.5+` connected-speech |
+| `Adaptive Training Controls.speaking_complexity` | Override complexity if set |
+| `Vocabulary Profile.cefr` | Cap vocabulary at this CEFR level |
+| TTS rate | `< 5.5 → rate="-10%"` · `5.5-6.5 → rate="-5%"` · `> 6.5 → rate="+0%"` |
+
 ## Workflow (3-5 sentences per group)
 
 Per sentence:

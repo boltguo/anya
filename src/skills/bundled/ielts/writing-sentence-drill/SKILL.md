@@ -17,6 +17,17 @@ Grammar-range ceiling breaker. One structure per session, 3 reps.
 
 Relative clause with reduction · Participle phrase (-ing/-ed) · Cleft sentence · Inversion · Mixed conditional · Noun phrase compression · Hedged claim · Concession + counter.
 
+## Adaptive Binding
+
+Read MEMORY and apply:
+
+| MEMORY parameter | Controls |
+|---|---|
+| `IELTS Bands.Writing` | `< 5.5` → basic structures (relative clause, conditional); `6.0+` → advanced (inversion, cleft, participle) |
+| `Grammar Profile.weak` | Prefer structures from this list |
+| `Grammar Profile.unstable_under_pressure` | Target these for reinforcement |
+| `Vocabulary Profile.cefr` | Scenario examples use vocabulary at this level |
+
 ## Workflow
 
 1. Pick structure (learner or auto from recent samples where the structure is under-used).
