@@ -1,45 +1,37 @@
 ---
 name: ielts-cron-briefing
-description: "[SUPPORT] Daily 08:30 pinned learning package on Telegram."
-command: false
+description: "Scheduled task (cron job). Runs every morning. Silently sources an authentic article/audio based on user interests, extracts 5-8 new vocabulary items into the database without notifying the user, and sends a clean invitation to read or listen."
 ---
 
-# Ielts Cron Briefing
+# Daily Material & Silent Seeding (Morning Push)
 
-Cron-triggered. Delivers one pinned, weak-skill-aligned package per day. Scheduling is in `src/cron/default_jobs.json`.
+## 1. When to Use
+- Scheduled trigger: Runs automatically every morning via `cron/jobs.ts`.
 
-## When to Use
+## 2. Workflow (Step-by-Step)
+**Step 1: Source the Material (The Daily Spark)**
+- Query `USER.md` for the user's interests.
+- Search for a short, high-quality, authentic piece of news or a trending topic (150-250 words).
+- If possible, secure a related audio clip (or prepare to generate TTS).
 
-- Cron triggers `08:30` (daily briefing) or `21:00` (evening check-in)
-- Learner says `今天 / 今日推送 / 晨报 / daily briefing` → surface today's package
+**Step 2: Silent Vocabulary Seeding (MANDATORY BACKEND ACTION)**
+- Scan the sourced text. Identify **5 to 8** high-value, native phrases, idioms, or academic words that the user likely doesn't know based on their level.
+- **Deduplication Check**: Query the `words` table in `study.db` to ensure these words don't already exist.
+- **Silent Insert**: Use the `db` tool to INSERT the new words into the `words` table.
+  - Set `mastery="queued_new"`, `origin="daily_spark"`, `srs_due=CURRENT_TIMESTAMP`.
+  - Include a concise Chinese definition and the EXACT sentence from the morning article as the `example_en`.
+- **CRITICAL RULE**: Do NOT tell the user you did this. This must be completely invisible to them.
 
-## Workflow
+**Step 3: The Clean Invitation (Frontend Delivery)**
+- Send the user a brief, engaging summary or a thought-provoking quote from the material.
+- **MANDATORY UI**: Attach a clean inline keyboard inviting them to consume the material:
+  - Row 1: `[📖 读读这篇新闻]`
+  - Row 2: `[🎧 听听这段播客]`
+- **Tone Rule**: Be an inviting host, not a nagging teacher. Do not mention vocabulary, tasks, or reviews.
 
-1. Read `MEMORY.md` (bands, weak dims, top errors), `USER.md` (interests, engage, avoid, tone). Query last 20 `samples` for freshness + avoid repetition. All queries via `ielts-data-contract`.
-2. Pick today's topic — weak-skill aligned:
-   - weaker writing → opinion-friendly
-   - weaker speaking → personal reaction
-   - weaker listening → clean audio narration
-   - weaker reading → clear academic structure
+## 3. Persist (Data Contract)
+- **Table `words`**: MUST insert the 5-8 new words silently. Ensure no duplicates.
 
-   Use `web_search` for a timely article; respect `avoid` list; fall back to evergreen explainer.
-3. Adapt length / sentence style / vocab load / audio speed by band range (see `references/band-ladder.md`).
-4. Build package: headline + bridge (CN/EN) + adapted article + `Today's Focus` box + `Try This Next` block.
-5. `image_gen` cover + `tts` narration at ladder-specified rate.
-6. Send cover + article + audio + action keyboard. `tg(type:"pin")` the main entry.
-7. If learner replies → record as `samples` with `skill_type='daily_briefing'`.
-8. Evening check-in (21:00): query today's load + completion → short summary + tomorrow hint.
-
-## Resources
-
-- `templates/briefing_package.md` — full package shape
-- `references/band-ladder.md` — length / style / vocab / audio speed per band
-
-## Rules
-
-1. **One topic per day.**
-2. **Pin every main entry.**
-3. **Text first, media second** — deliver even if image / audio fails.
-4. **No weekly schedule** — driven by profile + weak skill + current content.
-5. **Personalization > novelty.**
-6. **If absent 3+ days**, lighter re-entry tone.
+## 4. Hard Rules
+1. **Absolute Silence on Vocab**: NEVER write "I added some words to your list" in the message sent to the user. The vocabulary extraction must be a background process only.
+2. **Pure Material**: The delivered message should focus 100% on the content/topic of the news, acting solely as a hook to trigger `reading-deepdive` or `listening-podcast`.

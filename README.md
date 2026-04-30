@@ -255,89 +255,72 @@ sequenceDiagram
 | `ielts-router` | 训练中心主菜单。解析自由文本练习请求，路由到对应 skill |
 | `learner-state` | **数据驱动的水平刷新**。查询 study.db 最近 14 天数据，EMA 平滑计算 bands，写入 MEMORY.md |
 | `placement-quick` | 10 分钟快速定级：口语 30s + 听写 2 句 + 阅读 150 词 + 写作 50 词 |
-| `placement-full` | 40-50 分钟深度定级：四科完整测试 + 置信度评估 + 2 周计划 |
 
 ### 🗣️ 口语 Speaking
 
 | Skill | 说明 |
 |-------|------|
-| `speaking-exam` | 完整雅思口语模考：Part 1 + Part 2 + Part 3，四维评分 |
-| `speaking-freetalk` | 60-120 秒自由独白，重点反馈流利度 + 一个语言升级点 |
+| `speaking-freetalk` | **即兴脱口秀与辩论**：不再是单向独白，Anya 会主动抛出暴论或追问，倒逼用户即兴反驳 |
 | `speaking-repeat` | 听后复述：播放片段一次，用自己的话复述 |
 | `speaking-roleplay` | 场景对话（机场/餐厅/面试/诊所），Anya 扮演对方 |
-| `speaking-shadowing` | 语音跟读：TTS → 语音重复 → 发音评估 → 一个定点修复 |
-| `speaking-explain` | 口语失分解释：引用原始表达，分析具体扣分原因 |
+| `speaking-shadowing` | 语音跟读与发音门诊：精准评估发音，并提供发音器官级（舌头、口型）的物理纠音指导 |
 | `speaking-azure-score` | [内部] Azure 发音评估接口封装，被其他口语 skill 调用 |
 
 ### 🎧 听力 Listening
 
 | Skill | 说明 |
 |-------|------|
-| `listening-exam` | 完整雅思听力模考：4 section，40 题，band 报告 |
 | `listening-dictation` | 句子听写：盲听 → 提示 → 逐词 diff → 中文释义 → 重做 |
 | `listening-shadowing` | 片段级影子跟读：节奏 + 关键词保留 + 语调捕捉 |
-| `listening-prediction` | 先预测答案类型，再听 + 作答，双重评分 |
-| `listening-mapdrill` | Section 2 地图标注练习：方位词、相对位置、序数 |
 | `listening-numberdrill` | 数字/日期/时间/拼写专项（13 vs 30、double-0、人名拼写） |
-| `listening-explain` | 听力失分解释：引用原文 + 陷阱类型分析 |
+| `listening-podcast` | **播客泛听浸泡**：不要求做题，训练在长程真实语料中抓取大意和猜测语境的能力 |
 
 ### 📖 阅读 Reading
 
 | Skill | 说明 |
 |-------|------|
-| `reading-exam` | 完整雅思阅读模考：3 篇文章，40 题，60 分钟 |
-| `reading-timed` | 单篇限时练习（15-20 分钟），训练做题节奏 |
-| `reading-untimed` | 无限时精读：主旨 + 段落功能 + 释义 + 作者立场 |
+| `material-discussion` | **真实外刊闲聊**：抓取用户感兴趣的真实新闻/帖子，不强做题，只为引发全英文自由讨论 |
+| `reading-deepdive` | **核心外刊精读**：无时间压力，深度解剖长难句语法结构和段落逻辑 |
 | `reading-skim-drill` | 90 秒略读后隐藏文章，凭记忆回答主旨 + 功能题 |
-| `reading-typetrain` | 单一题型专项（TFNG / Heading / Matching / Completion / MCQ） |
 | `reading-vocab-extract` | 阅读后词汇收割：提取生词/短语/释义对存入 study.db |
-| `reading-explain` | 阅读失分解释：引用原文证据 + 陷阱类型分析 |
 
 ### ✍️ 写作 Writing
 
 | Skill | 说明 |
 |-------|------|
-| `writing-exam` | 完整雅思写作模考：Task 1 (20min) + Task 2 (40min) + 四维评分 |
-| `writing-task2` | Task 2 议论文练习（观点/讨论/问题解决/利弊/双问题） |
-| `writing-task1-academic` | 学术 Task 1：图表/地图/流程图，强制 overview |
-| `writing-task1-general` | GT Task 1 书信：正式/半正式/非正式语域训练 |
-| `writing-guided` | 脚手架式写作：给大纲，学员填充句子（适合低分段） |
+| `writing-journal` | **英语日记/碎碎念**：提供情绪价值的低压力练笔出口，带隐性语法和地道表达润色 |
+| `writing-essay` | 长文综合写作：合并了书信、图表和议论文的综合长段落训练入口 |
 | `writing-rewrite` | 升级改写：把 Band 5/6 段落改到 Band 7 水平 |
-| `writing-sentence-drill` | 单一语法结构练习（条件句/强调句/倒装/分词…） |
-| `writing-collocation` | 主题搭配练习：用 4+ 个短语写 100 词段落 |
-| `writing-explain` | 写作失分解释：任务/逻辑/语言三层分析 |
+| `writing-builder` | **句法构造工厂**：一站式微观训练，包含高级词汇造句、句型转换、结构扩写 | 升级改写：把 Band 5/6 段落改到 Band 7 水平 |
 
 ### 📚 词汇 Vocabulary
 
 | Skill | 说明 |
 |-------|------|
-| `vocab-review` | SRS 间隔复习：覆盖单词/短语/句型/释义组 |
-| `vocab-contextual` | 从最近练习中提取 5-8 个生词，带原句上下文学习 |
+| `vocab-review` | **SRS 记忆引擎**：Anki 级按遗忘曲线复习。遮挡释义盲猜，带词根拆解与地道俚语平替 |
+| `vocab-harvest` | **全局生词收割机**：在听说读写中自动提取您的薄弱表达，或通过对话主动将生词加入您的私人词库 |
 | `vocab-testme` | 主动回忆测验：针对临界掌握词汇 |
 | `vocab-topic` | 主题聚类学习：一个话题 8-12 个词，展示 → 隐藏 → 回忆 |
+
+| `error-clinic` | **全科错题门诊**：统一接管听说读写的错题分析，直击语法或认知陷阱，给出避坑 Tips |
 
 ### 📊 诊断与分析
 
 | Skill | 说明 |
 |-------|------|
-| `analysis-exam` | 考试结果分析：band 拆解、历史对比、稳定性评估 |
-| `analysis-weakness` | 跨会话弱点检测：高频错误 + 最弱子能力 |
-| `analysis-study` | 学习行为分析：总时长、连续性、科目覆盖、不均衡检测 |
-| `analysis-recommend` | 把诊断结论转化为一个具体的下一步行动推荐 |
 
 ### 💬 教练 Coaching
 
 | Skill | 说明 |
 |-------|------|
-| `coach-passive` | 被动教练：回答学员主动提出的进度/计划/方法问题 |
+| `coach-consultation` | **教练进度复盘**：用户的战略顾问，整合进度、弱点分析和下一步建议，自然对话输出 |
 | `coach-proactive` | 主动教练：根据触发条件决定是否提醒、鼓励或刷新学习计划 |
 
 ### ⏰ 定时任务 Cron
 
 | Skill | 触发时间 | 说明 |
 |-------|---------|------|
-| `ielts-cron-briefing` | 每天 08:30 | 每日学习包：今日任务 + 复习词 + 听力句 |
-| `ielts-cron-word-seed` | 每天 07:15 | 静默维护：保持 `queued_new` 词汇库存 ≥ 8 |
+| `ielts-cron-briefing` | 每天 08:30 | **早安外刊与静默收割**：根据兴趣抓取真实新闻/播客邀请您阅读，并**静默**提取 5-8 个地道生词入库 |
 | `ielts-cron-word-review` | 每天 21:00 | SRS 复习推送：挑一个到期词推送到 Telegram |
 | `learner-state` | 每天 23:30 | 静默维护：聚合 study.db → EMA 平滑 → 刷新 MEMORY.md |
 
@@ -436,6 +419,6 @@ queued_new → learning → known → mastered
 
 ## 总结
 
-Anya 最有前途的地方，不是把 IELTS 做得更像考试，而是把 IELTS 的优质训练方法，做成一个低压力、长期主义、真实有效的英语成长系统。
+Anya 最有前途的地方，不是把 IELTS 做得更像考试，而是把 IELTS 的优质训练方法，做成一个**纯粹、低压力、长期主义**、真实有效的**英语私教**系统。我们已经去除了所有笨重的全真模考和奇葩题型，只保留最核心的能力训练。
 
 如果这个方向成立，那么高分不会消失，只是它不再被放在学习体验的正中央。

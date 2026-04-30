@@ -1,62 +1,27 @@
 ---
 name: speaking-shadowing
-description: "Phoneme-accuracy shadowing: TTS → voice repeat → pron_assess → one targeted fix."
+description: "Use this skill for pronunciation practice, shadowing exercises, or when the user wants to improve their accent and intonation by repeating after a model."
 ---
 
-# Speaking Shadowing
+# Speaking Shadowing (Pronunciation Clinic)
 
-Each round targets exactly one pronunciation issue. Always calls `pron_assess`.
+## Description
+This skill focuses on improving the user's pronunciation, rhythm, and intonation through shadowing (listen and repeat). It utilizes underlying pronunciation assessment tools to pinpoint specific phoneme errors.
 
-## When to Use
+## Workflow
 
-- `跟读 / 练发音 / shadow`
-- Callback `speaking-shadowing`
-- `fluency < 4.0` AND `pronunciation_weak` has ≥ 2 entries
-- `speaking.pronunciation_intelligibility ≤ 5.0` after placement
+1.  **Material Selection & Playback**:
+    - Provide a short, natural sentence or use one the user provides.
+    - Generate high-quality audio for the text.
+    - Ask the user to listen carefully and then record themselves saying it back.
 
-## Adaptive Binding
+2.  **Assessment**:
+    - Analyze their pronunciation, fluency, and completeness.
+    - Identify the specific phonemes or words that were mispronounced.
 
-Before generating sentences, read MEMORY and apply:
+3.  **The Pronunciation Clinic (Feedback)**:
+    - **Articulatory Guidance**: If the user consistently mispronounces a sound (e.g., confusing /θ/ with /s/), provide specific, physical instructions on how to produce the sound.
+      - *Example*: "I noticed you struggled with 'think'. To make the /θ/ sound, stick the tip of your tongue slightly between your top and bottom teeth, and blow air out gently. Try saying 'thhhh-ink'."
+    - **Rhythm & Stress**: Point out which words should be stressed in the sentence.
 
-| MEMORY parameter | Controls |
-|---|---|
-| `IELTS Bands.Speaking` | Match sentence scaling: `<4.5` simple daily · `4.5-5.5` one subordinate · `5.5+` connected-speech |
-| `Adaptive Training Controls.speaking_complexity` | Override complexity if set |
-| `Vocabulary Profile.cefr` | Cap vocabulary at this CEFR level |
-| TTS rate | `< 5.5 → rate="-10%"` · `5.5-6.5 → rate="-5%"` · `> 6.5 → rate="+0%"` |
-
-## Workflow (3-5 sentences per group)
-
-Per sentence:
-
-1. `tts` target sentence (rate −10% only for < 5.5). Send text hidden via `<tg-spoiler>`.
-2. `force_reply` prompt; wait for voice.
-3. `pron_assess(audio, reference)` → find lowest-accuracy word. Classify the error.
-4. ONE fix only — show IPA + issue label. `tts` the correct fragment.
-5. Redo: `force_reply` "再跟读一次，注意 …". Call `pron_assess` again.
-6. `react ✅` on improvement, `🔁` otherwise.
-
-Sentence scaling: < 4.5 simple daily / 4.5-5.5 one subordinate / 5.5+ with ≥ 1 connected-speech feature.
-
-Error → taxonomy key: stress → `word_stress` / `pronunciation_stress`; vowel → `pronunciation_vowel`; consonant → `pronunciation_consonant`; linking → `connected_speech_fail`.
-
-After the group: wrap card with avg accuracy trend + top issue. Difficulty keyboard.
-
-## Persist
-
-**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
-
-- 1 `samples` row per sentence (`load_score=1`, `feedback={first_acc, second_acc, weak_word}`).
-- `subcap_scores.speaking.pronunciation_intelligibility` = avg second-attempt score mapped to band.
-- 1 `errors` row per distinct issue + `root:language`.
-
-Queries: `support/ielts-data-contract/references/queries.md`.
-
-## Rules
-
-1. **Always call `pron_assess`** — that's the point.
-2. **One fix per round.**
-3. **Hide target text behind `<tg-spoiler>`** — try from audio first.
-4. **IPA hints** next to every fix.
-5. **Rate −10% only for < 5.5.**
-6. **Persist both attempts.**
+4.  **Retry**: Encourage the user to try again using the physical technique you taught them.

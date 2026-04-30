@@ -1,7 +1,6 @@
 -- study.db — unified schema for the entire English-tutor package
--- Practice samples, errors, subcap scores, daily tasks, mock sessions,
+-- Practice samples, errors, subcap scores, daily tasks,
 -- stage transitions, vocabulary notebook, and word events.
--- Regenerate study.db from this file when the schema changes (no migrations).
 
 -- ─── Practice / learner records ────────────────────────────────────────────
 
@@ -9,7 +8,7 @@ CREATE TABLE IF NOT EXISTS samples (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at          TEXT NOT NULL,
     skill_type          TEXT NOT NULL,
-    mode                TEXT NOT NULL DEFAULT 'study',  -- 'study' | 'exam' | 'placement'
+    mode                TEXT NOT NULL DEFAULT 'study',  -- 'study' | 'placement'
     completed           INTEGER NOT NULL DEFAULT 1,     -- 0 = abandoned, 1 = finished
     duration_seconds    INTEGER,                        -- wall-clock time for this practice
     prompt              TEXT NOT NULL DEFAULT '',
@@ -19,12 +18,13 @@ CREATE TABLE IF NOT EXISTS samples (
     band_lexical        REAL,
     band_grammar        REAL,
     band_overall        REAL,
-    raw_score           INTEGER,                        -- e.g. 32 out of 40 for R/L
-    max_score           INTEGER,                        -- e.g. 40
-    audio_path          TEXT,
+    raw_score           INTEGER,                        
+    max_score           INTEGER,                        
+    audio_path          TEXT,                           -- Essential for 'Revenge Protocol' audio reuse
     session_id          TEXT NOT NULL DEFAULT '',
     feedback            TEXT NOT NULL DEFAULT '',
     difficulty_switches INTEGER NOT NULL DEFAULT 0,
+    ui_feedback         TEXT NOT NULL DEFAULT '',       -- NEW: Stores clicked inline buttons e.g., "slower,too_hard"
     translation         TEXT NOT NULL DEFAULT '',
     parent_sample_id    INTEGER REFERENCES samples(id),
     redo_count          INTEGER NOT NULL DEFAULT 0,
@@ -71,25 +71,6 @@ CREATE TABLE IF NOT EXISTS daily_tasks (
     completed    INTEGER NOT NULL DEFAULT 0,
     completed_at TEXT,
     sample_id    INTEGER REFERENCES samples(id)
-);
-
-CREATE TABLE IF NOT EXISTS mock_sessions (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at      TEXT NOT NULL,
-    type            TEXT NOT NULL,
-    assessment_type TEXT NOT NULL DEFAULT 'mock-exam', -- 'placement-quick' | 'placement-full' | 'mock-exam' | 'reassess'
-    duration_seconds INTEGER,
-    completed       INTEGER NOT NULL DEFAULT 1,
-    module          TEXT NOT NULL DEFAULT 'academic',  -- 'academic' | 'general'
-    band_listening  REAL,
-    band_reading    REAL,
-    band_writing    REAL,
-    band_speaking   REAL,
-    band_overall    REAL,
-    listening_raw   INTEGER,
-    reading_raw     INTEGER,
-    stability_score REAL,
-    notes           TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS stage_transitions (
@@ -169,11 +150,11 @@ CREATE TABLE IF NOT EXISTS band_trend (
     section       TEXT NOT NULL,                       -- listening | reading | writing | speaking | overall
     band_estimate REAL NOT NULL,
     sample_count  INTEGER,                             -- how many sessions fed into this estimate
-    source        TEXT DEFAULT 'learner-state',        -- 'learner-state' | 'placement' | 'mock'
+    source        TEXT DEFAULT 'learner-state',        -- 'learner-state' | 'placement'
     UNIQUE(date, section)
 );
 
--- Daily activity summary — written by cron or learner-state after each session
+-- Daily activity summary
 CREATE TABLE IF NOT EXISTS activity_log (
     date             TEXT PRIMARY KEY,               -- YYYY-MM-DD
     sessions_count   INTEGER DEFAULT 0,
@@ -196,8 +177,6 @@ CREATE INDEX IF NOT EXISTS idx_sample_words_word     ON sample_words(word);
 CREATE INDEX IF NOT EXISTS idx_subcap_sample         ON subcap_scores(sample_id);
 CREATE INDEX IF NOT EXISTS idx_subcap_key            ON subcap_scores(subcap_key);
 CREATE INDEX IF NOT EXISTS idx_daily_date            ON daily_tasks(date);
-CREATE INDEX IF NOT EXISTS idx_mock_created          ON mock_sessions(created_at);
-CREATE INDEX IF NOT EXISTS idx_mock_type             ON mock_sessions(assessment_type);
 CREATE INDEX IF NOT EXISTS idx_stage_changed         ON stage_transitions(changed_at);
 CREATE INDEX IF NOT EXISTS idx_words_mastery         ON words(mastery);
 CREATE INDEX IF NOT EXISTS idx_words_srs_due         ON words(srs_due);

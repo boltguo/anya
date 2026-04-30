@@ -9,8 +9,6 @@ Canonical scoring reference for all IELTS skills. Contains the four-criterion ru
 
 ## When to Use
 
-- Any exam skill (`speaking-exam`, `writing-exam`, `reading-exam`, `listening-exam`) needs scoring criteria
-- `placement-quick` or `placement-full` needs to assign band estimates
 - `speaking-explain` / `writing-explain` need to justify why a band was given
 - Any skill needs to convert a raw /40 score to a band
 - Any skill needs the overall band rounding rule

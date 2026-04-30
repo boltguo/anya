@@ -20,7 +20,7 @@ Owner of `USER.md`. Collects or corrects profile fields. On first-run (or `/prof
 0. **Bootstrap study.db** — call `db name=study sql="SELECT 1"` to ensure the database and schema exist (auto-created from `templates/study.sql` on first access).
 1. Read `USER.md` + `MEMORY.md`.
 2. Decide mode:
-   - **First-run** (`USER.initialized = false` or `/profile-manager` with empties) → collect the field bundles in `references/fields.md`, one bundle per turn. After all required fields are filled, set `Status.initialized = true` and chain `placement-quick` (or `placement-full` if asked). Hand off to `ielts-router`.
+   - **First-run** (`USER.initialized = false` or `/profile-manager` with empties) → collect the field bundles in `references/fields.md`, one bundle per turn. After all required fields are filled, set `Status.initialized = true` and chain `placement-quick` (or `placement-quick` if asked). Hand off to `ielts-router`.
    - **Targeted update** — parse intent, ask at most one clarifying question, write only the affected field.
    - **Single-field lookup** — another skill reads USER via `memory target=user action=read`; this path rarely runs directly.
 3. All writes through `memory target=user action=replace`.

@@ -11,7 +11,6 @@ Single-type specialist. One type per session.
 
 - `题型 / TFNG / Heading / Matching / MCQ / 专项`
 - Callback `reading-typetrain`
-- `reading-exam` showed one type < 50% accuracy
 
 ## Types
 

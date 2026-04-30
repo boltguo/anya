@@ -72,7 +72,6 @@ db name=study sql="UPDATE daily_tasks SET completed = 1, completed_at = datetime
 # record a full mock (include assessment_type, duration_seconds, completed)
 db name=study sql="INSERT INTO mock_sessions (created_at, type, band_listening, band_reading, band_writing, band_speaking, band_overall, stability_score, notes, assessment_type, duration_seconds, completed) VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" params='["full", 6.5, 6.0, 5.5, 6.0, 6.0, 0.35, "", "mock-exam", 7200, 1]'
 
-# assessment_type values: 'placement-quick', 'placement-full', 'mock-exam', 'reassess'
 
 # record stage change
 db name=study sql="INSERT INTO stage_transitions (changed_at, from_stage, to_stage, from_path, to_path, reason, snapshot_path) VALUES (datetime('now'), ?, ?, ?, ?, ?, ?)" params='["diagnose", "breakthrough", "B", "B", "primary_stable_2w", "memory_snapshots/2026-W16.md"]'

@@ -1,84 +1,95 @@
 ---
 name: listening-dictation
-description: "Sentence dictation drill: first-pass blind with optional spoiler hints, second-pass hinting, answer reveal with Chinese gloss, final redo — 3-5 sentences per session."
+description: "MUST trigger when the user asks for dictation, intensive listening, spelling practice, or mentions they cannot catch fast speech/connected speech. This is the primary strength-training module for listening."
 ---
 
-# Listening Dictation
+# Listening Dictation (Intensive & Adaptive)
 
-Kills the three most common mid-band listening errors: function words dropped, spelling, connected-speech decoding.
+## 1. When to Use (Trigger Contexts)
+- User phrases: "听写", "dictation", "精听一段", "I want to practice listening deeply."
+- Callback/System triggers: `listening-dictation`
+- Diagnostic triggers: User recently had high `function_word_miss` or `connected_speech_fail` errors.
 
-## When to Use
+## 2. Adaptive Sentence Scaling (CRITICAL Constraint)
+Before generating or selecting ANY sentence, you MUST read the user's current listening level from `MEMORY.md` (or infer from their profile) and strictly adhere to this scaling table. **Never overwhelm the user.**
 
-- `听写 / 精听 / dictation`
-- Callback `listening-dictation`
-- Recent errors include `function_word_miss`, `spelling_error`, `connected_speech_fail`
-- Weekly minimum (1 session per week for all bands)
+| User Level (Band) | Word Count Limit | Syntactic Complexity | Audio Speed | Accent Variation |
+| :--- | :--- | :--- | :--- | :--- |
+| **Beginner** (< 5.0) | **6-10 words** | Simple SVO. No subordinate clauses. | Slower (-10%) | Standard US/UK only |
+| **Intermediate** (5.0-6.0)| **11-16 words** | Max 1 relative or subordinate clause. | Normal speed | Standard US/UK only |
+| **Advanced** (6.5+) | **17-25 words** | Complex sentences, 1+ connected speech feature (elision/assimilation). | Normal speed | **Inject 1 non-standard accent (e.g., Australian, Indian) every 3 sentences.** |
 
-## Sentence scaling
+## 3. Workflow (Step-by-Step)
+Execute these steps strictly in order for each sentence. Default session length is **3 sentences**. After sentence 3, you MUST ask whether to continue with another group or end.
 
-| Band | Profile |
-| ---- | ------- |
-| < 5.0 | 8-12 words, simple SVO |
-| 5.0-5.5 | 12-18 words, one subordinate clause |
-| 5.5-6.5 | 18-25 words, academic phrasing |
-| 6.5+ | 20-30 words, ≥ 1 connected-speech feature |
+**Step 1: Target Acquisition (The "Revenge" Protocol)**
+- *Query `study.db`*: Look for sentences the user failed (e.g., missed function words) at least 3 days ago.
+- *If found*: **REUSE** the `audio_path` from the database. Do NOT call the TTS tool.
+- *If none found*: Generate a new sentence adhering to the Scaling Table. Call the `tts` tool to generate the audio.
 
-## Adaptive Binding
+**Step 2: Delivery & UI Setup**
+- Send the audio to the user.
+- **Reply rule (MANDATORY):**
+  - The **audio message should NOT reply** to any message.
+  - The **instruction / question message MUST reply to the audio message** so the thread is visually clear.
+- **Tone rule:** Sound natural and conversational, like a supportive coach chatting with the learner. Avoid blunt labels like "第 2 题，继续". Prefer warm, human prompts such as "来，听听这一句。把你听到的英文打出来。"
+- **MANDATORY UI**: Immediately after the audio, send a text or keyboard message that:
+  1. asks the learner to type what they heard,
+  2. tells them they can also tap the buttons below for help,
+  3. uses **Chinese button labels**.
+- Recommended keyboard layout (keep it compact):
+  - Row 1: `[🐢 放慢一点]`, `[💡 给点提示]`
+  - Row 2: `[😵 句子太难]`
+- Wait for the user to type what they heard or click/type an option.
 
-Before generating sentences, read MEMORY and apply:
+**Step 3: Handle Feedback (If an option is chosen)**
+- `[🐢 放慢一点]`: Briefly acknowledge, generate/send a slower version (-10% rate), and wait again. The new instruction message MUST again reply to the latest audio.
+- `[😵 句子太难]`: Acknowledge naturally, reveal the sentence, explain the hard vocabulary or chunk, and **drop the difficulty tier** for the next sentence.
+- `[💡 给点提示]`: Reply with first-letter hints (e.g., `T_ p______ i_...`) and invite another try.
+- Log any button usage to `activity_log`.
 
-| MEMORY parameter | Controls |
-|---|---|
-| `IELTS Bands.Listening` | Match Sentence Scaling table below |
-| `Adaptive Training Controls.listening_sentence_length` | Override word count if set (e.g. `12-18`) |
-| `Adaptive Training Controls.recommended_support_level` | `high` → show spoiler hints by default; `low` → blind first pass |
-| `Vocabulary Profile.cefr` | Cap vocabulary at this CEFR level (don't exceed) |
-| TTS rate | `< 5.0 → rate="-10%"` · `5.0-5.5 → rate="-5%"` · `> 5.5 → rate="+0%"` |
+**Step 4: Evaluation & Diff**
+- Once the user submits their dictation, perform a strict **word-by-word diff**.
+- Visually highlight the exact missing/wrong words.
+- Keep the correction readable in chat format.
 
-## Workflow
+**Step 5: Review, Error Analysis & Gloss**
+After each answer, reveal the correct sentence and include:
+1. the correct full sentence,
+2. a concise Chinese translation,
+3. a short gloss for useful chunks or tricky pronunciation,
+4. **a brief error analysis / 易错点** when applicable.
 
-Per sentence (3-5 total):
+The feedback should not stop at only "哪里对/哪里错". Prefer useful guidance such as:
+- article / determiner misses (`a`, `the`, `this`),
+- singular/plural ending misses,
+- near-sound confusion (`task` vs `test`),
+- connected-speech decoding issues,
+- function-word drop due to weak attention.
 
-1. First listen once only (`tts`, rate −10% only if < 5.0).
-2. On the first attempt, spoiler-covered keywords / hints may be shown together with the prompt, but they must stay hidden by default so the learner can choose whether to reveal them.
-3. `force_reply` — type what you heard.
-4. Word-by-word diff. Classify each miss: `function_word_miss` / `missed_plural_s` / `spelling_error` / `connected_speech_fail` / `distractor_trap`.
-5. If the learner stayed blind on the first attempt and is blocked, play the sentence again and encourage using the spoiler hints or give 2-4 keywords / chunks on the second attempt.
-6. Prefer hidden hints when the interface allows it (for example spoiler-covered keywords) so the learner can choose whether to reveal them.
-7. Second listen + `force_reply`: "再听一次，先自己试；需要的话再点开关键词提示。"
-8. Show the correct sentence only if still blocked or after the second attempt.
-9. When revealing the answer, always include a short Chinese translation.
-10. If the learner likely does not know a phrase or chunk (for example `past`, `half past nine`), add a brief Chinese gloss / usage note.
-11. If paraphrase involved, 1 micro quiz on the synonym pair.
-12. Final redo: type the corrected full sentence.
-13. If repeated failure continues, lower difficulty immediately (shorter sentence, slower rate only if profile allows, more transparent vocabulary).
+Keep the analysis concise but highly actionable.
 
-After 3-5 sentences: wrap with first-listen / final-redo accuracy + top error. Difficulty keyboard.
+## 4. End-of-Group UX (MANDATORY)
+- A standard group = **3 sentences**.
+- After the 3rd sentence is reviewed, you MUST send an **inline keyboard in Chinese** asking what to do next.
+- Recommended compact layout:
+  - Row 1: `[🔄 再来一组]`, `[🧭 练习其他]`
+- Do not end with plain text only when the 3-sentence group is complete.
+- **Note**: 
+  - If the user selects `[🔄 再来一组]`, immediately start the next group of 3 sentences.
+  - If the user selects `[🧭 练习其他]`, it acts as returning to the main menu or re-initiating practice. Do not generate further listening tasks. 
+  - (If the user explicitly types they want to quit or ignore the buttons, simply end the session warmly.)
 
-## Persist
+## 5. Persist (Data Contract)
+You MUST use the `db` tool to log the practice data strictly following this schema. Do NOT update `MEMORY.md` directly.
+- **Table `samples`**: Insert a row with `skill_type="listening.dictation"`, `load_score=2`. Log the accuracy percentage in `feedback`. If TTS was used, save the `audio_path` here for future Revenge Protocol use.
+- **Table `errors`**: For every missed word, insert a row. Use canonical keys: `function_word_miss`, `spelling_error`, or `connected_speech_fail`.
+- **Table `activity_log`**: Log if any UI buttons (`放慢一点`, `有点难`, `给提示`) were used.
 
-**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
-
-- 1 `samples` row per session (`load_score=2`, `feedback={first_pct, final_pct}`).
-- `subcap_scores.listening.connected_speech` (+ `.academic_vocab` for band 6+).
-- `errors` per distinct diff with canonical key + root cause.
-- Auto-harvest unknown words / chunks to `study.db`, especially time expressions and high-frequency function-word patterns.
-- Store whether the learner needed `spoiler_hint`, `keyword_hint`, `full_sentence_reveal`, `translation_support`, and `difficulty_drop` so later drills can resume with the right support ladder.
-
-Queries: `support/ielts-data-contract/references/queries.md`.
-
-## Rules
-
-1. **First listen = one pass only.**
-2. **First attempt may include spoiler-covered hints, but they must remain hidden by default.**
-3. **Diff every word** — specific, not "great job".
-4. **Classify every error** with canonical key + root cause.
-5. **Use progressive hinting**: hidden spoiler hint available → second-pass keyword hint → full sentence.
-6. **Prefer spoiler-covered hints** when possible.
-7. **Answer reveal must include Chinese translation.**
-8. **Unknown chunks should get a micro gloss**, not just the raw answer.
-9. **Final redo mandatory** unless perfect first pass.
-10. **Rate −10% only for < 5.0.**
-11. **Micro quiz only if paraphrase** is present.
-12. **Persist partial data** if abandoned.
-13. **If the learner reports that answer exposure is helping recognition but not raw decoding, keep hints optional and hidden on the first attempt rather than visibly exposing them.**
+## 6. Hard Rules
+1. **No Early Reveals**: NEVER show the English transcript on the first listen unless the user explicitly requests it or clicks `[😵 句子太难]`.
+2. **Be Specific**: Diff every word. Do not just say "Good job" if they missed an `s`, an article, or a function word.
+3. **Circuit Breaker**: If their accuracy drops below 40% on a sentence, you MUST immediately drop down one tier in the Scaling Table for the next sentence. Do not let them get frustrated.
+4. **Reply Hygiene**: Audio never replies. Prompt/instruction messages reply to the corresponding audio.
+5. **Natural Chat Tone**: Keep the teaching voice supportive, natural, and conversational — not robotic or overly terse.
+6. **Post-Group Choice**: After a 3-sentence set, always use inline keyboard choices in Chinese for next action.

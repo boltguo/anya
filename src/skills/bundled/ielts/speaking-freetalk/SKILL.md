@@ -1,52 +1,45 @@
 ---
 name: speaking-freetalk
-description: "Open 60-120 sec spoken monologue with focused feedback on fluency + one language upgrade."
+description: "MUST trigger for conversational practice, free-flowing speaking, or impromptu debates. Trigger for 'let's chat', 'freetalk', 'debate'."
 ---
 
-# Speaking Freetalk
+# Speaking Freetalk (Impromptu & Debate)
 
-Low-pressure, no 4-criterion report. Goal: get the learner talking.
+## 1. When to Use (Trigger Contexts)
+- User phrases: "Let's chat", "口语闲聊", "debate", "freetalk"
+- Callback/System triggers: `speaking-freetalk`
 
-## When to Use
+## 2. Adaptive Scaling (CRITICAL Constraint)
+Read the user's speaking level from `MEMORY.md`.
+- **Beginner (< 5.0)**: Familiar topics (hobbies, food, daily routine).
+- **Intermediate (5.0-6.0)**: Opinion-based topics (advantages/disadvantages of remote work).
+- **Advanced (6.5+)**: Controversial or abstract topics (AI replacing jobs, ethical dilemmas).
 
-- `自由说 / 随便说说 / freetalk / 聊一个话题`
-- Callback `speaking-freetalk`
-- Coach suggests a light warm-up / re-entry
-- `streak_break` re-entry task
+## 3. Workflow (Step-by-Step)
+Default session is **1 ongoing conversation (3-4 back-and-forth turns)**.
 
-## Adaptive Binding
+**Step 1: The Hook & UI Setup**
+- Send a short audio (or text) introducing the topic with a thought-provoking question.
+- **Reply rule (MANDATORY):** If sending audio, the text prompt MUST reply to the audio.
+- **MANDATORY UI**: Send an inline keyboard:
+  - Row 1: `[🆘 不知道怎么用英文说]`, `[🔄 换个话题]`
 
-Read MEMORY and apply:
+**Step 2: Handle Feedback (If clicked or typed native language)**
+- `[🆘 不知道怎么用英文说]` or user types in Chinese: Enter **Scaffolding Mode**. Provide 3 useful verb phrases and a sentence starter. Tell them to try saying it again in English.
+- `[🔄 换个话题]`: Acknowledge, generate a new topic, and restart.
+- Log button usage to `ui_feedback`.
 
-| MEMORY parameter | Controls |
-|---|---|
-| `IELTS Bands.Speaking` | `< 5.0` → simple daily topics, accept 30s; `5.0-6.0` → opinion topics; `6.0+` → abstract/hypothetical |
-| `Adaptive Training Controls.speaking_complexity` | Guide topic abstraction level if set |
-| `Vocabulary Profile.cefr` | Feedback vocabulary ceiling (don't use C2 feedback for a B1 learner) |
-| `Weak Dimensions.Speaking` | Focus feedback on the weakest dimension |
+**Step 3: Active Listening & Stealth Feedback**
+- Listen to their response. Push back gently to simulate a real debate ("I see your point, but what about...").
+- **Stealth Feedback**: Do not stop the flow to correct every error. Mention 1 glaring error or suggest 1 advanced phrase *at the end* of your response.
 
-## Workflow
+## 4. End-of-Group UX (MANDATORY)
+After 3-4 turns, wrap up the conversation and send an inline keyboard in Chinese:
+- Row 1: `[🔄 换个话题再聊]`, `[🧭 练习其他]`
 
-1. Offer 3 topic choices aligned with `Content Profile.engage` (plus `🎲 给我一个`).
-2. `tg(type:"force_reply", text:"聊 90 秒，先想 10 秒再开始。发语音给我。")`.
-3. Transcribe; measure pause + filler + duration. Call `pron_assess` only if pronunciation is flagged weak.
-4. Feedback — 3 tight parts: 流利度 / 亮点表达 / 一句升级（原句 → 升级 → 原因）.
-5. One optional 20-sec micro-drill using the upgraded sentence (skip for clearly 6.5+).
-6. Persist: `samples` (load_score=2), subcap scores (`fluency_pauses`, `lexical_variety`), auto-harvest the upgrade chunk.
-7. Difficulty keyboard + `[🔁 speaking-freetalk]  [🏠 nav:main]`.
+## 5. Persist (Data Contract)
+- **Table `samples`**: `skill_type="speaking.freetalk"`. Save clicked buttons to `ui_feedback`.
 
-Queries: `support/ielts-data-contract/references/queries.md`.
-
-## Rules
-
-1. **Low pressure.** No "扣分" language.
-2. **One topic per session.**
-3. **≤ 120 sec target.** Feedback covers first 2 minutes.
-4. **One upgrade.** More is noise.
-5. **Skip `pron_assess`** when pronunciation isn't flagged weak.
-6. **Persist every session** even if abandoned.
-7. **Short voice (< 30 sec)**: Don't grade yet. Encourage: "再多说一点，想到什么说什么 👇" with another `force_reply`. Concatenate both transcripts for grading.
-
-## Persist
-
-**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+## 6. Hard Rules
+1. **The 'I'm Stuck' Protocol**: If the user uses native language or hits SOS, you MUST NOT grade them. Provide a word bank immediately.
+2. **Fluency over Accuracy**: Keep the conversation flowing.

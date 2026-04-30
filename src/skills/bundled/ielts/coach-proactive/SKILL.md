@@ -10,7 +10,6 @@ Trigger-based. Most runs produce no message — silence is valid.
 ## When to Use
 
 - Cron `coach_proactive_pass` (e.g. evening 21:00)
-- After `placement-full` (generate 2-week plan)
 - A training skill detects a strong signal and escalates
 
 **Not** for the learner's questions — that's `coach-passive`.

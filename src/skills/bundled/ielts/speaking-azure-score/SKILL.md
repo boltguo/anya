@@ -12,7 +12,6 @@ Never user-facing. Documents the request/response contract for the `pron_assess`
 | Caller | When to call |
 | ------ | ------------ |
 | `speaking-shadowing` | Every repeat (first + second) |
-| `speaking-exam` | Each voice turn ≥ 20 sec |
 | `speaking-repeat` | Only if pronunciation flagged weak |
 | `speaking-roleplay` | Only on long turns AND pronunciation flagged weak |
 | `speaking-freetalk` | Usually skipped |

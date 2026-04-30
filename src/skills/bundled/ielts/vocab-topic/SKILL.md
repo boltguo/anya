@@ -11,7 +11,6 @@ Teach vocab the way it's used — in topic-tight clusters.
 
 - `话题词汇 / 教育话题 / 环境词汇 / topic vocab / 成组学`
 - Callback `vocab-topic`
-- Before a writing-task2 / speaking-exam on a topic where the learner's topic vocab count is low (< 15 known items)
 
 ## Topics
 

@@ -13,7 +13,6 @@ description: "10-minute mixed-skill baseline to give the learner a starting band
 - `快速测 / 先给我测 / quick placement / 我想知道我几分`
 - MEMORY `IELTS Bands.Overall` missing OR `Calibration.profile_confidence = low`
 
-For routine updates use `learner-state`; for deep baseline use `placement-full`.
 
 ## Blueprint
 
