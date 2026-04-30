@@ -26,16 +26,15 @@ export async function registerAllTools(): Promise<void> {
   toolsLoaded = true;
   await Promise.all([
     import('../tools/file.js'),
-    import('../tools/shell.js'),
     import('../tools/webSearch.js'),
     import('../tools/memory.js'),
     import('../tools/skill.js'),
     import('../tools/clarify.js'),
     import('../tools/telegram.js'),
     import('../tools/tts.js'),
-    import('../tools/imageGen.js'),
     import('../tools/pronAssess.js'),
     import('../tools/db.js'),
+    import('../tools/resetContext.js'),
   ]);
 }
 

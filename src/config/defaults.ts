@@ -2,8 +2,7 @@
  * @module config/defaults
  * @description Anya configuration type definition and default values.
  *
- * LLM: OpenAI Codex (gpt-5.4, OAuth device code).
- * Gemini: AI Studio API key for vision + image generation.
+ * LLM: Google Gemini (gemini-3-flash-preview, API key via gemini.api_key).
  * Azure: Speech key for TTS + pronunciation assessment.
  */
 
@@ -25,7 +24,7 @@ export interface AnyaConfig {
     native_language: string;
   };
 
-  /** LLM provider (OpenAI Codex). */
+  /** LLM provider settings. Uses Gemini API key from gemini.api_key. */
   provider: {
     model: string;
     max_tokens: number;
@@ -33,21 +32,13 @@ export interface AnyaConfig {
     max_retries: number;
   };
 
-  /** Gemini AI Studio — vision + image generation. */
+  /** Gemini AI Studio — API key for LLM + multimodality. */
   gemini: {
     api_key: string;
-    vision_model: string;
-    image_model: string;
-    aspect_ratio: string;
   };
 
   tools: {
     enabled: string[];
-    shell: {
-      require_approval: boolean;
-      approval_allowlist: string[];
-      working_directory: string;
-    };
     web_search: {
       backend: string;
       api_key: string;
@@ -113,7 +104,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   },
 
   provider: {
-    model: 'gpt-5.4',
+    model: 'gemini-3-flash-preview',
     max_tokens: 8192,
     temperature: 0.7,
     max_retries: 3,
@@ -121,22 +112,14 @@ export const DEFAULT_CONFIG: AnyaConfig = {
 
   gemini: {
     api_key: '',
-    vision_model: 'gemini-3-flash-preview',
-    image_model: 'gemini-3.1-flash-image-preview',
-    aspect_ratio: '1:1',
   },
 
   tools: {
     enabled: [
-      'read_file', 'write_file', 'list_dir', 'shell', 'web_search',
+      'read_file', 'write_file', 'list_dir', 'web_search',
       'memory', 'skill_view', 'clarify',
-      'tg', 'tts', 'image_gen', 'pron_assess', 'db',
+      'tg', 'tts', 'pron_assess', 'db', 'reset_context'
     ],
-    shell: {
-      require_approval: true,
-      approval_allowlist: ['git status', 'git log', 'git diff', 'ls', 'pwd', 'cat', 'head', 'tail', 'wc', 'find', 'which'],
-      working_directory: '~',
-    },
     web_search: { backend: 'tavily', api_key: '', max_results: 5 },
   },
 

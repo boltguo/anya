@@ -37,7 +37,6 @@ export const ANYA_HOME = process.env.ANYA_HOME || join(homedir(), '.anya');
 // ── Configuration ────────────────────────────────────────────────────────────
 export const CONFIG_PATH = join(ANYA_HOME, 'config.json');
 export const CONFIG_SCHEMA_PATH = join(ANYA_HOME, 'config.schema.json');
-export const AUTH_PATH = join(ANYA_HOME, 'auth.json');
 
 // ── Identity & Memory ────────────────────────────────────────────────────────
 export const MEMORY_DIR = join(ANYA_HOME, 'memories');
@@ -85,8 +84,6 @@ export const IMAGE_DIR = join(DATA_DIR, 'images');
 /** Images received from users (Telegram photos). */
 export const IMAGE_RECEIVED_DIR = join(IMAGE_DIR, 'received');
 
-/** AI-generated images (image_gen tool output). */
-export const IMAGE_GENERATED_DIR = join(IMAGE_DIR, 'generated');
 
 // ── Runtime ──────────────────────────────────────────────────────────────────
 export const LOGS_DIR = join(ANYA_HOME, 'logs');
@@ -112,7 +109,6 @@ export function ensureDirectories(): void {
     AUDIO_CACHE_DIR,
     IMAGE_DIR,
     IMAGE_RECEIVED_DIR,
-    IMAGE_GENERATED_DIR,
     LOGS_DIR,
     RUN_DIR,
   ];

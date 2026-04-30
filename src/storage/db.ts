@@ -45,12 +45,20 @@ function initializeSchema(db: DatabaseSync): void {
       tool_calls TEXT,
       tool_call_id TEXT,
       tool_name TEXT,
+      raw_parts TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       seq INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, seq);
   `);
+
+  // Migration: add raw_parts column if it doesn't exist
+  try {
+    db.exec('ALTER TABLE messages ADD COLUMN raw_parts TEXT;');
+  } catch {
+    // Ignore error if column already exists
+  }
 }
 
 /**

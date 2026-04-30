@@ -32,14 +32,13 @@ graph TB
     HISTORY["history\n历史截断与清洗"]
     COMPRESS["contextCompressor\n长上下文压缩"]
     ERR["errorClassifier\n错误分类"]
-    PROVIDER["OpenAIProvider\n唯一主 LLM Provider\n(Codex Responses API)"]
-    TOOLS["Tool Registry\n11 个内置工具"]
+    PROVIDER["GeminiProvider\n唯一主 LLM Provider\n(Gemini REST API)"]
+    TOOLS["Tool Registry\n10 个内置工具"]
     SKILLS["Skill Loader\n技能加载与索引"]
   end
 
   subgraph Data["运行时数据 / ~/.anya"]
     CONFIG["config.json\n主配置"]
-    AUTH["auth.json\n认证状态"]
     MEM["memories/\nRULES.md, USER.md, MEMORY.md"]
     SKDIR["skills/\n技能目录"]
     CRONDIR["cron/\njobs.json, history/"]
@@ -76,8 +75,6 @@ graph TB
   TOOLS --> MEDIA
   AGENT --> STORE
   CLI --> CONFIG
-  TGADAPTER --> CONFIG
-  TGADAPTER --> AUTH
   SCHED --> CRONDIR
   Runtime --> LOGS
 ```
@@ -93,7 +90,7 @@ sequenceDiagram
   participant User as User
   participant Adapter as Adapter (CLI/TG)
   participant Agent as Agent Core
-  participant Provider as OpenAI Provider
+  participant Provider as Gemini Provider
   participant Tools as Tool Registry
   participant DB as SQLite (state.db)
 
@@ -125,7 +122,7 @@ sequenceDiagram
 
 ## 3. CLI 启动与命令分发
 
-**用户敲 `anya ...` 以后，命令是怎么被分发到具体实现的。`chat` 是本地 smoke test，真正的长期运行依靠 `gateway` 和 `cron`。**
+**用户敲 `anya ...` 以后，命令是怎么被分发到具体实现的。长期交互依靠 `gateway`，定时学习任务依靠 `cron`。**
 
 ```mermaid
 flowchart TD
@@ -134,7 +131,6 @@ flowchart TD
   PARSE --> CMD{"Which command?"}
 
   CMD -->|init| INIT["runInit()\n初始化 ~/.anya/"]
-  CMD -->|chat| CHAT["runChat()\n本地 smoke test"]
   CMD -->|config| CONFIG["registerConfig()\n配置子命令"]
   CMD -->|doctor| DOCTOR["registerDoctor()\n环境体检"]
   CMD -->|skills| SKILLS["registerSkills()\n技能管理"]
@@ -187,7 +183,7 @@ flowchart TD
 
 **每次 `Agent.run()` 开始时，system prompt 的构建顺序（来自 `promptBuilder.ts`）。**
 
-注意：时间戳被放入用户消息而非 system prompt，以保持 system prompt 稳定，最大化 OpenAI Codex 的 prompt cache 命中率。
+注意：时间戳被放入用户消息而非 system prompt，以保持 system prompt 稳定，最大化 Gemini 的 prompt cache 命中率。
 
 ```mermaid
 flowchart LR
@@ -198,7 +194,7 @@ flowchart LR
   P3B["   memories/MEMORY.md\nAgent 笔记"] --> MEMSEC
   MEMSEC --> PROMPT
   P4["4. buildSkillIndex()\n技能索引（轻量）"] --> PROMPT
-  P5["5. Security 约束\nallowed_paths + shell 规则"] --> PROMPT
+  P5["5. Security 约束\nallowed_paths 规则"] --> PROMPT
   P6["6. Platform Capabilities\n按 enabled tools 动态生成"] --> PROMPT
 
   style MEMSEC fill:#fdebd0
@@ -212,11 +208,11 @@ flowchart LR
 
 **tool 如何注册、模型如何看见、`dispatch()` 如何执行。**
 
-当前 11 个内置工具：`file`、`shell`、`webSearch`、`memory`、`skill`、`clarify`、`telegram`、`tts`、`imageGen`、`pronAssess`、`db`。
+当前内置工具：`file`、`webSearch`、`memory`、`skill`、`clarify`、`telegram`、`tts`、`pronAssess`、`db` 等。
 
 ```mermaid
 flowchart TD
-  IMPORTS["registerAllTools()\nPromise.all 动态加载 11 个工具模块"] --> REG["Map of toolName to ToolDefinition\n工具注册表"]
+  IMPORTS["registerAllTools()\nPromise.all 动态加载 10 个工具模块"] --> REG["Map of toolName to ToolDefinition\n工具注册表"]
 
   REG --> SCHEMAS["getToolSchemas(config, isTelegram)\n生成给模型看的 schema"]
   REG --> EXEC["dispatch(name, args, context)\n按名执行工具"]
@@ -402,7 +398,6 @@ flowchart LR
 graph TD
   HOME["~/.anya\n运行时根目录\nANYA_HOME 环境变量可覆盖"] --> CFG["config.json"]
   HOME --> SCHEMA["config.schema.json"]
-  HOME --> AUTH["auth.json\nCodex OAuth token"]
   HOME --> MEM["memories/"]
   HOME --> SK["skills/"]
   HOME --> CRON["cron/"]
@@ -432,5 +427,4 @@ graph TD
   AUDIO --> ATTS["tts/\n生成音频"]
 
   IMAGES --> RECEIVED["received/\nTelegram 收到的图片"]
-  IMAGES --> GENERATED["generated/\nimage_gen 生成图片"]
 ```

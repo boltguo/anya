@@ -6,9 +6,6 @@
  * - {@link isPathAllowed} — checks if a file path falls within configured
  *   allowed directories (config.security.allowed_paths). Prevents file
  *   tools from reading/writing outside the sandbox.
- * - {@link isCommandAllowed} — checks if a shell command matches the
- *   approval allowlist (config.tools.shell.approval_allowlist). Prevents
- *   running unapproved commands without user consent.
  */
 
 import { resolve, normalize, relative, sep } from 'node:path';
@@ -45,26 +42,6 @@ export function isPathAllowed(filePath: string, config: AnyaConfig): boolean {
   for (const allowed of config.security.allowed_paths) {
     const allowedResolved = normalize(resolve(expandHome(allowed)));
     if (isInsideDir(resolved, allowedResolved)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * Check if a shell command matches the approval allowlist.
- * Matches if the command starts with any allowed prefix.
- */
-export function isCommandAllowed(command: string, config: AnyaConfig): boolean {
-  if (!config.tools.shell.require_approval) {
-    return true;
-  }
-
-  const trimmed = command.trim();
-
-  for (const allowed of config.tools.shell.approval_allowlist) {
-    if (trimmed === allowed || trimmed.startsWith(allowed + ' ')) {
       return true;
     }
   }

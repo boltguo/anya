@@ -11,7 +11,6 @@ import { registerCron } from './commands/cron.js';
 import { registerSessions } from './commands/sessions.js';
 import { registerDataTransfer } from './commands/dataTransfer.js';
 import { runInit } from '../src/commands/init.js';
-import { runChat } from '../src/commands/chat.js';
 import { runUsage } from '../src/commands/usage.js';
 
 // Resolve package.json for version
@@ -45,14 +44,6 @@ program
   .description('Initialize ~/.anya/ directory and configuration')
   .action(async () => {
     await runInit();
-  });
-
-program
-  .command('chat')
-  .description('Send a single message to the agent and print the response')
-  .argument('[message]', 'Message to send', 'Hello, who are you?')
-  .action(async (message: string) => {
-    await runChat(message);
   });
 
 registerConfig(program);

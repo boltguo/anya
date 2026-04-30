@@ -12,6 +12,19 @@
 // ── Conversation History ─────────────────────────────────────────────────────
 
 /**
+ * An attached file (image) for multimodal input.
+ *
+ * Transient — carried through the ReAct loop but never persisted to SQLite.
+ * Before saving messages, the Agent degrades file-bearing messages to plain text.
+ */
+export interface MessageFile {
+  /** Absolute path to the file on disk. */
+  path: string;
+  /** MIME type (e.g., 'image/jpeg'). */
+  mimeType: string;
+}
+
+/**
  * A single message in the conversation history.
  *
  * Messages are persisted to the session database and replayed on each
@@ -23,13 +36,19 @@ export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool';
   /** Text content of the message. Optional for tool-call-only assistant turns. */
   content?: string;
+  /** Attached files (images) for native multimodal input. Transient — never persisted. */
+  files?: MessageFile[];
   /** Tool calls requested by the assistant (present when role='assistant'). */
   toolCalls?: ToolCall[];
   /** ID linking this tool result to the original tool call (present when role='tool'). */
   toolCallId?: string;
   /** Name of the tool that produced this result (present when role='tool'). */
   toolName?: string;
-
+  /** 
+   * Raw opaque parts received from the model in a previous turn. 
+   * Useful for preserving internal state like `thought_signature` when round-tripping. 
+   */
+  _rawParts?: unknown[];
 }
 
 /**
@@ -45,6 +64,11 @@ export interface ToolCall {
   name: string;
   /** Arguments to pass to the tool's execute function. */
   args: Record<string, unknown>;
+  /** 
+   * Gemini 3+ requirement: The thought_signature must be echoed back exactly 
+   * as received in the functionCall block when creating the model's history message.
+   */
+  thoughtSignature?: string;
 }
 
 
@@ -72,6 +96,8 @@ export interface LLMResponse {
   content?: string;
   /** Tool calls the model wants to execute. */
   toolCalls?: ToolCall[];
+  /** Opaque raw model parts received from the provider, preserved for history round-tripping. */
+  rawModelParts?: unknown[];
 
   /** Token usage statistics for this API call. */
   usage?: {

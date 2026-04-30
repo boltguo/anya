@@ -19,15 +19,15 @@
  *   - {@link ./history} — truncation and Gemini-order sanitization
  */
 
-import type { Message, Adapter } from './types.js';
+import type { Message, Adapter, MessageFile } from './types.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { buildSystemPrompt } from './promptBuilder.js';
-import { getProvider } from '../providers/openai.js';
+import { getProvider } from '../providers/gemini.js';
 import { getToolSchemas, dispatch } from '../tools/registry.js';
 import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle } from '../storage/sessionStore.js';
 import { agentLogger } from '../lib/logger.js';
 import { trackLlm } from '../lib/usage.js';
-import { truncateHistory, sanitizeHistory } from './history.js';
+import { truncateHistory, sanitizeHistory, applyContextReset } from './history.js';
 import { classifyApiError } from './errorClassifier.js';
 import { ContextCompressor, estimateTokens } from './contextCompressor.js';
 
@@ -39,6 +39,8 @@ export interface RunOptions {
   sessionId?: string;
   /** Force creation of a new session, discarding previous history. */
   newSession?: boolean;
+  /** Attached files (images) for native multimodal input in this turn. */
+  files?: MessageFile[];
 }
 
 /** Result returned by {@link Agent.run} after the ReAct loop completes. */
@@ -86,7 +88,7 @@ export class Agent {
    * @throws Re-throws LLM provider errors after max retries.
    */
   async run(input: string, options: RunOptions): Promise<RunResult> {
-    const { sessionKey, newSession } = options;
+    const { sessionKey, newSession, files } = options;
     let { sessionId } = options;
 
     if (!sessionId) {
@@ -96,6 +98,7 @@ export class Agent {
     }
 
     let history = loadMessages(sessionId);
+    history = applyContextReset(history);
     const maxHistory = this.config.advanced.max_history_messages || 200;
     history = truncateHistory(history, maxHistory);
     history = sanitizeHistory(history);
@@ -109,11 +112,11 @@ export class Agent {
     const messages: Message[] = [
       { role: 'system', content: systemPrompt },
       ...history,
-      { role: 'user', content: timestampedInput },
+      { role: 'user', content: timestampedInput, files },
     ];
 
     const newMessages: Message[] = [
-      { role: 'user', content: input },
+      { role: 'user', content: input, files },
     ];
 
     // Auto-title the session from first user message.
@@ -130,6 +133,7 @@ export class Agent {
     let compressionCount = 0;
     const MAX_COMPRESSIONS = 3;
     let lastRealTokenCount = 0;
+    let firstLlmCall = true;  // Track whether images have been seen by LLM
 
     // ── ReAct Loop ──
     for (let loop = 0; loop < maxLoops; loop++) {
@@ -154,6 +158,20 @@ export class Agent {
       let response;
       try {
         response = await provider.chat(messages, toolSchemas, this.config, { sessionId });
+
+        // After the first LLM call that saw the images, strip inlineData from
+        // all messages to avoid re-uploading MB of base64 in subsequent loops.
+        if (firstLlmCall && files && files.length > 0) {
+          firstLlmCall = false;
+          for (const m of messages) {
+            if (m.files) {
+              m.content = `[📷 ${m.files.length} image(s) attached — already processed]\n${m.content || ''}`.trim();
+              delete m.files;
+            }
+          }
+        } else {
+          firstLlmCall = false;
+        }
       } catch (err) {
         const classified = classifyApiError(err);
 
@@ -213,6 +231,7 @@ export class Agent {
           role: 'assistant',
           content: response.content || undefined,
           toolCalls: response.toolCalls,
+          _rawParts: response.rawModelParts,
         };
         messages.push(assistantMsg);
         newMessages.push(assistantMsg);
@@ -255,10 +274,13 @@ export class Agent {
       const assistantMsg: Message = {
         role: 'assistant',
         content: finalContent,
+        _rawParts: response.rawModelParts,
       };
       newMessages.push(assistantMsg);
 
-      await saveMessages(sessionId, newMessages);
+      // Degrade multimodal messages before persisting — strip files, keep text placeholder
+      const degraded = degradeForStorage(newMessages);
+      await saveMessages(sessionId, degraded);
 
       return {
         content: finalContent,
@@ -271,7 +293,8 @@ export class Agent {
     // ── Max loops reached ──
     const fallbackMsg = 'Warning: Maximum loop count reached. Please try simplifying your request.';
     newMessages.push({ role: 'assistant', content: fallbackMsg });
-    await saveMessages(sessionId, newMessages);
+    const degraded = degradeForStorage(newMessages);
+    await saveMessages(sessionId, degraded);
 
     return {
       content: fallbackMsg,
@@ -280,4 +303,27 @@ export class Agent {
       tgSent,
     };
   }
+}
+
+// ── Multimodal Degradation ──────────────────────────────────────────────────
+
+/**
+ * Degrade multimodal messages for SQLite persistence.
+ *
+ * Strips the transient `files` field and replaces it with a lightweight
+ * text placeholder. This prevents MB-scale base64 blobs from entering
+ * the conversation history, while preserving a human-readable note that
+ * images were present.
+ */
+function degradeForStorage(messages: Message[]): Message[] {
+  return messages.map(msg => {
+    if (msg.files && msg.files.length > 0) {
+      const { files, ...rest } = msg;
+      return {
+        ...rest,
+        content: `[📷 User sent ${files.length} image(s)]\n${msg.content || ''}`.trim(),
+      };
+    }
+    return msg;
+  });
 }

@@ -66,7 +66,7 @@ function scanDir(dir: string): void {
   }
 
   for (const name of entries) {
-    if (name.startsWith('.') && name !== '.bundled') continue;
+    if (name.startsWith('.')) continue;
 
     const fullPath = join(dir, name);
     let isDir = false;

@@ -43,18 +43,10 @@
       "type": "object",
       "description": "LLM provider configuration.",
       "properties": {
-        "primary": {
+        "model": {
           "type": "string",
-          "description": "Primary model name (e.g. gemini-2.5-flash).",
-          "default": "gemini-2.5-flash"
-        },
-        "api_key": {
-          "type": "string",
-          "description": "API key for the LLM provider. Get from https://aistudio.google.com/"
-        },
-        "base_url": {
-          "type": "string",
-          "description": "Base URL for the API endpoint."
+          "description": "Primary model name (e.g. gemini-3-flash-preview).",
+          "default": "gemini-3-flash-preview"
         },
         "max_tokens": {
           "type": "integer",
@@ -73,8 +65,17 @@
           "description": "Max retries on transient failures.",
           "default": 3
         }
-      },
-      "required": ["primary", "api_key"]
+      }
+    },
+    "gemini": {
+      "type": "object",
+      "description": "Gemini API Configuration",
+      "properties": {
+        "api_key": {
+          "type": "string",
+          "description": "API key for the Gemini provider. Get from https://aistudio.google.com/"
+        }
+      }
     },
     "tools": {
       "type": "object",
@@ -84,26 +85,6 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "List of enabled tool names."
-        },
-        "shell": {
-          "type": "object",
-          "properties": {
-            "require_approval": {
-              "type": "boolean",
-              "description": "Whether shell commands need user approval.",
-              "default": true
-            },
-            "approval_allowlist": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Shell command prefixes that skip approval."
-            },
-            "working_directory": {
-              "type": "string",
-              "description": "Default working directory for shell commands.",
-              "default": "~"
-            }
-          }
         },
         "web_search": {
           "type": "object",

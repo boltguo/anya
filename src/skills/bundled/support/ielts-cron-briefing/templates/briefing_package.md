@@ -10,7 +10,7 @@ The default delivery is a 3-part Telegram package:
 
 ## 1. Pinned Entry Message
 
-Use `tg(type:"photo")` when an image is available. Otherwise use `tg(type:"text")`.
+Use `tg(type:"text")` to send each part.
 
 ```md
 🌤 <b>Today's Briefing</b>
@@ -83,22 +83,7 @@ In my view, {{topic}} is important because ...
 What is the main idea of paragraph 2?
 ```
 
-## 5. Image Prompt Guidance
-
-Image prompt should be:
-
-- concrete
-- relevant to the article topic
-- clean and editorial
-- not cartoonish unless the learner profile strongly prefers playful visuals
-
-Suggested prompt structure:
-
-```text
-Editorial illustration for an English learning daily briefing about {{topic}}. Clean composition, modern magazine style, optimistic and thoughtful mood, suitable as a Telegram cover image, {{aspect_ratio}}.
-```
-
-## 6. Audio Guidance
+## 5. Audio Guidance
 
 Default narration rules:
 

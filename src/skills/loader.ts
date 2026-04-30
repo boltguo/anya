@@ -80,8 +80,8 @@ function scanDirectory(dir: string, results: Skill[], mtimes: Map<string, number
   }
 
   for (const entry of entries) {
-    // Skip hidden files/dirs (except .bundled which holds bundled skills)
-    if (entry.startsWith('.') && entry !== '.bundled') continue;
+    // Skip hidden files/dirs
+    if (entry.startsWith('.')) continue;
 
     const fullPath = join(dir, entry);
     let stat;

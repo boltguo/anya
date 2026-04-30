@@ -99,7 +99,7 @@ export class ContextCompressor implements ContextEngine {
       .join('\n\n');
 
     try {
-      const { getProvider } = await import('../providers/openai.js');
+      const { getProvider } = await import('../providers/gemini.js');
       const provider = getProvider();
 
       const response = await provider.chat(

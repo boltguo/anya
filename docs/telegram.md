@@ -12,7 +12,7 @@ graph TD
     BOT --> TA["TelegramAdapter<br/>(Singleton)"]
     TA -->|per-request| TSA["TelegramSessionAdapter"]
     TSA --> AGENT["Agent.run()"]
-    AGENT --> PROVIDER["OpenAI Codex"]
+    AGENT --> PROVIDER["Gemini"]
     AGENT --> TOOLS["Tool Registry"]
     TOOLS -->|tg tool| TSA
     TSA -->|outbound queue| TG
@@ -82,7 +82,7 @@ sequenceDiagram
     participant TA as TelegramAdapter
     participant TSA as SessionAdapter
     participant Agent as Agent.run()
-    participant LLM as OpenAI Codex
+    participant LLM as Gemini
     participant Tools as Tool Registry
     participant DB as SQLite
 
@@ -327,10 +327,8 @@ stateDiagram-v2
 |------|---------|
 | 初始 | `🤔 Thinking...` |
 | read_file | `⏳ 📄 Reading file...` |
-| shell | `⏳ 💻 Running command...` |
 | web_search | `⏳ 🔍 Searching...` |
 | tts | `⏳ 🔊 Generating audio...` |
-| image_gen | `⏳ 🖼️ Generating image...` |
 | db | `⏳ 🗄️ Querying database...` |
 | 工具完成 | `🤔 Thinking...`（重置） |
 | 最终 | 删除状态消息 |
@@ -423,19 +421,19 @@ sequenceDiagram
 
 ---
 
-## 12. 审批流程 (Shell / File)
+## 12. 审批流程 (File)
 
 ```mermaid
 sequenceDiagram
     participant Agent as Agent
-    participant Tool as Shell Tool
+    participant Tool as File Tool
     participant TSA as SessionAdapter
     participant TG as Telegram
     participant User as 用户
     participant TA as TelegramAdapter
 
-    Agent->>Tool: dispatch("shell", {cmd: "rm -rf ..."})
-    Tool->>TSA: requestApproval("Agent wants to run: rm -rf ...")
+    Agent->>Tool: dispatch("read_file", {path: "/etc/passwd"})
+    Tool->>TSA: requestApproval("Agent wants to access: /etc/passwd")
     TSA->>TG: reply("🔐 Approval Required", ReplyKeyboard)
     Note over TG: [✅ Allow] [❌ Deny] [🔓 Always Allow]
 
@@ -444,7 +442,7 @@ sequenceDiagram
     TA->>TA: tryResolveApproval("✅ Allow")
     TA->>TSA: resolve promise → 'allow'
     TSA-->>Tool: 'allow'
-    Tool->>Tool: 执行命令
+    Tool->>Agent: 执行结果
     Tool-->>Agent: result
 
     Note over TSA: 超时 5 分钟 → 自动 deny

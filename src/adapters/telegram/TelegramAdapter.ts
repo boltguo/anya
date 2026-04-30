@@ -20,9 +20,9 @@ import { trackStt } from '../../lib/usage.js';
 import { loadSkills } from '../../skills/loader.js';
 import { createSession } from '../../storage/sessionStore.js';
 import { transcribeAudio } from '../../lib/stt.js';
-import { analyzeImage } from '../../lib/vision.js';
 import { AUDIO_CACHE_DIR, VOICE_DIR, IMAGE_RECEIVED_DIR, USER_MD_PATH } from '../../lib/paths.js';
 import type { AnyaConfig } from '../../config/defaults.js';
+import type { MessageFile } from '../../agent/types.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -152,6 +152,7 @@ export class TelegramAdapter {
     ctx: Context,
     input: string,
     cleanup?: () => void,
+    files?: MessageFile[],
   ): Promise<void> {
     const userId = ctx.from?.id;
     const allowedUsers = this.config.telegram.allowed_user_ids;
@@ -184,7 +185,7 @@ export class TelegramAdapter {
 
     try {
       await sessionAdapter.sendThinking();
-      const result: RunResult = await agent.run(input, { sessionKey });
+      const result: RunResult = await agent.run(input, { sessionKey, files });
       if (!result.tgSent && result.content) {
         await sessionAdapter.reply(result.content);
       }
@@ -206,7 +207,7 @@ export class TelegramAdapter {
    * 1. Commands (/start, /new, /kill, dynamic skill commands such as /init) — registered first for priority
    * 2. Text messages
    * 3. Voice messages (download → STT → agent)
-   * 4. Photo messages (download → vision → agent)
+   * 4. Photo messages (download → agent natively)
    * 5. Callback queries (approval, choice, or generic keyboard callbacks)
    */
   async start(): Promise<void> {
@@ -402,7 +403,7 @@ export class TelegramAdapter {
       this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
     });
 
-    // ── Photo message handler (download → Gemini Vision → agent) ──
+    // ── Photo message handler (download → pass natively to agent) ──
 
     this.bot.on('message:photo', async (ctx) => {
       const caption = ctx.message.caption || '';
@@ -433,26 +434,25 @@ export class TelegramAdapter {
         return;
       }
 
-      // Analyze image via Gemini Vision SDK
-      const visionResult = await analyzeImage(imagePath, this.config, caption || undefined);
+      // Determine MIME type from extension
+      const ext = path.extname(imagePath).toLowerCase();
+      const mimeMap: Record<string, string> = {
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.png': 'image/png', '.gif': 'image/gif',
+        '.webp': 'image/webp', '.bmp': 'image/bmp',
+      };
+      const mimeType = mimeMap[ext] || 'image/jpeg';
 
-      if (!visionResult.success || !visionResult.description) {
-        const errMsg = visionResult.error || 'Could not analyze image';
-        agentLogger.warn({ msg: 'tg_vision_failed', error: errMsg });
-        await ctx.reply(`🖼️ ${errMsg}`);
-        fs.unlink(imagePath, () => {});
-        return;
-      }
-
-      // Build agent input with vision description injected as context
+      // Pass image natively to Agent
       const input = caption
-        ? `[User sent a photo with caption: "${caption}"]\n[Vision analysis: ${visionResult.description}]`
-        : `[User sent a photo]\n[Vision analysis: ${visionResult.description}]`;
+        ? `[User sent a photo with caption: "${caption}"]`
+        : '[User sent a photo]';
+      const files: MessageFile[] = [{ path: imagePath, mimeType }];
 
-      agentLogger.info({ msg: 'tg_vision_done', chatId: ctx.chat.id, descLength: visionResult.description.length });
+      agentLogger.info({ msg: 'tg_photo_ready', chatId: ctx.chat.id, imagePath });
 
       // Keep image for audit trail (don't delete)
-      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
+      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input, undefined, files));
     });
 
     // ── Callback query dispatcher (approvals + choices + custom) ──

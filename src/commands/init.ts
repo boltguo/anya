@@ -112,9 +112,14 @@ export async function runInit(): Promise<void> {
   console.log(chalk.dim('  [ok] cron/'));
 
   // 6. Bundled skills
-  const skillsSrc = resolveAsset(__dirname, 'skills');
+  let skillsSrc = resolveAsset(__dirname, 'skills');
+  if (skillsSrc && existsSync(join(skillsSrc, 'bundled'))) {
+    // Development mode (src/skills) -> copy from src/skills/bundled
+    skillsSrc = join(skillsSrc, 'bundled');
+  }
+  
   if (skillsSrc) {
-    cpSync(skillsSrc, join(SKILLS_DIR, '.bundled'), { recursive: true, force: true });
+    cpSync(skillsSrc, SKILLS_DIR, { recursive: true, force: true });
     console.log(chalk.dim('  [ok] skills/'));
   } else {
     console.log(chalk.yellow('  [warn] bundled skills not found'));
@@ -125,7 +130,7 @@ export async function runInit(): Promise<void> {
   console.log(chalk.bold.green('✓ Init complete'));
   console.log();
   console.log(chalk.dim('  Next steps:'));
-  console.log(`    ${chalk.bold('anya config')}  — Sign in to OpenAI, configure Gemini / Azure / Telegram`);
+  console.log(`    ${chalk.bold('anya config')}  — Configure Gemini API key, Azure / Telegram`);
   console.log(`    ${chalk.bold('anya doctor')}  — Verify configuration`);
   console.log();
 }

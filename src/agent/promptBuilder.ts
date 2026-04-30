@@ -16,7 +16,7 @@
  * ├─────────────────────────────────────┤
  * │  5. Skills Index — Available skills  │  "What Anya can do"
  * ├─────────────────────────────────────┤
- * │  6. Security — Path & shell rules    │  "What Anya must not do"
+ * │  6. Security — Path rules            │  "What Anya must not do"
  * ├─────────────────────────────────────┤
  * │  7. Platform Capabilities            │  "What tools/media are available"
  * └─────────────────────────────────────┘
@@ -91,11 +91,7 @@ export function buildSystemPrompt(config: AnyaConfig): string {
   }
 
   if (config.gemini?.api_key) {
-    caps.push('- **Vision**: Photos are auto-analyzed via Gemini; description provided as text.');
-  }
-
-  if (enabled.includes('image_gen')) {
-    caps.push('- **Image Gen**: `image_gen` tool creates images from text. Send via `tg` type="photo" with returned path.');
+    caps.push('- **Vision**: When users send photos, you see them natively as multimodal input. Describe what you see and respond in context.');
   }
 
   if (enabled.includes('pron_assess')) {

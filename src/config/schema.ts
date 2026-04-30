@@ -9,11 +9,7 @@ export const PartialAnyaConfigSchema = z.object({
   version: z.string().optional(),
   agent: z.object({
     name: z.string().optional(),
-    // Injected directly into the system prompt. This replaces legacy file-based personality loading.
     personality: z.string().optional(),
-  }).optional(),
-  user: z.object({
-    native_language: z.string().optional(),
   }).optional(),
   provider: z.object({
     model: z.string().optional(),
@@ -23,26 +19,14 @@ export const PartialAnyaConfigSchema = z.object({
   }).optional(),
   gemini: z.object({
     api_key: z.string().optional(),
-    vision_model: z.string().optional(),
-    image_model: z.string().optional(),
-    aspect_ratio: z.string().optional(),
   }).optional(),
   tools: z.object({
     enabled: z.array(z.string()).optional(),
-    shell: z.object({
-      require_approval: z.boolean().optional(),
-      approval_allowlist: z.array(z.string()).optional(),
-      working_directory: z.string().optional(),
-    }).optional(),
     web_search: z.object({
       backend: z.string().optional(),
       api_key: z.string().optional(),
       max_results: z.number().optional(),
     }).optional(),
-  }).optional(),
-  security: z.object({
-    allowed_paths: z.array(z.string()).optional(),
-    fence_mode: z.enum(['ask', 'deny', 'allow']).optional(),
   }).optional(),
   telegram: z.object({
     enabled: z.boolean().optional(),
@@ -53,17 +37,9 @@ export const PartialAnyaConfigSchema = z.object({
     groq_api_key: z.string().optional(),
     model: z.string().optional(),
   }).optional(),
-  tts: z.object({
-    voice: z.string().optional(),
-    rate: z.string().optional(),
-  }).optional(),
   azure: z.object({
     speech_key: z.string().optional(),
     speech_region: z.string().optional(),
-  }).optional(),
-  cron: z.object({ enabled: z.boolean().optional() }).optional(),
-  ui: z.object({
-    show_tool_calls: z.boolean().optional(),
   }).optional(),
   advanced: z.object({
     context_window: z.number().optional(),

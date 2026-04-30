@@ -71,8 +71,8 @@ anya init
 
 编辑 `~/.anya/config.json`，最关键的几项：
 
-- `provider.model` —— 主 LLM（默认 OpenAI Codex `gpt-5.4`，通过 `anya gateway` 做 OAuth 设备码登录）
-- `gemini.api_key` —— 视觉 / 图像生成
+- `gemini.api_key` —— 主 LLM + 视觉（默认模型 `gemini-3-flash-preview`）
+- `provider.model` —— 可自定义模型名称
 - `azure.speech_key` + `azure.speech_region` —— TTS 与发音评分
 - `stt.groq_api_key` —— 语音识别
 - `telegram.bot_token` + `telegram.allowed_user_ids` —— Telegram Bot 接入
@@ -89,9 +89,6 @@ anya doctor              # 体检：检查 Node、ffmpeg、API key、数据库
 ### 日常运行
 
 ```bash
-# 单次对话（CLI）
-anya chat "帮我练一组雅思口语 Part 2"
-
 # 启动 Telegram Bot
 anya gateway start
 
@@ -108,14 +105,13 @@ anya usage
 
 | 用途           | 服务                         | 配置字段                                |
 | -------------- | ---------------------------- | --------------------------------------- |
-| 主 LLM         | OpenAI Codex（OAuth 设备码） | `provider.model` + `anya gateway login` |
-| 视觉、图像生成 | Google Gemini（AI Studio）   | `gemini.*`                              |
+| 主 LLM + 视觉  | Google Gemini（AI Studio）   | `gemini.api_key` + `provider.model`     |
 | TTS、发音评分  | Azure Speech                 | `azure.*`                               |
 | 语音识别       | Groq Whisper                 | `stt.groq_api_key`                      |
 | 联网搜索       | Tavily                       | `tools.web_search.api_key`              |
 | 聊天入口       | Telegram Bot                 | `telegram.*`                            |
 
-其中 Azure、Telegram、Tavily 不配置也能跑，只是相应功能会被禁用；主 LLM 与 Gemini 是体验完整性所需的最小集。
+其中 Azure、Telegram、Tavily 不配置也能跑，只是相应功能会被禁用；Gemini API key 是体验完整性所需的最小集。
 
 ## CLI 命令
 
@@ -124,7 +120,6 @@ anya usage
 | 命令                                          | 作用                                                                    |
 | --------------------------------------------- | ----------------------------------------------------------------------- |
 | `anya init`                                   | 初始化 `~/.anya/` 与默认配置                                            |
-| `anya chat [msg]`                             | 单次对话                                                                |
 | `anya config <get\|set\|edit\|path>`          | 读写 `config.json`                                                      |
 | `anya doctor`                                 | 环境体检（Node、ffmpeg、API、DB）                                       |
 | `anya skills <list\|install\|remove\|reload>` | 管理本地与打包 skills                                                   |
@@ -157,7 +152,7 @@ sequenceDiagram
   participant User as User
   participant Adapter as Adapter (CLI/TG)
   participant Agent as Agent Core
-  participant Provider as OpenAI Provider
+  participant Provider as Gemini Provider
   participant Tools as Tool Registry
   participant DB as SQLite (state.db)
 
@@ -190,7 +185,7 @@ sequenceDiagram
 - **Command Layer**：`src/commands/` 提供命令实现。
 - **Adapter Layer**：`src/adapters/telegram/` 等将平台输入/输出转为统一格式。
 - **Agent Core Layer**：`src/agent/Agent.ts` 统一 ReAct 循环、prompt 组装、历史管理、工具调度、消息落库。
-- **Provider Layer**：`src/providers/openai.ts` 目前唯一主 LLM Provider。
+- **Provider Layer**：`src/providers/gemini.ts` 目前唯一主 LLM Provider。
 - **Tool & Skill Layer**：`src/tools/`、`src/skills/` 注册原子工具与领域技能。
 - **Storage / Runtime Foundation Layer**：`src/storage/`、`src/lib/paths.ts` 等统一路径、SQLite、日志、配置。
 - **Bundled Domain Assets Layer**：`src/skills/bundled/ielts/**` 提供 IELTS 能力跃迁系统。
@@ -338,11 +333,11 @@ sequenceDiagram
 - [src/agent/](src/agent/)
   Agent 主循环、prompt 拼装、上下文压缩、历史管理、错误分类器。
 - [src/providers/](src/providers/)
-  LLM provider 抽象，当前只有 OpenAI Codex 实现。
+  LLM provider 抽象，当前只有 Gemini 实现。
 - [src/adapters/telegram/](src/adapters/telegram/)
   Telegram Bot、菜单、语音/图片消息接入。
 - [src/tools/](src/tools/)
-  Agent 可调用的工具：`db`、`memory`、`file`、`shell`、`skill`、`clarify`、`tts`、`pron_assess`、`web_search`、`image_gen`、`telegram`，以及 `registry` 负责装配。
+  Agent 可调用的工具：`db`、`memory`、`file`、`shell`、`skill`、`clarify`、`tts`、`pron_assess`、`web_search`、`telegram`，以及 `registry` 负责装配。
 - [src/commands/](src/commands/)
   CLI 命令实现（chat / config / gateway / usage 等）。
 - [src/config/](src/config/)

@@ -82,9 +82,6 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
   if (raw.google && typeof raw.google === 'object') {
     migrated.gemini = {
       api_key: raw.google.api_key || '',
-      vision_model: raw.google.vision_model || 'gemini-3-flash-preview',
-      image_model: raw.google.image_model || 'gemini-3.1-flash-image-preview',
-      aspect_ratio: raw.google.aspect_ratio || '1:1',
     };
     delete migrated.google;
   }
@@ -93,7 +90,7 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
   const provider = raw.provider;
   if (provider && (provider.gemini || provider.openai || provider.active)) {
     migrated.provider = {
-      model: provider.openai?.model || provider.gemini?.model || 'gpt-5.4',
+      model: provider.gemini?.model || provider.openai?.model || 'gemini-3-flash-preview',
       max_tokens: provider.max_tokens || 8192,
       temperature: provider.temperature ?? 0.7,
       max_retries: provider.max_retries || 3,
@@ -102,9 +99,6 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
     if (!migrated.gemini) {
       migrated.gemini = {
         api_key: provider.gemini?.api_key || '',
-        vision_model: raw.vision?.model || 'gemini-3-flash-preview',
-        image_model: raw.image_gen?.model || 'gemini-3.1-flash-image-preview',
-        aspect_ratio: raw.image_gen?.aspect_ratio || '1:1',
       };
     }
   }

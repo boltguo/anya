@@ -44,7 +44,7 @@ export function runUsage(month?: string): void {
   console.log();
 
   // ── LLM ──
-  console.log(chalk.bold('  🧠 LLM (Gemini / OpenAI)'));
+  console.log(chalk.bold('  🧠 LLM (Gemini)'));
   console.log(`     Calls:         ${chalk.white(fmtNum(usage.llm.calls))}`);
   console.log(`     Input tokens:  ${chalk.white(fmtNum(usage.llm.input_tokens))}`);
   console.log(`     Output tokens: ${chalk.white(fmtNum(usage.llm.output_tokens))}`);
@@ -79,16 +79,6 @@ export function runUsage(month?: string): void {
   if (sttToday && sttToday.calls > 0) {
     console.log(`     Today:    ${chalk.yellow(fmtNum(sttToday.calls))} calls, ${chalk.yellow(fmtDuration(sttToday.duration_sec))}`);
   }
-  console.log();
-
-  // ── Vision (Gemini) ──
-  console.log(chalk.bold('  👁️  Vision (Gemini)'));
-  console.log(`     Calls:    ${chalk.white(fmtNum(usage.vision.calls))}`);
-  console.log();
-
-  // ── Image Gen (Vertex) ──
-  console.log(chalk.bold('  🖼️  Image Gen (Vertex AI)'));
-  console.log(`     Calls:    ${chalk.white(fmtNum(usage.image_gen.calls))}`);
   console.log();
 
   // ── Web Search (Tavily) ──

@@ -104,13 +104,14 @@ export function loadMessages(sessionId: string): Message[] {
   // Query sorted by updated_at DESC so we get the most recent session,
   // with rowid as tiebreaker for same-timestamp entries.
   const rows = db.prepare(
-    'SELECT role, content, tool_calls, tool_call_id, tool_name FROM messages WHERE session_id = ? ORDER BY seq ASC'
+    'SELECT role, content, tool_calls, tool_call_id, tool_name, raw_parts FROM messages WHERE session_id = ? ORDER BY seq ASC'
   ).all(sessionId) as Array<{
     role: string;
     content: string | null;
     tool_calls: string | null;
     tool_call_id: string | null;
     tool_name: string | null;
+    raw_parts: string | null;
   }>;
 
   return rows.map(row => {
@@ -122,6 +123,12 @@ export function loadMessages(sessionId: string): Message[] {
     if (row.tool_calls) {
       try {
         msg.toolCalls = JSON.parse(row.tool_calls);
+      } catch { /* ignore parse errors */ }
+    }
+
+    if (row.raw_parts) {
+      try {
+        msg._rawParts = JSON.parse(row.raw_parts);
       } catch { /* ignore parse errors */ }
     }
 
@@ -148,8 +155,8 @@ export async function saveMessages(sessionId: string, messages: Message[]): Prom
     let seq = (seqRows[0]?.max_seq ?? -1) + 1;
 
     const insertMsg = db.prepare(`
-      INSERT INTO messages (session_id, role, content, tool_calls, tool_call_id, tool_name, seq)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO messages (session_id, role, content, tool_calls, tool_call_id, tool_name, raw_parts, seq)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const updateMeta = db.prepare(`
@@ -169,6 +176,7 @@ export async function saveMessages(sessionId: string, messages: Message[]): Prom
           msg.toolCalls ? JSON.stringify(msg.toolCalls) : null,
           msg.toolCallId || null,
           msg.toolName || null,
+          msg._rawParts ? JSON.stringify(msg._rawParts) : null,
           seq++
         );
       }

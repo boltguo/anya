@@ -11,11 +11,11 @@
 
 export { Agent } from './agent/Agent.js';
 export type { RunOptions, RunResult } from './agent/Agent.js';
-export type { Message, ToolCall, Adapter, ToolDefinition } from './agent/types.js';
+export type { Message, MessageFile, ToolCall, Adapter, ToolDefinition } from './agent/types.js';
 export type { AnyaConfig } from './config/defaults.js';
 export { loadConfig, getConfig, saveConfig } from './config/loader.js';
-export { getProvider } from './providers/openai.js';
-export type { LLMProvider } from './providers/openai.js';
+export { getProvider } from './providers/gemini.js';
+export type { LLMProvider } from './providers/gemini.js';
 export { register as registerTool, registerAllTools } from './tools/registry.js';
 export { classifyApiError } from './agent/errorClassifier.js';
 export type { FailoverReason, ClassifiedError } from './agent/errorClassifier.js';
