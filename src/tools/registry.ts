@@ -137,7 +137,7 @@ export async function dispatch(
 
   const startTime = Date.now();
   const sid = context.sessionId;
-  const TOOL_TIMEOUT_MS = 30_000;
+  const TOOL_TIMEOUT_MS = 120_000;
 
   try {
     agentLogger.info({ msg: 'tool_call', tool: toolName, sessionId: sid, args });

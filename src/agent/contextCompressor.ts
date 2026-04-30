@@ -19,9 +19,16 @@
  */
 
 import type { Message } from './types.js';
-import type { ContextEngine } from './contextEngine.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { agentLogger } from '../lib/logger.js';
+
+/** Abstract interface for context-window management strategies. */
+export interface ContextEngine {
+  /** True when the current token count exceeds the compression threshold. */
+  shouldCompress(messages: Message[], estimatedTokens: number, contextLimit: number): boolean;
+  /** Compress the message history to fit within the token budget. */
+  compress(messages: Message[], contextLimit: number): Promise<Message[]>;
+}
 
 const PROTECT_HEAD = 3;
 const PROTECT_TAIL = 8;
@@ -152,9 +159,10 @@ const CJK_RANGE = /[\u2E80-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F]/g;
  * Rough token estimate with CJK awareness.
  * - English/Latin: ~4 chars per token
  * - CJK characters: ~1.5 chars per token (each CJK char is typically 1 token)
+ * - Tool schemas: ~200 tokens overhead each (name + description + parameters JSON)
+ *
  * Used only for threshold checks, not billing.
  */
-/** Approximate overhead per tool schema (name + description + parameters JSON). */
 const TOOL_SCHEMA_OVERHEAD_TOKENS = 200;
 
 export function estimateTokens(messages: Message[], toolCount: number = 0): number {

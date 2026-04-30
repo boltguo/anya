@@ -108,6 +108,14 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
   delete migrated.image_gen;
   delete migrated.vision;
 
+  // Clean up legacy shell tool config (removed in v0.4)
+  if (migrated.tools && typeof migrated.tools === 'object') {
+    delete migrated.tools.shell;
+    if (Array.isArray(migrated.tools.enabled)) {
+      migrated.tools.enabled = migrated.tools.enabled.filter((t: string) => t !== 'shell');
+    }
+  }
+
   try {
     writeFileSync(CONFIG_PATH, JSON.stringify(migrated, null, 2) + '\n', 'utf-8');
   } catch { /* non-critical */ }

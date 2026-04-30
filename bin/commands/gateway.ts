@@ -15,9 +15,9 @@ export function registerGateway(program: Command): void {
   gatewayCmd
     .command('start')
     .description('Start the Telegram gateway')
-    .option('--foreground', 'Run in foreground (for debugging)')
-    .action(async (opts: { foreground?: boolean }) => {
-      await runGatewayStart(opts.foreground);
+    .option('--_bg_child', { hidden: true } as any)
+    .action(async (opts: { _bg_child?: boolean }) => {
+      await runGatewayStart(opts._bg_child);
     });
 
   gatewayCmd

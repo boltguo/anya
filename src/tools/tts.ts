@@ -83,16 +83,10 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
       const fullSsml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">\n${ssmlParts.join('\n')}\n</speak>`;
       const combinedText = textParts.join(' ');
 
-      const result = await textToSpeech(combinedText, context.config, {
+      return ttsResult(await textToSpeech(combinedText, context.config, {
         ssml: fullSsml,
         format: 'opus',
-      });
-
-      if (!result.success || !result.filePath) {
-        return JSON.stringify({ success: false, error: result.error });
-      }
-
-      return JSON.stringify({ success: true, filePath: result.filePath, durationSec: result.durationSec });
+      }));
     }
 
     // ── Simple mode: text + voice + rate ──
@@ -101,16 +95,18 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
       return JSON.stringify({ success: false, error: 'text or segments is required' });
     }
 
-    const result = await textToSpeech(text, context.config, {
+    return ttsResult(await textToSpeech(text, context.config, {
       voice: args.voice as string | undefined,
       rate: args.rate as string | undefined,
       format: 'opus',
-    });
-
-    if (!result.success || !result.filePath) {
-      return JSON.stringify({ success: false, error: result.error });
-    }
-
-    return JSON.stringify({ success: true, filePath: result.filePath, durationSec: result.durationSec });
+    }));
   },
 });
+
+/** Format a TTS result as JSON for the LLM. */
+function ttsResult(result: { success: boolean; filePath?: string; error?: string; durationSec?: number }): string {
+  if (!result.success || !result.filePath) {
+    return JSON.stringify({ success: false, error: result.error });
+  }
+  return JSON.stringify({ success: true, filePath: result.filePath, durationSec: result.durationSec });
+}

@@ -4,6 +4,11 @@ import { input as promptInput } from '@inquirer/prompts';
 import { startScheduler, runJobManually } from '../../src/cron/scheduler.js';
 import { stopService, isServiceRunning } from '../../src/lib/pidfile.js';
 import { loadJobs, addJob, removeJob } from '../../src/cron/jobs.js';
+import { LOGS_DIR, ensureDirectories } from '../../src/lib/paths.js';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const LOG_PATH = join(LOGS_DIR, 'cron.log');
 
 export function registerCron(program: Command): void {
   const cronCmd = program
@@ -12,9 +17,48 @@ export function registerCron(program: Command): void {
 
   cronCmd
     .command('start')
-    .description('Start the cron scheduler')
-    .action(async () => {
-      await startScheduler();
+    .description('Start the cron scheduler in the background')
+    .option('--_bg_child', { hidden: true } as any)  // internal: child process flag
+    .action(async (opts: { _bg_child?: boolean }) => {
+      // Internal: spawned child runs the scheduler directly
+      if (opts._bg_child) {
+        await startScheduler();
+        return;
+      }
+
+      const { running, pid } = isServiceRunning('cron');
+      if (running) {
+        console.log(`\n  Cron is already running (PID ${pid}).`);
+        console.log(`  Run "anya cron restart" to restart.\n`);
+        return;
+      }
+
+      ensureDirectories();
+      const { spawn } = await import('node:child_process');
+      const { openSync } = await import('node:fs');
+
+      const logFd = openSync(LOG_PATH, 'a');
+      const anyaBin = process.argv[1];
+      const isTsx = process.argv[0].includes('tsx') || anyaBin.endsWith('.ts');
+      const execPath = isTsx ? 'npx' : process.execPath;
+      const execArgs = isTsx
+        ? ['tsx', anyaBin, 'cron', 'start', '--_bg_child']
+        : [anyaBin, 'cron', 'start', '--_bg_child'];
+
+      const child = spawn(execPath, execArgs, {
+        detached: true,
+        stdio: ['ignore', logFd, logFd],
+        env: { ...process.env },
+      });
+
+      child.unref();
+
+      console.log(chalk.bold('\n  [cron] Started in background.'));
+      console.log(`  PID: ${child.pid}`);
+      console.log(`  Logs: ${LOG_PATH}`);
+      console.log(`  Stop: anya cron stop\n`);
+
+      process.exit(0);
     });
 
   cronCmd
@@ -35,6 +79,44 @@ export function registerCron(program: Command): void {
       } else {
         console.log(`\n  Cron: ${chalk.dim('stopped')}\n`);
       }
+    });
+
+  cronCmd
+    .command('restart')
+    .description('Restart the cron scheduler')
+    .action(async () => {
+      const { running } = isServiceRunning('cron');
+      if (running) {
+        const stopped = await stopService('cron');
+        if (stopped) console.log('  [ok] Cron stopped.');
+      }
+      // Re-invoke start in background mode by importing the action
+      ensureDirectories();
+      const { spawn } = await import('node:child_process');
+      const { openSync } = await import('node:fs');
+
+      const logFd = openSync(LOG_PATH, 'a');
+
+      const anyaBin = process.argv[1];
+      const isTsx = process.argv[0].includes('tsx') || anyaBin.endsWith('.ts');
+      const execPath = isTsx ? 'npx' : process.execPath;
+      const execArgs = isTsx
+        ? ['tsx', anyaBin, 'cron', 'start', '--_bg_child']
+        : [anyaBin, 'cron', 'start', '--_bg_child'];
+
+      const child = spawn(execPath, execArgs, {
+        detached: true,
+        stdio: ['ignore', logFd, logFd],
+        env: { ...process.env },
+      });
+
+      child.unref();
+
+      console.log(chalk.bold('\n  [cron] Restarted in background.'));
+      console.log(`  PID: ${child.pid}`);
+      console.log(`  Logs: ${LOG_PATH}\n`);
+
+      process.exit(0);
     });
 
   cronCmd

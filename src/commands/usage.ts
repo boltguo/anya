@@ -4,7 +4,7 @@
  *
  * Displays all metered service usage for the current month:
  * LLM tokens, TTS chars/duration, STT, pronunciation assessment,
- * Vision, and image generation.
+ * and web search.
  */
 
 import chalk from 'chalk';

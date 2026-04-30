@@ -106,6 +106,12 @@ async function toGeminiFormat(messages: Message[]): Promise<{
       // This preserves thought_signature and other opaque fields natively.
       if (msg._rawParts && msg._rawParts.length > 0) {
         rawContents.push({ role: 'model', parts: msg._rawParts as GeminiPart[] });
+        // Still populate toolCallNameMap so subsequent tool results can resolve names
+        for (const part of msg._rawParts as GeminiPart[]) {
+          if (part.functionCall) {
+            toolCallNameMap.set(part.functionCall.name, part.functionCall.name);
+          }
+        }
         continue;
       }
 

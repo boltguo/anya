@@ -53,12 +53,8 @@ function initializeSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, seq);
   `);
 
-  // Migration: add raw_parts column if it doesn't exist
-  try {
-    db.exec('ALTER TABLE messages ADD COLUMN raw_parts TEXT;');
-  } catch {
-    // Ignore error if column already exists
-  }
+  // Note: raw_parts column is retained in schema for backward compatibility
+  // but is always written as NULL (see sessionStore.ts). No migration needed.
 }
 
 /**

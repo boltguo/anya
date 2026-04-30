@@ -19,4 +19,4 @@ export type { LLMProvider } from './providers/gemini.js';
 export { register as registerTool, registerAllTools } from './tools/registry.js';
 export { classifyApiError } from './agent/errorClassifier.js';
 export type { FailoverReason, ClassifiedError } from './agent/errorClassifier.js';
-export type { ContextEngine } from './agent/contextEngine.js';
+export type { ContextEngine } from './agent/contextCompressor.js';

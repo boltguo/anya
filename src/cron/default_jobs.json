@@ -9,30 +9,12 @@
     "created_at": "2026-04-12T17:08:26+08:00"
   },
   {
-    "id": "cron_word_seed",
-    "name": "Word Inventory Seed",
-    "schedule": "15 7 * * *",
-    "prompt": "Run the ielts-cron-word-seed skill: read it with skill_view first, then follow its workflow exactly. Keep the queued_new word inventory ready in study.db. This is a silent maintenance job.",
-    "deliver_to": "cli",
-    "enabled": true,
-    "created_at": "2026-04-16T09:00:00+08:00"
-  },
-  {
     "id": "cron_word_review",
-    "name": "Daily Word Review",
-    "schedule": "0 21 * * *",
-    "prompt": "Run the ielts-cron-word-review skill: read it with skill_view first, then follow its workflow exactly. Pick one due review word from study.db and send the review push to Telegram. Do not introduce unseen words.",
+    "name": "Spaced Word Review (Flashcard)",
+    "schedule": "*/30 9-22 * * *",
+    "prompt": "Run the ielts-cron-word-review skill: read it with skill_view first, then follow its workflow exactly. Pick one due review word from study.db and send a quiz push to Telegram. Do not introduce unseen words.",
     "deliver_to": "telegram",
     "enabled": true,
     "created_at": "2026-04-16T04:22:00+08:00"
-  },
-  {
-    "id": "cron_learner_state",
-    "name": "Daily MEMORY Refresh",
-    "schedule": "30 23 * * *",
-    "prompt": "Run the learner-state skill: read it with skill_view first, then follow its workflow exactly. Query study.db, compute EMA-smoothed bands, and update MEMORY.md. This is a silent maintenance job — do NOT send any message to the user.",
-    "deliver_to": "cli",
-    "enabled": true,
-    "created_at": "2026-04-24T12:00:00+08:00"
   }
 ]

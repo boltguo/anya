@@ -7,7 +7,7 @@
  * - TTS (Azure): calls, billable characters, audio duration
  * - STT (Groq): calls, audio duration
  * - Pronunciation Assessment (Azure): calls, audio duration
- * - Image Generation (Vertex): calls
+ * - Web Search (Tavily): calls
  *
  * Azure TTS SSML billing: only text content is counted, XML tags are excluded.
  */

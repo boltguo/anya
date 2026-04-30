@@ -55,6 +55,15 @@ function parseStringArray(raw: unknown): string[] {
   return raw as string[];
 }
 
+/**
+ * Resolve the reply_to argument: maps 'user' to the incoming message ID.
+ */
+function resolveReplyTo(raw: unknown, tg: TelegramSessionAdapter): number | string | undefined {
+  if (!raw) return undefined;
+  const val = String(raw);
+  return val === 'user' ? tg.getUserMessageId() : val;
+}
+
 // ── Single unified Telegram tool ─────────────────────────────────────────────
 //
 // All Telegram interactions go through this one tool.
@@ -116,8 +125,7 @@ register({
 
     switch (type) {
       case 'text': {
-        let replyTo: number | string | undefined = args.reply_to as string | undefined;
-        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const replyTo = resolveReplyTo(args.reply_to, tg);
         const msgId = await tg.sendMessage(String(args.text || ''), {
           replyTo, tag: args.tag as string,
           parseMode: (args.parse_mode as any) || 'HTML',
@@ -128,8 +136,7 @@ register({
       case 'photo': {
         const url = String(args.url || '');
         if (!url) return JSON.stringify({ ok: false, error: 'url is required for photo type' });
-        let replyTo: number | string | undefined = args.reply_to as string | undefined;
-        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const replyTo = resolveReplyTo(args.reply_to, tg);
         const msgId = await tg.sendPhoto(url, String(args.text || ''), {
           replyTo, tag: args.tag as string,
           parseMode: (args.parse_mode as any) || 'HTML',
@@ -140,8 +147,7 @@ register({
       case 'audio': {
         const url = String(args.url || '');
         if (!url) return JSON.stringify({ ok: false, error: 'url is required for audio type' });
-        let replyTo: number | string | undefined = args.reply_to as string | undefined;
-        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const replyTo = resolveReplyTo(args.reply_to, tg);
         const msgId = await tg.sendAudio(url, String(args.text || ''), {
           replyTo, tag: args.tag as string,
           parseMode: (args.parse_mode as any) || 'HTML',
@@ -152,8 +158,7 @@ register({
       case 'voice': {
         const url = String(args.url || '');
         if (!url) return JSON.stringify({ ok: false, error: 'url is required for voice type' });
-        let replyTo: number | string | undefined = args.reply_to as string | undefined;
-        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const replyTo = resolveReplyTo(args.reply_to, tg);
         const msgId = await tg.sendVoice(url, {
           replyTo, tag: args.tag as string,
         });
@@ -162,8 +167,7 @@ register({
 
       case 'keyboard': {
         const buttons = parseArray(args.buttons);
-        let replyTo: number | string | undefined = args.reply_to as string | undefined;
-        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const replyTo = resolveReplyTo(args.reply_to, tg);
         const msgId = await tg.sendKeyboard(String(args.text || ''), buttons, {
           replyTo, tag: args.tag as string,
         });
@@ -182,8 +186,7 @@ register({
       }
 
       case 'force_reply': {
-        let replyTo: number | string | undefined = args.reply_to as string | undefined;
-        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const replyTo = resolveReplyTo(args.reply_to, tg);
         const msgId = await tg.sendForceReply(String(args.text || ''), {
           replyTo, tag: args.tag as string,
         });
@@ -242,8 +245,7 @@ register({
       }
 
       case 'document': {
-        let replyTo: number | string | undefined = args.reply_to as string | undefined;
-        if (replyTo === 'user') replyTo = tg.getUserMessageId();
+        const replyTo = resolveReplyTo(args.reply_to, tg);
         const msgId = await tg.sendDocument(String(args.url || ''), {
           caption: args.text as string,
           replyTo, tag: args.tag as string,

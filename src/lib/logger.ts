@@ -55,13 +55,3 @@ export const agentLogger = createLogger('agent', logLevel);
 export const gatewayLogger = createLogger('gateway', logLevel);
 export const cronLogger = createLogger('cron', logLevel);
 
-/**
- * Get a child logger with additional context.
- */
-export function getLogger(service: 'agent' | 'gateway' | 'cron'): pino.Logger {
-  switch (service) {
-    case 'agent': return agentLogger;
-    case 'gateway': return gatewayLogger;
-    case 'cron': return cronLogger;
-  }
-}

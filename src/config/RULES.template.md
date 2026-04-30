@@ -58,7 +58,8 @@ Use `memory` tool to persist important information across sessions.
 - Training skills MAY write coaching observations — just not numeric scores.
 
 **Hygiene:**
-- Check for existing facts before saving. Replace outdated entries, don't append duplicates.
+- Check for existing facts before saving. 
+- **CRITICAL**: When updating `MEMORY.md` or `USER.md` with `action="replace"`, you MUST provide the **entire file content**, not just the fields you want to change. If you only provide the new fields, you will permanently delete the rest of the user's profile and history!
 - Keep entries concise: summaries over logs. High-frequency data belongs in `study.db`.
 
 ## Skill Execution

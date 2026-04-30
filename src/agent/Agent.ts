@@ -109,7 +109,7 @@ export class Agent {
     // system prompt stable across turns, maximising prompt cache hit rate.
     const timestampedInput = `[${new Date().toISOString()}] ${input}`;
 
-    let messages: Message[] = [
+    const messages: Message[] = [
       { role: 'system', content: systemPrompt },
       ...history,
       { role: 'user', content: timestampedInput, files },
@@ -263,16 +263,6 @@ export class Agent {
           };
           messages.push(toolMsg);
           newMessages.push(toolMsg);
-        }
-
-        // ── Immediate Context Pruning ──
-        // If reset_context was called in this batch, immediately truncate the working
-        // messages array so subsequent loops in this same turn do not carry old baggage.
-        const hasReset = response.toolCalls.some(tc => tc.name === 'reset_context');
-        if (hasReset) {
-          const sysMsg = messages[0]; // Preserve system prompt
-          messages = [sysMsg, ...applyContextReset(messages)];
-          agentLogger.info({ msg: 'working_memory_reset_in_turn', loop });
         }
 
         continue;

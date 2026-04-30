@@ -10,17 +10,18 @@
  * ├─────────────────────────────────────┤
  * │  2. RULES.md — Operational Rules     │  "How Anya operates"
  * ├─────────────────────────────────────┤
- * │  3. Timestamp — Current date/time      │  "When it is now"
+ * │  3. Memory — USER.md + MEMORY.md     │  "Who the user is & adaptive context"
  * ├─────────────────────────────────────┤
- * │  4. User Profile — USER.md + MEMORY.md   │  "Who the user is & adaptive context"
+ * │  4. Skills Index — Available skills  │  "What Anya can do"
  * ├─────────────────────────────────────┤
- * │  5. Skills Index — Available skills  │  "What Anya can do"
+ * │  5. Security — Path rules            │  "What Anya must not do"
  * ├─────────────────────────────────────┤
- * │  6. Security — Path rules            │  "What Anya must not do"
- * ├─────────────────────────────────────┤
- * │  7. Platform Capabilities            │  "What tools/media are available"
+ * │  6. Platform Capabilities            │  "What tools/media are available"
  * └─────────────────────────────────────┘
  * ```
+ *
+ * Note: Timestamp is appended to the user message (not system prompt)
+ * to maximise Gemini's prompt cache hit rate.
  */
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
@@ -53,7 +54,6 @@ export function buildSystemPrompt(config: AnyaConfig): string {
   }
 
   // ── 3. Memory (USER.md + MEMORY.md) ────────────────────────────────
-  // NOTE: Timestamp moved to user message to preserve prompt cache prefix.
   const userMemory = loadFile(USER_MD_PATH);
   const agentMemory = loadFile(MEMORY_MD_PATH);
   if (userMemory || agentMemory) {
@@ -68,18 +68,18 @@ export function buildSystemPrompt(config: AnyaConfig): string {
     }
   }
 
-  // ── 5. Skills index ────────────────────────────────────────────────
+  // ── 4. Skills index ────────────────────────────────────────────────
   const skillIndex = buildSkillIndex();
   if (skillIndex) {
     sections.push('\n' + skillIndex);
   }
 
-  // ── 6. Security constraints ────────────────────────────────────────
+  // ── 5. Security constraints ────────────────────────────────────────
   sections.push('\n## Security');
   sections.push(`- Your default working directory is ~/.anya/. File operations outside ${config.security.allowed_paths.join(', ')} require user approval.`);
   sections.push('- Use the database and file tools only for Anya-owned runtime data unless the user explicitly grants broader access.');
 
-  // ── 7. Platform capabilities ────────────────────────────────────────
+  // ── 6. Platform capabilities ────────────────────────────────────────
   // Note: tg message types and formatting are covered in RULES.md.
   // This section only adds tool-specific capabilities not in RULES.
   const enabled = config.tools?.enabled ?? [];
@@ -95,6 +95,10 @@ export function buildSystemPrompt(config: AnyaConfig): string {
 
   if (enabled.includes('pron_assess')) {
     caps.push('- **Pronunciation**: `pron_assess` tool (Azure Speech). Use `audio_path` from voice metadata. Only call during speaking practice or explicit request — NOT for regular voice messages.');
+  }
+
+  if (enabled.includes('reset_context')) {
+    caps.push('- **Context Reset**: Use `reset_context` when a distinct task is completely finished and the user is moving to an unrelated topic. This clears old history to save tokens and helps you focus. Optionally carry over a brief summary of important facts.');
   }
 
   if (caps.length > 0) {

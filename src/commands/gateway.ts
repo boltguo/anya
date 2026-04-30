@@ -22,7 +22,7 @@ const LOG_PATH = join(LOGS_DIR, 'gateway.log');
 /**
  * Start the Telegram gateway in the background (or foreground).
  */
-export async function runGatewayStart(foreground = false): Promise<void> {
+export async function runGatewayStart(_bgChild = false): Promise<void> {
   const { running, pid } = isServiceRunning(SERVICE);
   if (running) {
     console.log(`\n  Gateway is already running (PID ${pid}).`);
@@ -39,9 +39,8 @@ export async function runGatewayStart(foreground = false): Promise<void> {
 
   ensureDirectories();
 
-  if (foreground) {
-    // Run in foreground (for debugging)
-    console.log(chalk.bold('\n  [gateway] Starting in foreground mode...\n'));
+  if (_bgChild) {
+    // Internal: spawned child process runs the adapter directly
     writePid(SERVICE);
 
     process.on('SIGINT', () => {
@@ -57,17 +56,22 @@ export async function runGatewayStart(foreground = false): Promise<void> {
     const adapter = new TelegramAdapter(config);
     await adapter.start();
   } else {
-    // Spawn a detached child process that runs in foreground mode,
-    // with stdout/stderr redirected to the gateway log file.
+    // Default: spawn a detached background child process
     const { spawn } = await import('node:child_process');
     const { openSync } = await import('node:fs');
 
     const logFd = openSync(LOG_PATH, 'a');
 
-    // Resolve the `anya` binary path — could be a symlink via npm link
-    const anyaBin = process.argv[1]; // the current entry script
+    // Resolve the entry script and runner.
+    // In dev mode (tsx), we need to spawn via npx tsx; in production, use node directly.
+    const anyaBin = process.argv[1];
+    const isTsx = process.argv[0].includes('tsx') || anyaBin.endsWith('.ts');
+    const execPath = isTsx ? 'npx' : process.execPath;
+    const execArgs = isTsx
+      ? ['tsx', anyaBin, 'gateway', 'start', '--_bg_child']
+      : [anyaBin, 'gateway', 'start', '--_bg_child'];
 
-    const child = spawn(process.execPath, [anyaBin, 'gateway', 'start', '--foreground'], {
+    const child = spawn(execPath, execArgs, {
       detached: true,
       stdio: ['ignore', logFd, logFd],
       env: { ...process.env },

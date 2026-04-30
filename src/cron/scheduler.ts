@@ -89,19 +89,83 @@ async function deliverResult(job: CronJob, result: string): Promise<void> {
     try {
       const config = loadConfig();
       if (config.telegram.enabled && config.telegram.bot_token) {
-        const { Bot } = await import('grammy');
+        const { Bot, InputFile } = await import('grammy');
         const bot = new Bot(config.telegram.bot_token);
 
         for (const userId of config.telegram.allowed_user_ids) {
-          const header = `[cron: ${job.name}]\n\n`;
-          await bot.api.sendMessage(userId, header + result).catch(() => {});
+          // If the model explicitly returned the silent marker or said there are no words due,
+          // abort sending anything to Telegram.
+          if (result.trim().toLowerCase() === '[silent]' || result.includes('No words due for review')) {
+            agentLogger.info({ msg: 'cron_delivery_skipped_silent', jobId: job.id });
+            continue;
+          }
+
+          let finalMsg = result;
+          let audioPath: string | undefined;
+          let shouldPin = false;
+
+          const match = result.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+          if (match) {
+            try {
+              const payload = JSON.parse(match[1]);
+              
+              if (payload.type === 'quiz') {
+                try {
+                  await bot.api.sendPoll(
+                    userId,
+                    payload.text,
+                    payload.options,
+                    {
+                      type: 'quiz',
+                      correct_option_id: payload.correct_index,
+                      explanation: payload.explanation,
+                      is_anonymous: false,
+                    } as any
+                  );
+                  
+                  const sessionKey = `tg:${userId}`;
+                  const sessionId = await getOrCreateSession(sessionKey);
+                  await saveMessages(sessionId, [
+                    { role: 'user', content: `[Cron Job: ${job.name}]` },
+                    { role: 'assistant', content: `[Sent Quiz: ${payload.text}]` },
+                  ]);
+                } catch (e) {
+                  agentLogger.error({ msg: 'cron_quiz_delivery_error', error: (e as Error).message });
+                }
+                continue; // Skip the standard sendMessage flow
+              }
+
+              // Import formatter dynamically to avoid top-level dependency
+              const { markdownToTelegramHtml } = await import('../lib/tgFormat.js');
+              finalMsg = markdownToTelegramHtml(payload.text || '');
+              audioPath = payload.audio_path;
+              shouldPin = !!payload.pin;
+            } catch (e) {
+              // fallback to raw result but formatted
+              const { markdownToTelegramHtml } = await import('../lib/tgFormat.js');
+              finalMsg = markdownToTelegramHtml(result);
+            }
+          } else {
+             // Not a JSON payload, format raw markdown
+             const { markdownToTelegramHtml } = await import('../lib/tgFormat.js');
+             finalMsg = markdownToTelegramHtml(result);
+          }
 
           try {
+            const sentMsg = await bot.api.sendMessage(userId, finalMsg, { parse_mode: 'HTML' });
+            if (shouldPin) {
+              await bot.api.pinChatMessage(userId, sentMsg.message_id, { disable_notification: true }).catch(() => {});
+            }
+
+            if (audioPath && existsSync(audioPath)) {
+              await bot.api.sendVoice(userId, new InputFile(audioPath));
+            }
+
             const sessionKey = `tg:${userId}`;
             const sessionId = await getOrCreateSession(sessionKey);
             await saveMessages(sessionId, [
-              { role: 'user', content: `[定时任务: ${job.name}]` },
-              { role: 'assistant', content: header + result },
+              { role: 'user', content: `[Cron Job: ${job.name}]` },
+              { role: 'assistant', content: finalMsg + (audioPath ? `\n[Audio Attached: ${audioPath}]` : '') },
             ]);
           } catch (e) {
             agentLogger.error({ msg: 'cron_memory_link_error', error: (e as Error).message });
