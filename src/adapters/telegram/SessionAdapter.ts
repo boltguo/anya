@@ -18,7 +18,6 @@ import { isAbsolute } from 'node:path';
 import { Bot, InlineKeyboard, Keyboard, InputFile, Context } from 'grammy';
 import PQueue from 'p-queue';
 import type { Adapter } from '../../agent/types.js';
-import type { AnyaConfig } from '../../config/defaults.js';
 import { agentLogger } from '../../lib/logger.js';
 import { markdownToTelegramHtml } from '../../lib/tgFormat.js';
 import { stripMarkdown, splitMarkdownForTelegram } from './markdown.js';
@@ -28,7 +27,6 @@ export class TelegramSessionAdapter implements Adapter {
   readonly platform = 'telegram' as const;
   private ctx: Context;
   private bot: Bot;
-  private config: AnyaConfig;
   private pendingApprovals: Map<string, PendingApproval>;
   private pendingChoices: Map<string, PendingChoice>;
   private activePolls: Map<string, { chatId: number; options: string[]; correctIndex: number }>;
@@ -52,14 +50,13 @@ export class TelegramSessionAdapter implements Adapter {
   constructor(
     ctx: Context,
     bot: Bot,
-    config: AnyaConfig,
+    _config: unknown,
     pendingApprovals: Map<string, PendingApproval>,
     pendingChoices: Map<string, PendingChoice>,
     activePolls?: Map<string, { chatId: number; options: string[]; correctIndex: number }>,
   ) {
     this.ctx = ctx;
     this.bot = bot;
-    this.config = config;
     this.pendingApprovals = pendingApprovals;
     this.pendingChoices = pendingChoices;
     this.activePolls = activePolls ?? new Map();

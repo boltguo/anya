@@ -208,11 +208,11 @@ flowchart LR
 
 **tool 如何注册、模型如何看见、`dispatch()` 如何执行。**
 
-当前内置工具：`file`、`webSearch`、`memory`、`skill`、`clarify`、`telegram`、`tts`、`pronAssess`、`db` 等。
+当前内置工具：`file`、`webSearch`、`memory`、`skill`、`clarify`、`telegram`、`tts`、`pronAssess`、`db`、`resetContext` 等。
 
 ```mermaid
 flowchart TD
-  IMPORTS["registerAllTools()\nPromise.all 动态加载 10 个工具模块"] --> REG["Map of toolName to ToolDefinition\n工具注册表"]
+  IMPORTS["registerAllTools()\nPromise.all 动态加载工具模块"] --> REG["Map of toolName to ToolDefinition\n工具注册表"]
 
   REG --> SCHEMAS["getToolSchemas(config, isTelegram)\n生成给模型看的 schema"]
   REG --> EXEC["dispatch(name, args, context)\n按名执行工具"]
@@ -251,8 +251,7 @@ flowchart TD
   STT --> VINPUT["text + audio_path 注入"]
 
   PHOTO --> DLP["download to IMAGE_RECEIVED_DIR"]
-  DLP --> VISION["analyzeImage()\nGemini Vision"]
-  VISION --> PINPUT["caption + vision description 注入"]
+  DLP --> PINPUT["caption + native image file\n作为多模态输入注入"]
 
   CALLBACK --> CBTYPE{"callback prefix?"}
   CBTYPE -->|"approval_*"| APPROVAL["resolve pendingApproval"]

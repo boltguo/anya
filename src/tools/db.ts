@@ -2,8 +2,8 @@
  * @module tools/dbTool
  * @description Direct SQLite database tool for the agent.
  *
- * Replaces the shell → node script → sqlite roundtrip with a single
- * tool call. The agent specifies a database name and raw SQL.
+ * Provides direct SQLite access through a constrained tool call. The agent
+ * specifies a database name and raw SQL.
  *
  * Databases live under ~/.anya/data/store/<name>.db.
  * Schema is defined in skill SKILL.md files, and the agent creates

@@ -77,8 +77,7 @@ export function buildSystemPrompt(config: AnyaConfig): string {
   // ── 6. Security constraints ────────────────────────────────────────
   sections.push('\n## Security');
   sections.push(`- Your default working directory is ~/.anya/. File operations outside ${config.security.allowed_paths.join(', ')} require user approval.`);
-  sections.push('- Shell commands require user approval unless they are in the allowlist.');
-  sections.push('- Never execute destructive commands without explicit user confirmation.');
+  sections.push('- Use the database and file tools only for Anya-owned runtime data unless the user explicitly grants broader access.');
 
   // ── 7. Platform capabilities ────────────────────────────────────────
   // Note: tg message types and formatting are covered in RULES.md.

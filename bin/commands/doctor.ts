@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
-import { isInitialized, CONFIG_PATH, ANYA_HOME } from '../../src/lib/paths.js';
+import { isInitialized } from '../../src/lib/paths.js';
 import { loadConfig } from '../../src/config/loader.js';
 import { loadSkills } from '../../src/skills/loader.js';
 import { isServiceRunning } from '../../src/lib/pidfile.js';

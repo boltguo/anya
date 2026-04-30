@@ -20,7 +20,7 @@ import { trackStt } from '../../lib/usage.js';
 import { loadSkills } from '../../skills/loader.js';
 import { createSession } from '../../storage/sessionStore.js';
 import { transcribeAudio } from '../../lib/stt.js';
-import { AUDIO_CACHE_DIR, VOICE_DIR, IMAGE_RECEIVED_DIR, USER_MD_PATH } from '../../lib/paths.js';
+import { VOICE_DIR, IMAGE_RECEIVED_DIR, USER_MD_PATH } from '../../lib/paths.js';
 import type { AnyaConfig } from '../../config/defaults.js';
 import type { MessageFile } from '../../agent/types.js';
 import fs from 'node:fs';
@@ -91,12 +91,12 @@ export class TelegramAdapter {
    */
   private cancelPending(): number {
     let count = 0;
-    for (const [id, pending] of this.pendingApprovals) {
+    for (const [, pending] of this.pendingApprovals) {
       pending.resolve('deny');
       count++;
     }
     this.pendingApprovals.clear();
-    for (const [id, pending] of this.pendingChoices) {
+    for (const [, pending] of this.pendingChoices) {
       pending.resolve('');
       count++;
     }

@@ -48,13 +48,10 @@
     "marked": "^18.0.1",
     "p-queue": "^9.1.2",
     "pino": "^9.0.0",
-    "pino-roll": "^2.0.0",
-    "which": "^6.0.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@types/which": "^3.0.4",
     "tsup": "^8.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"

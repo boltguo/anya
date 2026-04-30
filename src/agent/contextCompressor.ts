@@ -51,7 +51,7 @@ export class ContextCompressor implements ContextEngine {
     return estimatedTokens > threshold && messages.length > PROTECT_HEAD + PROTECT_TAIL + 2;
   }
 
-  async compress(messages: Message[], contextLimit: number): Promise<Message[]> {
+  async compress(messages: Message[], _contextLimit: number): Promise<Message[]> {
     if (messages.length <= PROTECT_HEAD + PROTECT_TAIL) return messages;
 
     const head = messages.slice(0, PROTECT_HEAD);

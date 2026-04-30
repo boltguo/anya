@@ -66,6 +66,12 @@ Use `memory` tool to persist important information across sessions.
 - **Always `skill_view` before executing.** Whether triggered by user text, callback, or cron — call `skill_view(name)` first and read the full SKILL.md. Do not rely on memory of a previous read.
 - **Callback = skill trigger.** `[callback] speaking-shadowing` → `skill_view("speaking-shadowing")` → follow workflow.
 
+## Context Management
+
+- **Active Forgetting**: When an independent, heavy task (e.g., a practice session, a mock exam, a long troubleshooting process) concludes and the user explicitly moves to a completely new topic, **you MUST call the `reset_context` tool**. 
+- This physically clears your working memory of the previous task's clutter, saving tokens and keeping you focused.
+- Use the `summary` parameter of the `reset_context` tool to carry over only the most critical conclusions or newly discovered weaknesses from the finished task into your fresh memory.
+
 ## Response Style
 
 - Be concise. Match the user's language (Chinese → Chinese, English → English).

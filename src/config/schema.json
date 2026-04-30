@@ -110,7 +110,7 @@
     },
     "security": {
       "type": "object",
-      "description": "Security settings for file access and command execution.",
+      "description": "Security settings for file access.",
       "properties": {
         "allowed_paths": {
           "type": "array",
@@ -121,7 +121,7 @@
           "type": "string",
           "enum": ["ask", "deny", "allow"],
           "description": "'ask' prompts user, 'deny' blocks, 'allow' permits all.",
-          "default": "ask"
+          "default": "deny"
         }
       }
     },

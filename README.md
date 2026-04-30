@@ -198,7 +198,6 @@ sequenceDiagram
 ~/.anya/
 ├── config.json
 ├── config.schema.json
-├── auth.json
 ├── memories/
 │   ├── RULES.md
 │   ├── USER.md
@@ -218,8 +217,7 @@ sequenceDiagram
 │   │   ├── voice/
 │   │   └── tts/
 │   └── images/
-│       ├── received/
-│       └── generated/
+│       └── received/
 ├── logs/
 └── run/
 ```
@@ -337,15 +335,15 @@ sequenceDiagram
 - [src/adapters/telegram/](src/adapters/telegram/)
   Telegram Bot、菜单、语音/图片消息接入。
 - [src/tools/](src/tools/)
-  Agent 可调用的工具：`db`、`memory`、`file`、`shell`、`skill`、`clarify`、`tts`、`pron_assess`、`web_search`、`telegram`，以及 `registry` 负责装配。
+  Agent 可调用的工具：`db`、`memory`、`file`、`skill`、`clarify`、`tts`、`pron_assess`、`web_search`、`telegram`、`reset_context`，以及 `registry` 负责装配。
 - [src/commands/](src/commands/)
-  CLI 命令实现（chat / config / gateway / usage 等）。
+  CLI 命令实现（config / gateway / cron / usage 等）。
 - [src/config/](src/config/)
   配置默认值、JSON schema、loader。
 - [src/storage/](src/storage/)
   `db` 基础连接 + `sessionStore` 会话/消息档案。
 - [src/lib/](src/lib/)
-  通用库：paths、auth、pidfile、ffmpeg、stt、tts、vision、tgFormat、logger、usage、approval。
+  通用库：paths、pidfile、ffmpeg、stt、tts、tgFormat、logger、usage、approval。
 - [src/skills/bundled/](src/skills/bundled/)
   IELTS 技能包（上述 50 个 skill）。
 - [src/cron/](src/cron/)

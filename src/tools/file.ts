@@ -8,12 +8,11 @@
  */
 
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
-import { join, resolve, dirname, basename } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { register } from './registry.js';
 import { isPathAllowed, type ApprovalResult } from '../lib/approval.js';
 import { persistConfig } from '../config/loader.js';
 import type { ToolContext } from '../agent/types.js';
-import type { AnyaConfig } from '../config/defaults.js';
 
 /**
  * Check file path and request approval if outside fence.

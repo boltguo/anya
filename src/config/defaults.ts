@@ -123,7 +123,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
     web_search: { backend: 'tavily', api_key: '', max_results: 5 },
   },
 
-  security: { allowed_paths: ['~/.anya/'], fence_mode: 'ask' },
+  security: { allowed_paths: ['~/.anya/'], fence_mode: 'deny' },
   telegram: { enabled: false, bot_token: '', allowed_user_ids: [] },
   stt: { groq_api_key: '', model: 'whisper-large-v3-turbo' },
   tts: { voice: 'en-US-AriaNeural', rate: '+0%' },

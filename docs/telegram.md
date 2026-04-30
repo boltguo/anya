@@ -337,7 +337,7 @@ stateDiagram-v2
 
 ## 9. tg Tool 统一调度
 
-Agent 通过 `tg` 工具与 Telegram 交互，所有 14 种操作合并为单个工具声明：
+Agent 通过 `tg` 工具与 Telegram 交互，所有 Telegram 操作合并为单个工具声明：
 
 ```mermaid
 flowchart TD
@@ -348,16 +348,16 @@ flowchart TD
     SWITCH --> T2["photo → sendPhoto"]
     SWITCH --> T3["audio → sendAudio"]
     SWITCH --> T4["voice → sendVoice"]
-    SWITCH --> T5["keyboard → sendKeyboard"]
-    SWITCH --> T6["quiz → sendQuiz"]
-    SWITCH --> T7["force_reply → sendForceReply"]
-    SWITCH --> T8["reply_keyboard → sendReplyKeyboard"]
-    SWITCH --> T9["remove_keyboard → removeKeyboard"]
-    SWITCH --> T10["edit → editMessage"]
-    SWITCH --> T11["edit_keyboard → editKeyboard"]
-    SWITCH --> T12["dice → sendDice"]
-    SWITCH --> T13["react → react"]
-    SWITCH --> T14["pin → pin"]
+    SWITCH --> T5["document → sendDocument"]
+    SWITCH --> T6["keyboard → sendKeyboard"]
+    SWITCH --> T7["quiz → sendQuiz"]
+    SWITCH --> T8["force_reply → sendForceReply"]
+    SWITCH --> T9["reply_keyboard → sendReplyKeyboard"]
+    SWITCH --> T10["remove_keyboard → removeKeyboard"]
+    SWITCH --> T11["edit → editMessage"]
+    SWITCH --> T12["edit_keyboard → editKeyboard"]
+    SWITCH --> T13["delete → deleteMsg"]
+    SWITCH --> T14["dice / react / pin / action"]
 
     T1 --> TSA["SessionAdapter"]
     T5 --> TSA

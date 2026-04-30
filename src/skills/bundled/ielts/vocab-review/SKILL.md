@@ -14,47 +14,46 @@ description: "MUST trigger when the user asks to review vocabulary, check their 
 Before starting, query the `words` table in `study.db` for words where `mastery != 'mastered'` and `srs_due <= CURRENT_TIMESTAMP` (or words recently added). 
 - A standard review batch is **5-8 words**. Do NOT overwhelm the user with 20 words at once.
 
-## 3. Workflow (Step-by-Step)
-Execute these steps for EACH word in the batch:
+## 3. Workflow (State Machine)
+Execute these steps strictly as a two-turn state machine for EACH word in the batch:
 
-**Step 1: Active Recall (The Flashcard)**
-- Present the word and its phonetic spelling (IPA) if available.
-- **MANDATORY**: Do NOT show the Chinese meaning or the full definition yet. 
-- Provide a short, engaging fill-in-the-blank example sentence using the word, OR ask a clever question (e.g., "If you are 'exhausted', are you full of energy or ready to sleep?").
-- **MANDATORY UI**: Send an inline keyboard with Chinese buttons representing the user's memory state:
-  - Row 1: `[🎯 秒懂 (Easy)]`, `[🤔 模糊 (Hard)]`
-  - Row 2: `[❌ 忘了 (Again)]`
+### State A: Active Recall (The Flashcard)
+For the current word in the batch, present a flashcard test.
+- **MANDATORY Audio**: Send a voice message (`tts`) for the word. You MUST use SSML `<break>` tags for the phonetic segmented breakdown. 
+  - Format: Word (Normal speed) x 3, Segmented Breakdown x 1, Example Sentence x 1.
+  - Example TTS text: `apple. apple. apple. ap <break time="500ms"/> ple. I ate an apple.`
+- **MANDATORY Hidden Meaning**: Do NOT show the Chinese meaning or the full definition yet. 
+- Present the word and its phonetic spelling (IPA) if available. Provide a short, engaging fill-in-the-blank example sentence using the word, OR ask a clever question (e.g., "If you are 'exhausted', are you full of energy or ready to sleep?").
+- **MANDATORY UI**: Send an inline keyboard (`tg` tool `type: "keyboard"`) with Chinese buttons representing the user's memory state:
+  - Row 1: `[🎯 秒懂 (Easy)|srs:easy:word]`, `[🤔 模糊 (Hard)|srs:hard:word]`
+  - Row 2: `[❌ 忘了 (Again)|srs:again:word]`
+- **STOP AND WAIT**. Do not generate the lesson yet. Wait for the user to click a callback button.
 
-**Step 2: Handle Feedback & Reveal**
-Wait for the user to click a button. Once clicked, REVEAL the word's details using the **Micro-lesson Format** (see below).
+### State B: Handle Feedback & Reveal (Micro-lesson)
+When you receive the user's callback click (`srs:easy`, `srs:hard`, or `srs:again`):
 
-- `[🎯 秒懂]`: Praise them briefly. (Backend: Increase `success_count`, significantly increase `srs_interval`).
-- `[🤔 模糊]`: Encourage them. (Backend: Increase `srs_interval` slightly).
-- `[❌ 忘了]`: Reassure them ("It's okay, this is a tough one"). (Backend: Increase `fail_count`, reset `srs_interval` to 0, and **add this word to the end of the current batch to be tested again**).
+1. **Persist SRS Feedback via `db` tool**:
+   - `[🎯 秒懂]`: Praise them briefly. Increase `success_count`, significantly increase `srs_interval`, update `srs_due`.
+   - `[🤔 模糊]`: Encourage them. Increase `srs_interval` slightly, update `srs_due`.
+   - `[❌ 忘了]`: Reassure them. Increase `fail_count`, reset `srs_interval` to 0, update `srs_due`. **Add this word to the end of the current batch to be tested again**.
+   - Update `mastery` level if applicable (e.g., 'learning' -> 'known' -> 'mastered').
 
-**Step 3: The Micro-lesson Format (MANDATORY Layout)**
-When revealing the answer, you MUST use this exact, scannable format:
+2. **Reveal Micro-lesson (MANDATORY Layout)**:
+   Reply to the user with this exact, scannable format:
+   * **[Word]** /IPA/ 
+   * 📖 **释义**: [Concise Chinese meaning]
+   * 🔪 **拆解 (Etymology)**: [Explain prefix/root/suffix. E.g., in-(not) + vincible(conquer) = invincible] *Only if applicable.*
+   * 🗣️ **地道平替 (Native Slang/Idiom)**: [1 casual/native alternative. E.g., instead of 'exhausted', say 'wiped out'].
+   * 📝 **高频搭配 (Collocation)**: [1-2 common word combinations. E.g., 'heavily rely on'].
 
-* **[Word]** /IPA/ 
-* 📖 **释义**: [Concise Chinese meaning]
-* 🔪 **拆解 (Etymology)**: [Explain prefix/root/suffix. E.g., in-(not) + vincible(conquer) = invincible] *Only if applicable.*
-* 🗣️ **地道平替 (Native Slang/Idiom)**: [1 casual/native alternative. E.g., instead of 'exhausted', say 'wiped out'].
-* 📝 **高频搭配 (Collocation)**: [1-2 common word combinations. E.g., 'heavily rely on'].
+3. **Proceed**: If the batch is not finished, automatically loop back to **State A** and present the next word. If finished, proceed to Step 4.
 
 ## 4. End-of-Group UX (MANDATORY)
 After the batch of 5-8 words is complete (including any `[❌ 忘了]` words that were re-tested), you MUST send an inline keyboard:
-- Row 1: `[🔄 再背一组]`, `[🧭 练习其他]`
+- Row 1: `[🔄 再背一组|vocab-review]`, `[🧭 练习其他|nav:main]`
 
-## 5. Persist (Data Contract)
-You MUST use the `db` tool to update the `words` table for EACH word reviewed:
-- Increment `review_count` by 1.
-- Update `last_result` ('easy', 'hard', or 'again').
-- Update `srs_due` based on the spaced repetition result.
-- Update `mastery` level if they consistently get it right (e.g., 'learning' -> 'known' -> 'mastered').
-- Log the button click (`easy`, `hard`, `again`) in `word_events` to track the history of this specific word.
-
-## 6. Hard Rules
+## 5. Hard Rules
 1. **No Info Dumping**: The Micro-lesson MUST be concise. Do not write paragraphs of text. Use the emojis and bolding as shown.
 2. **Active Recall First**: NEVER reveal the meaning before the user clicks a memory button. The effort of trying to remember is what builds neural pathways.
-3. **Re-test Failures**: If they click `[❌ 忘了]`, they MUST see that word again before the batch ends.
-4. **Reply Hygiene**: The Micro-lesson reveal MUST reply to the Flashcard question message.
+3. **Audio Mandatory**: Every flashcard MUST include the TTS audio with SSML breaks as specified in State A.
+4. **Re-test Failures**: If they click `[❌ 忘了]`, they MUST see that word again before the batch ends.
