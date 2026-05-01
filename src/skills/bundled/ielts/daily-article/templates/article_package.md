@@ -1,6 +1,6 @@
-# Daily Briefing Package
+# Daily Article Package
 
-Use this file as the output contract for `daily_briefing/SKILL.md`.
+Use this file as the output contract for `daily-article/SKILL.md`.
 
 The default delivery is a 3-part Telegram package:
 
@@ -13,7 +13,7 @@ The default delivery is a 3-part Telegram package:
 Use `tg(type:"text")` to send each part.
 
 ```md
-🌤 <b>Today's Briefing</b>
+📰 <b>Today's Article</b>
 
 <b>{{headline}}</b>
 
@@ -49,7 +49,7 @@ Article guidance by level:
 ## 3. Audio Caption
 
 ```md
-🔊 Audio version of today's briefing
+🔊 Audio version of today's article
 
 Try this:
 - First listen for the main idea

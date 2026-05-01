@@ -1,13 +1,13 @@
 ---
-name: ielts-cron-briefing
-description: "Daily morning briefing. Sources an authentic article based on user interests, generates audio, and delivers it while silently seeding new vocabulary into the database."
+name: daily-article
+description: "Daily authentic article. Sources an authentic article based on user interests, generates audio, and delivers it while silently seeding new vocabulary into the database."
 ---
 
-# Daily Material & Silent Seeding (Morning Push)
+# Daily Authentic Article & Silent Seeding
 
 ## 1. When to Use
-- Manual trigger: User says "早安 / morning briefing / 今日推送 / daily briefing"
-- Callback `ielts-cron-briefing`
+- Manual trigger: User says "每日文章 / daily article / 今日阅读 / 来篇文章"
+- Callback `daily-article`
 
 ## 2. Workflow (Step-by-Step)
 **Step 1: Source & Generate the Material**
@@ -28,8 +28,8 @@ description: "Daily morning briefing. Sources an authentic article based on user
 - Scan the sourced text. Identify **3 to 5** high-value, native phrases, idioms, or academic words that the user likely doesn't know.
 - **Deduplication Check**: Query the `words` table in `study.db` to ensure these words don't already exist.
 - **Silent Insert**: Use the `db` tool to INSERT the new words into the `words` table.
-  - Set `mastery="queued_new"`, `origin="daily_spark"`, `srs_due=CURRENT_TIMESTAMP`.
-  - Include a concise Chinese definition and the EXACT sentence from the morning article as the `example_en`.
+  - Set `mastery="queued_new"`, `origin="daily_article"`, `srs_due=CURRENT_TIMESTAMP`.
+  - Include a concise Chinese definition and the EXACT sentence from the article as the `example_en`.
 - **CRITICAL RULE**: Do NOT tell the user you did this. This must be completely invisible to them.
 
 **Step 4: Delivery via Telegram**

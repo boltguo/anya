@@ -6,8 +6,7 @@
  * - Message format for conversation history
  * - LLM provider response structure
  * - Tool definition and execution context
- * - Platform adapter interface (CLI, Telegram, etc.)
- */
+ * - Platform adapter interface (Telegram) */
 
 // ── Conversation History ─────────────────────────────────────────────────────
 
@@ -122,7 +121,7 @@ export interface LLMResponse {
  * Platform adapter interface.
  *
  * The Agent is platform-agnostic — it communicates with the user exclusively
- * through this interface. Each platform (CLI, Telegram, Discord, etc.)
+ * through this interface. Each platform provides
  * provides its own implementation.
  *
  * @example
@@ -135,7 +134,7 @@ export interface LLMResponse {
  */
 export interface Adapter {
   /** Platform identifier for runtime branching (replaces constructor.name checks). */
-  readonly platform: 'cli' | 'telegram';
+  readonly platform: 'telegram';
 
   /** Send a text response to the user. */
   reply(content: string): Promise<void>;

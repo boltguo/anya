@@ -3,12 +3,12 @@
  * @description Session and message persistence layer.
  *
  * Manages conversation sessions and their messages in SQLite. Each session
- * is identified by a `session_key` (e.g., `tg:12345` or `cli:local`) and
+ * is identified by a `session_key` (e.g., `tg:12345`) and
  * contains an ordered sequence of messages.
  *
  * All write operations use {@link withWriteRetry} to handle database-locked
- * errors that can occur when CLI and Telegram access the same DB file
- * concurrently (even with WAL mode and busy_timeout PRAGMA).
+ * errors that can occur during concurrent access
+ * (even with WAL mode and busy_timeout PRAGMA).
  */
 
 import { randomUUID } from 'node:crypto';

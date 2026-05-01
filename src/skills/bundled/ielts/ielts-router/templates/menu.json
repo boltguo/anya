@@ -3,6 +3,9 @@
     "text": "📚 IELTS 训练中心\n\n选一个方向开始，每个菜单都能返回上一层。",
     "buttons": [
       [
+        "📰 每日文章精读|daily-article"
+      ],
+      [
         "🗣️ 口语|nav:speaking",
         "🎧 听力|nav:listening"
       ],

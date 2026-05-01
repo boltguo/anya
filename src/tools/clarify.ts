@@ -3,8 +3,7 @@
  * @description Clarification tool for multi-step user interaction.
  *
  * On Telegram, presents choices as native inline keyboard buttons via
- * {@link requestChoice}. On CLI, falls back to text-based prompts.
- * Used when the agent needs the user to pick between options.
+ * {@link requestChoice}. Used when the agent needs the user to pick between options.
  */
 
 import { register } from './registry.js';

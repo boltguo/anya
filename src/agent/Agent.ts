@@ -33,7 +33,7 @@ import { ContextCompressor, estimateTokens } from './contextCompressor.js';
 
 /** Options for {@link Agent.run}. */
 export interface RunOptions {
-  /** Session key for history persistence (e.g., 'tg:12345' or 'cli:local'). */
+  /** Session key for history persistence (e.g., 'tg:12345'). */
   sessionKey: string;
   /** Explicit session ID. If omitted, resolved from sessionKey. */
   sessionId?: string;
@@ -59,9 +59,8 @@ export interface RunResult {
  * The Anya Agent — core ReAct (Reason + Act) loop.
  *
  * Platform-agnostic: communicates with the user exclusively through
- * the {@link Adapter} interface. Each platform (CLI, Telegram) provides
+ * the {@link Adapter} interface. The platform provides
  * its own adapter implementation.
- *
  * Lifecycle per user message:
  * 1. Load/create session and conversation history from SQLite
  * 2. Build system prompt (config personality + rules + profile + skills)

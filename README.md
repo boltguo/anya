@@ -2,7 +2,7 @@
 
 > 用 IELTS 的优质训练内容，提升真实英语能力。
 
-运行在 Telegram / CLI 上的陪伴式英语私教，由一个可扩展的个人 Agent 框架驱动。
+运行在 Telegram 上的陪伴式英语私教，由一个可扩展的个人 Agent 框架驱动。
 
 ## 目录
 
@@ -138,14 +138,14 @@ pnpm build       # 产出 dist/
 
 ## Agent 架构与数据流
 
-Anya 采用统一 Agent Core 架构，所有入口（CLI/Telegram）最终都汇聚到 `Agent.run()`，由其统一调度工具、技能和本地数据，所有运行态数据都落在 `~/.anya/`。
+Anya 采用统一 Agent Core 架构，所有消息入口最终都汇聚到 `Agent.run()`，由其统一调度工具、技能和本地数据，所有运行态数据都落在 `~/.anya/`。
 
 **数据流游泳池（Swimlane）图：**
 
 ```mermaid
 sequenceDiagram
   participant User as User
-  participant Adapter as Adapter (CLI/TG)
+  participant Adapter as Adapter (TG)
   participant Agent as Agent Core
   participant Provider as Gemini Provider
   participant Tools as Tool Registry
@@ -176,7 +176,7 @@ sequenceDiagram
 
 ### 架构分层与职责
 
-- **Entry / Process Layer**：`bin/anya.ts` 负责 CLI/网关/定时任务分发。
+- **Entry / Process Layer**：`bin/anya.ts` 负责系统命令（CLI）与网关的启动分发。
 - **Command Layer**：`src/commands/` 提供命令实现。
 - **Adapter Layer**：`src/adapters/telegram/` 等将平台输入/输出转为统一格式。
 - **Agent Core Layer**：`src/agent/Agent.ts` 统一 ReAct 循环、prompt 组装、历史管理、工具调度、消息落库。
@@ -224,7 +224,7 @@ sequenceDiagram
 
 ## Skills 技能包
 
-共 50 个 skill，覆盖建档、定级、四科训练、词汇 SRS、诊断分析、教练和定时任务。所有 skill 定义在 `src/skills/bundled/`。
+共几十个 skill，覆盖建档、定级、四科训练、词汇 SRS、诊断分析、教练等。所有 skill 定义在 `src/skills/bundled/`。
 
 ```
 用户消息 → Agent → ielts-router → 具体 skill
@@ -240,7 +240,6 @@ sequenceDiagram
 |-------|------|
 | `profile-manager` | 建档与资料更新。首次运行收集用户目标、背景、偏好，写入 USER.md |
 | `ielts-router` | 训练中心主菜单。解析自由文本练习请求，路由到对应 skill |
-| `learner-state` | **数据驱动的水平刷新**。查询 study.db 最近 14 天数据，EMA 平滑计算 bands，写入 MEMORY.md |
 | `placement-quick` | 10 分钟快速定级：口语 30s + 听写 2 句 + 阅读 150 词 + 写作 50 词 |
 
 ### 🗣️ 口语 Speaking
@@ -266,6 +265,7 @@ sequenceDiagram
 
 | Skill | 说明 |
 |-------|------|
+| `daily-article` | **每日文章精读**：抓取用户感兴趣的新闻或话题生成适配水平的文章，生成音频并伴随核心生词静默入库 |
 | `material-discussion` | **真实外刊闲聊**：抓取用户感兴趣的真实新闻/帖子，不强做题，只为引发全英文自由讨论 |
 | `reading-deepdive` | **核心外刊精读**：无时间压力，深度解剖长难句语法结构和段落逻辑 |
 | `reading-skim-drill` | 90 秒略读后隐藏文章，凭记忆回答主旨 + 功能题 |
@@ -278,7 +278,7 @@ sequenceDiagram
 | `writing-journal` | **英语日记/碎碎念**：提供情绪价值的低压力练笔出口，带隐性语法和地道表达润色 |
 | `writing-essay` | 长文综合写作：合并了书信、图表和议论文的综合长段落训练入口 |
 | `writing-rewrite` | 升级改写：把 Band 5/6 段落改到 Band 7 水平 |
-| `writing-builder` | **句法构造工厂**：一站式微观训练，包含高级词汇造句、句型转换、结构扩写 | 升级改写：把 Band 5/6 段落改到 Band 7 水平 |
+| `writing-builder` | **句法构造工厂**：一站式微观训练，包含高级词汇造句、句型转换、结构扩写 |
 
 ### 📚 词汇 Vocabulary
 
@@ -289,12 +289,12 @@ sequenceDiagram
 | `vocab-testme` | 主动回忆测验：针对临界掌握词汇 |
 | `vocab-topic` | 主题聚类学习：一个话题 8-12 个词，展示 → 隐藏 → 回忆 |
 
-| `error-clinic` | **全科错题门诊**：统一接管听说读写的错题分析，直击语法或认知陷阱，给出避坑 Tips |
-
 ### 📊 诊断与分析
 
 | Skill | 说明 |
 |-------|------|
+| `learner-state` | **数据驱动的水平刷新**。查询 study.db 最近 14 天数据，EMA 平滑计算 bands，写入 MEMORY.md |
+| `error-clinic` | **全科错题门诊**：统一接管听说读写的错题分析，直击语法或认知陷阱，给出避坑 Tips |
 
 ### 💬 教练 Coaching
 
@@ -302,7 +302,6 @@ sequenceDiagram
 |-------|------|
 | `coach-consultation` | **教练进度复盘**：用户的战略顾问，整合进度、弱点分析和下一步建议，自然对话输出 |
 | `coach-proactive` | 主动教练：根据触发条件决定是否提醒、鼓励或刷新学习计划 |
-
 
 ### 📦 支撑包 Support
 

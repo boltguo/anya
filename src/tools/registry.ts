@@ -166,7 +166,7 @@ export async function dispatch(
 /**
  * List all registered tools with their enabled/disabled status.
  *
- * Useful for debugging and the `anya tools` CLI command.
+ * Useful for debugging.
  *
  * @param config - The current agent config.
  * @returns Array of tool info objects with name, description, and enabled flag.
