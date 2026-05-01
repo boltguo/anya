@@ -39,10 +39,8 @@ Your goal is to act as an empathetic listener first, and an English coach second
    - `raw_content` = the user's full journal entry
    - `accuracy = NULL` (journal is unscored)
    - `load_score = 1`
-   - `feedback` = JSON:
-     ```json
-     {"word_count": 85, "corrections_given": 2, "phrasal_verbs_taught": ["wind down", "burn out"], "session_notes": "情绪表达自然，时态混用"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`errors`** — from `references/error-keys.md` (only the 1-2 you corrected):
    - `l1_transfer`, `verb_form_error`, `collocation_error`

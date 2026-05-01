@@ -40,15 +40,13 @@ Tiny drill, disproportionate exam payoff. Most learners leak 2-3 easy marks per 
 
 1. **`samples`** row:
    - `skill_type = 'listening.numberdrill'`
-   - `prompt` = correct answers (joined by ` | `)
-   - `raw_content` = user's answers (joined by ` | `)
+   - `prompt` = the correct answer
+   - `raw_content` = the user's answer
    - `accuracy` = correct / total (0.0–1.0)
    - `raw_score` = correct count, `max_score` = item count
    - `load_score = 1`
-   - `feedback` = JSON:
-     ```json
-     {"family": "13-30", "accuracy": 0.75, "items": 8, "correct": 6, "error_types": ["number_confusion"], "session_notes": "-teen/-ty 区分偏弱"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`errors`** — from `references/error-keys.md`: `number_confusion`, `spelling_error`, `function_word_miss`
 

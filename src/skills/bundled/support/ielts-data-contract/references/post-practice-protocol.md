@@ -32,7 +32,7 @@ INSERT INTO samples (
 | `raw_score` | ✅ for scored | Items correct (numerator). |
 | `max_score` | ✅ for scored | Items total (denominator). |
 | `band_overall` | optional | Only for writing/speaking band-scored tasks. |
-| `feedback` | ✅ | **Must be valid JSON.** See per-type specs below. |
+| `feedback` | ✅ | **Natural language textual analysis.** Write a detailed diagnostic paragraph. Do not use JSON. |
 | `audio_path` | if applicable | For listening skills with TTS — essential for Revenge Protocol. |
 | `mode` | ✅ | `study` (default) \| `exam` \| `placement` |
 | `completed` | ✅ | `1` = finished, `0` = abandoned. **Write even if abandoned.** |
@@ -84,86 +84,12 @@ db name=study sql="SELECT last_insert_rowid() AS sample_id"
 
 ---
 
-## Feedback JSON Spec (by skill type)
+## Feedback Spec
 
-`feedback` must be a valid JSON string. Minimum required fields per type:
+`feedback` must be a natural language textual analysis. Do not use JSON. 
+Write a concise but detailed diagnostic paragraph about what exactly the user missed, the root cause, and overall performance.
 
-### Listening (dictation / numberdrill / prediction / mapdrill)
-
-```json
-{
-  "accuracy": 0.75,
-  "items": 3,
-  "correct": 2,
-  "missed_words": ["on", "a"],
-  "error_types": ["function_word_miss", "article_usage"],
-  "session_notes": "连续漏掉冠词"
-}
-```
-
-### Listening (podcast / shadowing)
-
-```json
-{
-  "comprehension_accuracy": 0.8,
-  "items": 5,
-  "correct": 4,
-  "main_idea_grasped": true,
-  "session_notes": "细节题偏弱"
-}
-```
-
-### Reading (typetrain / skim-drill / deepdive)
-
-```json
-{
-  "type": "TFNG",
-  "accuracy": 0.83,
-  "items": 6,
-  "correct": 5,
-  "errors_by_type": {"tfng_logic_error": 1},
-  "session_notes": "NOT GIVEN 判断偏弱"
-}
-```
-
-### Writing (essay / builder / rewrite / journal)
-
-```json
-{
-  "word_count": 245,
-  "band_task": 6.0,
-  "band_coherence": 5.5,
-  "band_lexical": 6.0,
-  "band_grammar": 5.5,
-  "error_count": 3,
-  "session_notes": "论点展开不够充分"
-}
-```
-
-### Speaking (freetalk / roleplay / repeat)
-
-```json
-{
-  "turns": 4,
-  "filler_count": 3,
-  "self_corrections": 1,
-  "scaffolding_used": false,
-  "session_notes": "话题展开自然，词汇偏基础"
-}
-```
-
-### Vocabulary (review / testme / topic)
-
-```json
-{
-  "items": 6,
-  "correct": 5,
-  "accuracy": 0.83,
-  "format_mix": ["recall", "production", "collocation"],
-  "shaky_words": ["resilient", "fluctuate"],
-  "session_notes": "production 偏弱"
-}
-```
+Example: "The user missed the definite article 'the' and heard 'released' as 'release'. This indicates weak sensitivity to word-final sounds and connected speech of weak forms, though they successfully caught the main sentence structure."
 
 ---
 
@@ -173,7 +99,7 @@ db name=study sql="SELECT last_insert_rowid() AS sample_id"
 
 ```
 -- 1. samples
-db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, accuracy, raw_score, max_score, session_id, feedback, mode, completed, duration_seconds, load_score, audio_path) VALUES (datetime('now'), 'listening.dictation', 'The software engineer is coding a new game.', 'The soft engineer was coding new game', 0.5, 3, 6, 'tg:12345', '{\"accuracy\":0.5,\"items\":3,\"correct\":1,\"missed_words\":[\"software\",\"a\"],\"error_types\":[\"lexical_substitution\",\"function_word_miss\"],\"session_notes\":\"词汇替换+冠词遗漏\"}', 'study', 1, 45, 2, '/path/to/audio.ogg')"
+db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, accuracy, raw_score, max_score, session_id, feedback, mode, completed, duration_seconds, load_score, audio_path) VALUES (datetime('now'), 'listening.dictation', 'The software engineer is coding a new game.', 'The soft engineer was coding new game', 0.5, 3, 6, 'tg:12345', 'The user missed the definite article a and heard software as soft. This indicates weak sensitivity to word-final sounds and function words.', 'study', 1, 45, 2, '/path/to/audio.ogg')"
 
 -- 2. get sample_id
 db name=study sql="SELECT last_insert_rowid() AS sample_id"
@@ -193,7 +119,7 @@ db name=study sql="INSERT INTO activity_log (date, sessions_count, minutes_total
 ### Example: speaking.freetalk
 
 ```
-db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, accuracy, session_id, feedback, mode, completed, duration_seconds, load_score) VALUES (datetime('now'), 'speaking.freetalk', 'Should AI replace human teachers?', 'I think AI can help but not replace teachers because...', NULL, 'tg:12345', '{\"turns\":4,\"filler_count\":3,\"self_corrections\":1,\"scaffolding_used\":false,\"session_notes\":\"话题展开自然，词汇偏基础\"}', 'study', 1, 180, 2)"
+db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, accuracy, session_id, feedback, mode, completed, duration_seconds, load_score) VALUES (datetime('now'), 'speaking.freetalk', 'Should AI replace human teachers?', 'I think AI can help but not replace teachers because...', NULL, 'tg:12345', 'The user maintained good flow but lacked advanced vocabulary. There were a few filler words used.', 'study', 1, 180, 2)"
 
 db name=study sql="SELECT last_insert_rowid() AS sample_id"
 
@@ -208,7 +134,7 @@ db name=study sql="INSERT INTO activity_log (date, sessions_count, minutes_total
 ### Example: vocab (review / testme)
 
 ```
-db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, accuracy, raw_score, max_score, session_id, feedback, mode, completed, load_score) VALUES (datetime('now'), 'vocab', 'review-batch', 'resilient:pass, fluctuate:fail, elaborate:pass', 0.83, 5, 6, 'tg:12345', '{\"items\":6,\"correct\":5,\"accuracy\":0.83,\"format_mix\":[\"recall\",\"production\",\"collocation\"],\"shaky_words\":[\"fluctuate\"],\"session_notes\":\"production偏弱\"}', 'study', 1, 2)"
+db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, accuracy, raw_score, max_score, session_id, feedback, mode, completed, load_score) VALUES (datetime('now'), 'vocab', 'review-batch', 'resilient:pass, fluctuate:fail, elaborate:pass', 0.83, 5, 6, 'tg:12345', 'The user successfully recalled most words but struggled with the production of the word fluctuate.', 'study', 1, 2)"
 
 db name=study sql="SELECT last_insert_rowid() AS sample_id"
 
@@ -226,5 +152,5 @@ db name=study sql="INSERT INTO activity_log (date, sessions_count, minutes_total
 - Do NOT update MEMORY.md directly — `learner-state` skill handles that
 - Do NOT skip writes for abandoned sessions — write `completed=0`
 - Do NOT invent error keys — use `references/error-keys.md`
-- Do NOT put plain text in `feedback` — must be valid JSON
+- Do NOT use JSON in `feedback` — must be natural language analysis
 - Do NOT leave `prompt` or `raw_content` empty

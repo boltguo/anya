@@ -47,10 +47,8 @@ After 3-4 turns, wrap up the conversation and send an inline keyboard in Chinese
    - `raw_content` = concatenated user responses (or transcription if voice)
    - `accuracy = NULL` (freetalk is unscored)
    - `load_score = 2`
-   - `feedback` = JSON:
-     ```json
-     {"turns": 4, "filler_count": 3, "self_corrections": 1, "scaffolding_used": false, "session_notes": "话题展开自然，词汇偏基础"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`errors`** — from `references/error-keys.md`:
    - `filler_overuse`, `verb_form_error`, `l1_transfer`, `vocabulary_repetition`, `register_mismatch`

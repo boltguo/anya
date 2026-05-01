@@ -64,10 +64,8 @@ After the entire batch is complete:
    - `accuracy` = easy+hard / total (0.0–1.0). `again` = fail.
    - `raw_score` = pass count, `max_score` = total words tested
    - `load_score = 2`
-   - `feedback` = JSON:
-     ```json
-     {"items": 6, "correct": 5, "accuracy": 0.83, "format_mix": ["recall", "production"], "shaky_words": ["fluctuate"], "session_notes": "production偏弱"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`words`** table — per word during the batch (already in State B):
    - Update `review_count`, `success_count`/`fail_count`, `last_result`, `srs_due`, `mastery`

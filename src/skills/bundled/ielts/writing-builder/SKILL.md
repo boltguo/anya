@@ -42,16 +42,14 @@ After 3 tasks, you MUST send an inline keyboard in Chinese:
 
 1. **`samples`** row:
    - `skill_type = 'writing.builder'`
-   - `prompt` = the 3 micro-tasks (joined by ` | `)
-   - `raw_content` = the user's 3 responses (joined by ` | `)
+   - `prompt` = the current micro-task
+   - `raw_content` = the user's response
    - `accuracy` = tasks graded correct / total (e.g. 2/3 = 0.67)
    - `raw_score` = correct count, `max_score` = 3
    - `load_score = 2`
    - `ui_feedback` = clicked buttons (e.g. `"SOS,SOS"`)
-   - `feedback` = JSON:
-     ```json
-     {"accuracy": 0.67, "items": 3, "correct": 2, "grammar_targets": ["Despite", "relative clause"], "sos_count": 1, "session_notes": "从句结构需要加强"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`errors`** — from `references/error-keys.md`:
    - `verb_form_error`, `sentence_fragment`, `run_on_sentence`, `word_form_error`, `word_order_error`

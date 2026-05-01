@@ -26,7 +26,7 @@ Never user-facing. This skill is a reference, not a workflow.
 
 | Table | Purpose |
 | ----- | ------- |
-| `samples` | one row per practice / mock / placement response; `accuracy` (0.0–1.0) for queryable correct ratio; `raw_score`/`max_score` for item counts; `feedback` must be valid JSON; `mode` distinguishes exam vs study vs placement |
+| `samples` | one row per practice / mock / placement response; `accuracy` (0.0–1.0) for queryable correct ratio; `raw_score`/`max_score` for item counts; `feedback` must be natural language analysis; `mode` distinguishes exam vs study vs placement |
 | `errors` | per-sample error rows, classified by `recurrence_key` (must come from `references/error-keys.md`) + category + severity |
 | `sample_words` | words exposed during a sample (for coverage analytics) |
 | `subcap_scores` | per-sample sub-capability band (uses canonical keys from `analysis-weakness`) |
@@ -47,5 +47,5 @@ Never user-facing. This skill is a reference, not a workflow.
 4. **Record every session** as a `samples` row — even abandoned ones (`completed=0`).
 5. **`prompt_hash` is load-bearing.** See `references/prompt-hash.md` before writing it.
 6. **Schema changes = regenerate.** Delete `study.db`, recreate from `templates/study.sql`. No migration scripts.
-7. **`feedback` must be JSON.** See `references/post-practice-protocol.md` for the per-type spec.
+7. **`feedback` must be natural language.** See `references/post-practice-protocol.md` for the per-type spec.
 8. **Never leave `prompt` or `raw_content` empty.** These are essential for Revenge Protocol and Error Clinic.

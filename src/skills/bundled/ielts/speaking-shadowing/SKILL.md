@@ -57,15 +57,13 @@ After the 3-sentence batch:
 
 1. **`samples`** row:
    - `skill_type = 'speaking.shadowing'`
-   - `prompt` = the 3 sentences (joined by ` | `)
+   - `prompt` = the current sentence
    - `raw_content` = pron_assess scores summary (e.g. `"S1:92, S2:78, S3:85"`)
    - `accuracy` = average pron score / 100 (e.g. 85/100 = 0.85)
    - `raw_score` = sentences scored ≥85, `max_score` = 3
    - `load_score = 2`
-   - `feedback` = JSON:
-     ```json
-     {"avg_score": 85, "items": 3, "scores": [92, 78, 85], "retries": 1, "weak_sounds": ["/θ/", "/ɪ/"], "session_notes": "th音偏弱"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`errors`** — from `references/error-keys.md`:
    - `pronunciation_error` — for specific sound patterns

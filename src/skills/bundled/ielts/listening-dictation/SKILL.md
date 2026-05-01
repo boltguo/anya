@@ -83,20 +83,18 @@ Keep the analysis concise but highly actionable.
 ## 5. Persist (Data Contract)
 You MUST use the `db` tool to log the practice data strictly following `support/ielts-data-contract/references/post-practice-protocol.md`.
 
-**Step-by-step writes after each 3-sentence group:**
+**Step-by-step writes AFTER EACH SENTENCE:**
 
 1. **`samples`** row — required fields:
    - `skill_type = 'listening.dictation'`
-   - `prompt` = the 3 correct sentences (joined by ` | `)
-   - `raw_content` = the user's 3 typed responses (joined by ` | `)
+   - `prompt` = the correct sentence
+   - `raw_content` = the user's typed response
    - `accuracy` = correct_words / total_words (0.0–1.0)
    - `raw_score` = number of correct words, `max_score` = total words
-   - `load_score = 2`
-   - `audio_path` = TTS file path (for Revenge Protocol reuse)
-   - `feedback` = JSON:
-     ```json
-     {"accuracy": 0.75, "items": 3, "correct": 2, "missed_words": ["on", "a"], "error_types": ["function_word_miss"], "session_notes": "冠词漏听"}
-     ```
+   - `load_score = 1`
+   - `audio_path` = the specific TTS file path generated for this sentence (for Revenge Protocol reuse)
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance.
+     Example: `"The user missed the definite article 'the' and heard 'released' as 'release'. This indicates weak sensitivity to word-final sounds (especially passive voice '-ed') and connected speech of weak forms, though they successfully caught the main sentence structure."`
 
 2. **`errors`** — one row per missed/wrong word:
    - Keys from `references/error-keys.md`: `function_word_miss`, `spelling_error`, `connected_speech_fail`, `word_substitution`, `tense_miss`, `plural_miss`

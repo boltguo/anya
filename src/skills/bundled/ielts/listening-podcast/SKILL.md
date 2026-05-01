@@ -53,10 +53,8 @@ After the discussion, you MUST send an inline keyboard in Chinese:
    - `load_score = 2`
    - `audio_path` = TTS file path
    - `ui_feedback` = clicked buttons (e.g. `"slower,transcript"`)
-   - `feedback` = JSON:
-     ```json
-     {"comprehension_accuracy": 0.8, "items": 3, "correct": 2, "main_idea_grasped": true, "session_notes": "细节题偏弱"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`subcap_scores`** — at least 1:
    - `listening.gist` — how well they grasped the main idea

@@ -31,7 +31,7 @@ Meta-strategy drill — why mid-band answers fail is rarely acoustic, it's "didn
 **Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
 
 - Two `samples` rows chained via `parent_sample_id` (prediction + audio); shared `session_id`.
-- `subcap_scores.listening.academic_vocab` + `.discourse_marker`. `feedback` JSON stores `prediction_accuracy`.
+- `subcap_scores.listening.academic_vocab` + `.discourse_marker`. `feedback` must be a natural language textual analysis including `prediction_accuracy`.
 - `errors` with canonical keys.
 
 Queries: `support/ielts-data-contract/references/queries.md`.

@@ -49,10 +49,8 @@ Read MEMORY and apply:
    - `accuracy` = correct / total (0.0–1.0)
    - `raw_score` = correct count, `max_score` = question count
    - `load_score = 2`, `audio_path` = TTS path
-   - `feedback` = JSON:
-     ```json
-     {"accuracy": 0.8, "items": 5, "correct": 4, "error_types": ["distractor_trap"], "session_notes": "左右方位混淆"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`errors`** — from `references/error-keys.md`: `paraphrase_miss`, `number_confusion`, `function_word_miss`
 

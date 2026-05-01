@@ -40,10 +40,8 @@ Pulls items near the edge of knowledge (not `mastered`) and tests in mixed forma
    - `accuracy` = correct / total (0.0–1.0)
    - `raw_score` = correct count, `max_score` = question count
    - `load_score = 2`
-   - `feedback` = JSON:
-     ```json
-     {"items": 6, "correct": 5, "accuracy": 0.83, "format_mix": ["recall", "production", "collocation", "register"], "shaky_words": ["fluctuate"], "session_notes": "production偏弱"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`words`** — update counters + `srs_due` per word. Bump `transfer_level` on good production.
 

@@ -50,10 +50,8 @@ After the review, you MUST send an inline keyboard in Chinese:
    - `accuracy = NULL` (qualitative assessment)
    - `load_score = 2`
    - `ui_feedback` = clicked buttons (e.g. `"句子太绕,生词太多"`)
-   - `feedback` = JSON:
-     ```json
-     {"comprehension": "partial", "structure_grasped": true, "killer_sentence_helped": true, "harvested_words": ["fluctuate", "notwithstanding"], "session_notes": "长难句拆解后理解到位"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`errors`** — from `references/error-keys.md` (if applicable):
    - `inference_error`, `paraphrase_miss`, `keyword_matching_error`

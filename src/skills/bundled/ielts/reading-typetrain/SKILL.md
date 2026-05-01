@@ -43,10 +43,8 @@ Single-type specialist. One type per session.
    - `accuracy` = correct / total (0.0–1.0)
    - `raw_score` = correct count, `max_score` = question count
    - `load_score = 2`
-   - `feedback` = JSON:
-     ```json
-     {"type": "TFNG", "accuracy": 0.83, "items": 6, "correct": 5, "errors_by_type": {"tfng_logic_error": 1}, "session_notes": "NOT GIVEN 判断偏弱"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`errors`** — from `references/error-keys.md`:
    - `tfng_logic_error`, `heading_mismatch`, `keyword_matching_error`, `inference_error`, `detail_location_fail`

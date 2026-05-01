@@ -27,10 +27,8 @@ description: "Use this skill whenever the user wants to practice writing a long-
    - `accuracy = NULL` (essays are band-scored, not accuracy-scored)
    - `band_task`, `band_coherence`, `band_lexical`, `band_grammar`, `band_overall` — all required
    - `load_score = 3`
-   - `feedback` = JSON:
-     ```json
-     {"word_count": 245, "band_task": 6.0, "band_coherence": 5.5, "band_lexical": 6.0, "band_grammar": 5.5, "error_count": 3, "session_notes": "论点展开不够充分"}
-     ```
+   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
+     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
 
 2. **`errors`** — from `references/error-keys.md`:
    - `article_usage`, `verb_form_error`, `collocation_error`, `coherence_gap`, `run_on_sentence`, `task_incomplete`
