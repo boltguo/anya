@@ -4,7 +4,7 @@
  *
  * Provides a single shared {@link DatabaseSync} instance for the entire process.
  * Uses WAL (Write-Ahead Logging) for concurrent read access from CLI, Telegram,
- * and cron processes, plus a 5-second busy_timeout to handle write contention.
+ * and gateway processes, plus a 5-second busy_timeout to handle write contention.
  *
  * Schema is auto-created on first access via {@link initializeSchema}.
  */
@@ -76,7 +76,7 @@ export function getDb(): DatabaseSync {
   _db.exec('PRAGMA journal_mode = WAL');
   _db.exec('PRAGMA foreign_keys = ON');
   // Wait up to 5 s when another connection holds the write lock
-  // (CLI + Telegram + cron may share the same DB file).
+  // (CLI + Telegram may share the same DB file).
   _db.exec('PRAGMA busy_timeout = 5000');
 
   initializeSchema(_db);

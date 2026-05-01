@@ -73,9 +73,7 @@ export interface AnyaConfig {
     speech_region: string;
   };
 
-  cron: {
-    enabled: boolean;
-  };
+
 
   ui: {
     show_tool_calls: boolean;
@@ -128,7 +126,6 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   stt: { groq_api_key: '', model: 'whisper-large-v3-turbo' },
   tts: { voice: 'en-US-AriaNeural', rate: '+0%' },
   azure: { speech_key: '', speech_region: 'eastasia' },
-  cron: { enabled: false },
   ui: { show_tool_calls: true },
 
   advanced: {

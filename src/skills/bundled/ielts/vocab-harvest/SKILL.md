@@ -25,6 +25,7 @@ description: "MUST trigger when the user explicitly asks to save a word/phrase (
 1. **Deduplication Check**: Query `words` in `study.db` to ensure it doesn't already exist.
 2. **Insert**: Use the `db` tool to INSERT the word/phrase.
    - Set `mastery="queued_new"`.
+   - Set `srs_due=CURRENT_TIMESTAMP`.
    - If user actively asked for it, set `is_user_word=1` (Highest priority in SRS). Otherwise, set it to 0.
    - Set `origin="practice_harvest"`.
    - MUST include the Chinese definition, IPA, and the exact sentence the user encountered it in (e.g., their own journal sentence or the reading text).

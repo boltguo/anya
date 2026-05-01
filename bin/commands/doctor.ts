@@ -54,10 +54,6 @@ export function registerDoctor(program: Command): void {
       console.log(
         `  Gateway:   ${gw.running ? '[ok] running (PID ' + gw.pid + ')' : '[--] stopped'}`,
       );
-      const cr = isServiceRunning('cron');
-      console.log(
-        `  Cron:      ${cr.running ? '[ok] running (PID ' + cr.pid + ')' : '[--] stopped'}`,
-      );
       console.log();
     });
 }

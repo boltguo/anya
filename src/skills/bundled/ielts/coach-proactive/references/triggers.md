@@ -22,7 +22,7 @@ One trigger fires per pass. Priority order (top wins):
 | `subcap_trough` | subcap avg ≤ 4.5 with n ≥ 3 |
 | `streak_break` | `streak_days` dropped from ≥ 5 to 0 |
 | `streak_milestone` | `streak_days` ∈ {7, 14, 30, 60, 90, 180} |
-| `vocab_queue_empty` | `queued_new_count = 0` → stay silent (handled by `ielts-cron-word-seed`) |
+| `vocab_queue_empty` | `queued_new_count = 0` → stay silent |
 | `plan_refresh_due` | 7 days since last proactive plan push |
 
 ## Messages
@@ -90,6 +90,6 @@ Build a 2-week rotation from weak dims + exam proximity. Present as a short tabl
 
 ## Delivery
 
-- Use `tg(type:"pin")` only for `exam_close` and `plan_refresh` pushes.
+- Use `tg(type:"text")` for all pushes.
 - Everything else is a plain message.
 - Record the push with `skill_type='coach_proactive'`, `prompt=<trigger>`, `load_score=0`.

@@ -4,14 +4,10 @@
  *
  * Consolidates all Telegram API interactions into a single `tg` tool with
  * a `type` parameter, reducing LLM function declaration overhead from
- * ~13 separate tool schemas to just 1 (~1300 prompt tokens saved per call).
+ * many separate tool schemas to just 1 (~1300 prompt tokens saved per call).
  *
- * Available types: text, photo, audio, voice, keyboard, quiz, force_reply,
- * reply_keyboard, remove_keyboard, edit, edit_keyboard, dice, react, pin, action.
- *
- * Interaction conventions are documented in the active prompt layer
- * (`config.agent.personality`, `RULES.md`, `USER.md`, `MEMORY.md`).
- * Specific skills can override these defaults with their own requirements.
+ * Available types: text, audio, voice, document, keyboard, quiz,
+ * force_reply, edit, delete, react, action.
  */
 
 import { register } from './registry.js';
@@ -70,45 +66,35 @@ function resolveReplyTo(raw: unknown, tg: TelegramSessionAdapter): number | stri
 // The `type` field determines the message format:
 //
 //   text           → Plain text message
-//   photo          → Photo with optional caption
 //   audio          → Audio file with optional caption
 //   voice          → Voice-bubble audio from a local OGG/Opus path
 //   document       → Send a file (PDF, ZIP, etc.) with optional caption
 //   keyboard       → Message with inline buttons (callback-based)
 //   quiz           → Native poll with auto-scoring
 //   force_reply    → Forces user's keyboard open for free-text input
-//   reply_keyboard → Persistent bottom keyboard menu
-//   remove_keyboard→ Remove the bottom keyboard
 //   edit           → Edit an existing message's text/buttons
-//   edit_keyboard  → Edit only the buttons of an existing message
 //   delete         → Delete a message by id or tag
-//   dice           → Send animated dice/emoji
 //   react          → Add emoji reaction to a message
-//   pin            → Pin a message to the top of the chat
 //   action         → Show typing/recording indicator
-//
-// Interaction conventions are documented in the active prompt layer.
 
 register({
   name: 'tg',
-  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, photo, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), force_reply, reply_keyboard (bottom menu), edit, delete, dice, react, pin, action. Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
+  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), force_reply, edit, delete, react, action. Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
   parameters: {
     type: 'object',
     properties: {
-      type:       { type: 'string', description: 'Message type: text | photo | audio | voice | document | keyboard | quiz | force_reply | reply_keyboard | remove_keyboard | edit | edit_keyboard | delete | dice | react | pin | action' },
+      type:       { type: 'string', description: 'Message type: text | audio | voice | document | keyboard | quiz | force_reply | edit | delete | react | action' },
       text:       { type: 'string', description: 'Message text/caption (HTML format). Use <b>bold</b>, <i>italic</i>, <code>code</code>, <pre>block</pre>, <tg-spoiler>hidden</tg-spoiler>.' },
-      url:        { type: 'string', description: 'For photo/audio: URL or file path of the media to send.' },
-      buttons:    { type: 'string', description: 'JSON 2D array. For keyboard: [["label|callback_data",...]], for reply_keyboard: [["label",...]].' },
+      url:        { type: 'string', description: 'For audio/voice/document: URL or file path of the media to send.' },
+      buttons:    { type: 'string', description: 'JSON 2D array for keyboard: [["label|callback_data",...]].' },
       options:    { type: 'string', description: 'For quiz: JSON array of option strings.' },
       correct:    { type: 'integer', description: 'For quiz: 0-based index of correct answer.' },
       explanation:{ type: 'string', description: 'For quiz: explanation shown after answering.' },
-      message_id: { type: 'string', description: 'For edit/edit_keyboard/react/pin: target message_id (number) or tag.' },
+      message_id: { type: 'string', description: 'For edit/react: target message_id (number) or tag.' },
       reply_to:   { type: 'string', description: 'Reply to a message_id, tag, or "user" for the incoming message.' },
-      tag:        { type: 'string', description: 'Tag this message for later reference (edit, pin, reply-to).' },
-      emoji:      { type: 'string', description: 'For dice or react: emoji to use.' },
+      tag:        { type: 'string', description: 'Tag this message for later reference (edit, reply-to).' },
+      emoji:      { type: 'string', description: 'For react: emoji to use.' },
       action:     { type: 'string', description: 'For action type: typing, record_voice, upload_document, etc.' },
-      one_time:   { type: 'boolean', description: 'For reply_keyboard: auto-hide after tap.' },
-      silent:     { type: 'boolean', description: 'For pin: pin without notification.' },
       parse_mode: { type: 'string', description: 'Parse mode: HTML (default), Markdown, MarkdownV2, or none.' },
     },
     required: ['type'],
@@ -127,17 +113,6 @@ register({
       case 'text': {
         const replyTo = resolveReplyTo(args.reply_to, tg);
         const msgId = await tg.sendMessage(String(args.text || ''), {
-          replyTo, tag: args.tag as string,
-          parseMode: (args.parse_mode as any) || 'HTML',
-        });
-        return JSON.stringify({ ok: true, message_id: msgId });
-      }
-
-      case 'photo': {
-        const url = String(args.url || '');
-        if (!url) return JSON.stringify({ ok: false, error: 'url is required for photo type' });
-        const replyTo = resolveReplyTo(args.reply_to, tg);
-        const msgId = await tg.sendPhoto(url, String(args.text || ''), {
           replyTo, tag: args.tag as string,
           parseMode: (args.parse_mode as any) || 'HTML',
         });
@@ -193,20 +168,6 @@ register({
         return JSON.stringify({ ok: true, message_id: msgId });
       }
 
-      case 'reply_keyboard': {
-        const buttons = parseArray(args.buttons);
-        const msgId = await tg.sendReplyKeyboard(String(args.text || ''), buttons, {
-          oneTime: !!args.one_time,
-          tag: args.tag as string,
-        });
-        return JSON.stringify({ ok: true, message_id: msgId });
-      }
-
-      case 'remove_keyboard': {
-        const msgId = await tg.removeKeyboard(String(args.text || ''));
-        return JSON.stringify({ ok: true, message_id: msgId });
-      }
-
       case 'edit': {
         const msgRef = args.message_id as string;
         const buttons = args.buttons ? parseArray(args.buttons) : undefined;
@@ -214,33 +175,6 @@ register({
           isNaN(Number(msgRef)) ? msgRef : Number(msgRef),
           String(args.text || ''), buttons
         );
-        return JSON.stringify({ ok: true });
-      }
-
-      case 'edit_keyboard': {
-        const msgRef = args.message_id as string;
-        const buttons = parseArray(args.buttons);
-        await tg.editKeyboard(
-          isNaN(Number(msgRef)) ? msgRef : Number(msgRef), buttons
-        );
-        return JSON.stringify({ ok: true });
-      }
-
-      case 'dice': {
-        const result = await tg.sendDice(String(args.emoji || '🎲'));
-        return JSON.stringify({ ok: true, ...result });
-      }
-
-      case 'react': {
-        let ref: number | string = args.message_id as string;
-        if (ref === 'user') ref = tg.getUserMessageId()!;
-        await tg.react(ref, String(args.emoji || '👍'));
-        return JSON.stringify({ ok: true });
-      }
-
-      case 'pin': {
-        const ref = args.message_id as string;
-        await tg.pin(isNaN(Number(ref)) ? ref : Number(ref), !!args.silent);
         return JSON.stringify({ ok: true });
       }
 
@@ -260,13 +194,20 @@ register({
         return JSON.stringify({ ok: deleted });
       }
 
+      case 'react': {
+        let ref: number | string = args.message_id as string;
+        if (ref === 'user') ref = tg.getUserMessageId()!;
+        await tg.react(ref, String(args.emoji || '👍'));
+        return JSON.stringify({ ok: true });
+      }
+
       case 'action': {
         await tg.sendChatAction(String(args.action || 'typing'));
         return JSON.stringify({ ok: true });
       }
 
       default:
-        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, photo, audio, voice, document, keyboard, quiz, force_reply, reply_keyboard, remove_keyboard, edit, edit_keyboard, delete, dice, react, pin, action.` });
+        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, audio, voice, document, keyboard, quiz, force_reply, edit, delete, react, action.` });
     }
   },
 });

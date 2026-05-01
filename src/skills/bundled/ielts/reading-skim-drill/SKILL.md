@@ -44,7 +44,7 @@ Breaks word-by-word translation habit. Forces big-picture reading.
 
 ## Persist
 
-**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
 
 - 1 `samples` row (`load_score=2`, `feedback={skim_sec, gist_correct, function_correct, trap_correct, wpm}`).
 - `subcap_scores.reading.gist` + `.pace` + `.argument_structure`.

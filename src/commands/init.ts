@@ -17,7 +17,6 @@ import {
   CONFIG_SCHEMA_PATH,
   USER_MD_PATH,
   MEMORY_MD_PATH,
-  CRON_JOBS_PATH,
   SKILLS_DIR,
   RULES_PATH,
   isInitialized,
@@ -100,18 +99,8 @@ export async function runInit(): Promise<void> {
   }
   console.log(chalk.dim('  [ok] memories/'));
 
-  // 5. Cron jobs
-  if (!existsSync(CRON_JOBS_PATH)) {
-    const src = resolveAsset(__dirname, 'cron/default_jobs.json');
-    if (src) {
-      copyFileSync(src, CRON_JOBS_PATH);
-    } else {
-      writeFileSync(CRON_JOBS_PATH, '[]', 'utf-8');
-    }
-  }
-  console.log(chalk.dim('  [ok] cron/'));
 
-  // 6. Bundled skills
+  // 5. Bundled skills
   let skillsSrc = resolveAsset(__dirname, 'skills');
   if (skillsSrc && existsSync(join(skillsSrc, 'bundled'))) {
     // Development mode (src/skills) -> copy from src/skills/bundled

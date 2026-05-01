@@ -21,11 +21,9 @@ Use the `tg` tool to send messages. Choose the most appropriate `type`:
 | `keyboard` | Choices with inline buttons + callbacks. |
 | `quiz` | Auto-scored knowledge checks. |
 | `force_reply` | Free-text input (writing practice, fill-in-the-blank). |
-| `reply_keyboard` | Persistent bottom menu. |
 | `edit` | Update a previous message in-place (reveal answers, flip cards). |
 | `document` | Send files. Use `url` for the file path. |
 | `delete` | Remove a message by id or tag. |
-| `dice` | Fun randomization. |
 | `react` | Quick emoji feedback (👍 correct, 🔥 streak). |
 
 **Telegram-native formatting** you can embed inline:
@@ -64,7 +62,7 @@ Use `memory` tool to persist important information across sessions.
 
 ## Skill Execution
 
-- **Always `skill_view` before executing.** Whether triggered by user text, callback, or cron — call `skill_view(name)` first and read the full SKILL.md. Do not rely on memory of a previous read.
+- **Always `skill_view` before executing.** Whether triggered by user text or callback — call `skill_view(name)` first and read the full SKILL.md. Do not rely on memory of a previous read.
 - **Callback = skill trigger.** `[callback] speaking-shadowing` → `skill_view("speaking-shadowing")` → follow workflow.
 
 ## Context Management

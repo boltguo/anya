@@ -8,7 +8,6 @@ description: "MUST trigger when the user asks to review vocabulary, check their 
 ## 1. When to Use (Trigger Contexts)
 - User phrases: "背单词", "review words", "flashcards", "考考我昨天的词"
 - Callback/System triggers: `vocab-review`
-- Scheduled trigger: Triggered by cron job `ielts-cron-word-review`.
 
 ## 2. Adaptive Batching (CRITICAL Constraint)
 Before starting, query the `words` table in `study.db` for words where `mastery != 'mastered'` and `srs_due <= CURRENT_TIMESTAMP` (or words recently added). 

@@ -2,7 +2,7 @@
  * @module lib/pidfile
  * @description PID file management for background services.
  *
- * Tracks running background processes (gateway, cron) via PID files in
+ * Tracks running background processes (gateway) via PID files in
  * ~/.anya/run/. Provides lifecycle operations: write, read, check, stop.
  * Cleans up stale PID files when the referenced process is no longer running.
  */

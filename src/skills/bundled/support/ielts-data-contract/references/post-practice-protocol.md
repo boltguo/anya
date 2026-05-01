@@ -1,6 +1,6 @@
 # Post-Practice Write Protocol
 
-Every training skill **must** write to `study.db` after each practice session. MEMORY.md is refreshed separately by daily cron via `learner-state` — do NOT update MEMORY directly.
+Every training skill **must** write to `study.db` after each practice session. MEMORY.md is refreshed separately by `learner-state` — do NOT update MEMORY directly.
 
 ## Required Writes (in order)
 
@@ -69,7 +69,7 @@ ON CONFLICT(date) DO UPDATE SET
 
 ## Do NOT
 
-- Do NOT update MEMORY.md directly — `learner-state` cron handles that
+- Do NOT update MEMORY.md directly — `learner-state` skill handles that
 - Do NOT skip writes for abandoned sessions — write `completed=0`
 - Do NOT invent error keys — use canonical taxonomy
 - Do NOT estimate band scores loosely — use the official IELTS rubrics loaded via `skill_view`

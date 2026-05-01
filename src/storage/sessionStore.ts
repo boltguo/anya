@@ -7,7 +7,7 @@
  * contains an ordered sequence of messages.
  *
  * All write operations use {@link withWriteRetry} to handle database-locked
- * errors that can occur when CLI, Telegram, and cron access the same DB file
+ * errors that can occur when CLI and Telegram access the same DB file
  * concurrently (even with WAL mode and busy_timeout PRAGMA).
  */
 

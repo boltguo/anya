@@ -15,9 +15,6 @@
  * │   ├── search/                  Web search cache
  * │   └── cache/                   General cache
  * ├── logs/                        Log files
- * ├── cron/                        Scheduled jobs
- * │   ├── jobs.json
- * │   └── history/
  * └── run/                         Runtime state (PID files)
  * ```
  *
@@ -47,10 +44,6 @@ export const MEMORY_MD_PATH = join(MEMORY_DIR, 'MEMORY.md');
 // ── Skills ───────────────────────────────────────────────────────────────────
 export const SKILLS_DIR = join(ANYA_HOME, 'skills');
 
-// ── Cron ─────────────────────────────────────────────────────────────────────
-export const CRON_DIR = join(ANYA_HOME, 'cron');
-export const CRON_JOBS_PATH = join(CRON_DIR, 'jobs.json');
-export const CRON_HISTORY_DIR = join(CRON_DIR, 'history');
 
 // ── Data (persistent storage) ────────────────────────────────────────────────
 
@@ -100,8 +93,6 @@ export function ensureDirectories(): void {
     ANYA_HOME,
     MEMORY_DIR,
     SKILLS_DIR,
-    CRON_DIR,
-    CRON_HISTORY_DIR,
     DATA_DIR,
     STORE_DIR,
     SEARCH_CACHE_DIR,

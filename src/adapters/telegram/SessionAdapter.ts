@@ -304,24 +304,6 @@ export class TelegramSessionAdapter implements Adapter {
     });
   }
 
-  /** Send a photo with optional caption. Accepts URL or local file path. */
-  async sendPhoto(photo: string, caption?: string, opts?: SendMessageOptions): Promise<number> {
-    return this.enqueue(async () => {
-      const replyTo = this.autoReplyTo(opts?.replyTo);
-      const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'HTML');
-      const source = isAbsolute(photo) || photo.startsWith('.') ? new InputFile(photo) : photo;
-
-      const msg = await this.bot.api.sendPhoto(this.chatId, source, {
-        caption: caption || undefined,
-        parse_mode: parseMode as any,
-        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
-      });
-
-      this.trackMessage(msg.message_id, opts?.tag);
-      this.hasSentContent = true;
-      return msg.message_id;
-    });
-  }
 
   /** Send an audio file with optional caption. Accepts URL or local file path. */
   async sendAudio(audio: string, caption?: string, opts?: SendMessageOptions): Promise<number> {
@@ -441,37 +423,6 @@ export class TelegramSessionAdapter implements Adapter {
     });
   }
 
-  /** Send a message with a persistent bottom reply keyboard. */
-  async sendReplyKeyboard(text: string, buttons: string[][], opts?: { persistent?: boolean; oneTime?: boolean; tag?: string }): Promise<number> {
-    return this.enqueue(async () => {
-      const keyboard = buttons.map(row => row.map(label => ({ text: label })));
-
-      const msg = await this.bot.api.sendMessage(this.chatId, text, {
-        reply_markup: {
-          keyboard,
-          resize_keyboard: true,
-          is_persistent: opts?.oneTime ? false : (opts?.persistent ?? true),
-          one_time_keyboard: opts?.oneTime ?? false,
-        },
-      });
-
-      this.trackMessage(msg.message_id, opts?.tag);
-      this.hasSentContent = true;
-      return msg.message_id;
-    });
-  }
-
-  /** Remove the bottom reply keyboard. */
-  async removeKeyboard(text: string): Promise<number> {
-    return this.enqueue(async () => {
-      const msg = await this.bot.api.sendMessage(this.chatId, text, {
-        reply_markup: { remove_keyboard: true },
-      });
-
-      this.trackMessage(msg.message_id);
-      return msg.message_id;
-    });
-  }
 
   /** Edit an existing message's text and optionally its inline buttons. */
   async editMessage(messageId: number | string, text: string, buttons?: string[][]): Promise<void> {
@@ -503,59 +454,6 @@ export class TelegramSessionAdapter implements Adapter {
     });
   }
 
-  /** Edit only the inline keyboard buttons of an existing message. */
-  async editKeyboard(messageId: number | string, buttons: string[][]): Promise<void> {
-    return this.enqueue(async () => {
-      const msgId = typeof messageId === 'string' ? this.taggedMessages.get(messageId) : messageId;
-      if (!msgId) throw new Error(`Message not found: ${messageId}`);
-
-      const keyboard = new InlineKeyboard();
-      for (const row of buttons) {
-        for (const btn of row) {
-          const parts = btn.split('|', 2);
-          keyboard.text(parts[0], parts.length > 1 ? parts[1] : parts[0]);
-        }
-        keyboard.row();
-      }
-
-      await this.bot.api.editMessageReplyMarkup(this.chatId, msgId, {
-        reply_markup: buttons.length > 0 ? keyboard : undefined,
-      }).catch(() => {});
-    });
-  }
-
-  /** Send an animated dice/emoji and return the random value. */
-  async sendDice(emoji: string = '🎲'): Promise<{ messageId: number; value: number }> {
-    return this.enqueue(async () => {
-      const msg = await this.bot.api.sendDice(this.chatId, emoji as any);
-      this.trackMessage(msg.message_id);
-      return { messageId: msg.message_id, value: msg.dice!.value };
-    });
-  }
-
-  /** Add an emoji reaction to a message. */
-  async react(messageId: number | string, emoji: string): Promise<void> {
-    return this.enqueue(async () => {
-      const msgId = typeof messageId === 'string' ? this.taggedMessages.get(messageId) : messageId;
-      if (!msgId) throw new Error(`Message not found: ${messageId}`);
-
-      await this.bot.api.setMessageReaction(this.chatId, msgId, [
-        { type: 'emoji', emoji: emoji as any },
-      ]).catch(() => {});
-    });
-  }
-
-  /** Pin a message to the top of the chat. */
-  async pin(messageId: number | string, silent: boolean = false): Promise<void> {
-    return this.enqueue(async () => {
-      const msgId = typeof messageId === 'string' ? this.taggedMessages.get(messageId) : messageId;
-      if (!msgId) throw new Error(`Message not found: ${messageId}`);
-
-      await this.bot.api.pinChatMessage(this.chatId, msgId, {
-        disable_notification: silent,
-      }).catch(() => {});
-    });
-  }
 
   /** Show a chat action indicator (typing, record_voice, etc). */
   async sendChatAction(action: string = 'typing'): Promise<void> {
@@ -600,6 +498,18 @@ export class TelegramSessionAdapter implements Adapter {
       return this.bot.api.deleteMessage(this.chatId, msgId)
         .then(() => true)
         .catch(() => false);
+    });
+  }
+
+  /** Add an emoji reaction to a message. */
+  async react(messageId: number | string, emoji: string): Promise<void> {
+    return this.enqueue(async () => {
+      const msgId = typeof messageId === 'string' ? this.taggedMessages.get(messageId) : messageId;
+      if (!msgId) throw new Error(`Message not found: ${messageId}`);
+
+      await this.bot.api.setMessageReaction(this.chatId, msgId, [
+        { type: 'emoji', emoji: emoji as any },
+      ]).catch(() => {});
     });
   }
 

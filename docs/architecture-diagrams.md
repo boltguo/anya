@@ -8,7 +8,7 @@
 
 ## 1. 总体架构
 
-**一句话理解：所有入口（CLI/Telegram/Cron）最终都汇聚到 `Agent.run()`，统一调度工具、技能和本地数据，所有运行态数据落在 `~/.anya/`。**
+**一句话理解：所有入口（CLI/Telegram）最终都汇聚到 `Agent.run()`，统一调度工具、技能和本地数据，所有运行态数据落在 `~/.anya/`。**
 
 ```mermaid
 graph TB
@@ -16,15 +16,12 @@ graph TB
     BIN["bin/anya.ts\nCLI 总入口"]
     CLI["CLI Commands\n命令入口"]
     GWCMD["gateway command\n网关命令"]
-    CRONCMD["cron command\n定时任务命令"]
   end
 
   subgraph Runtime["运行时层 / Runtime Layer"]
     AGENT["Agent.run()\n统一执行核心"]
     TGADAPTER["TelegramAdapter\nTelegram 顶层网关"]
     TGSESSION["TelegramSessionAdapter\n单轮会话适配器"]
-    SCHED["CronScheduler\n调度器"]
-    CRONADAPTER["CronAdapter\n定时任务适配器"]
   end
 
   subgraph Core["核心服务 / Core Services"]
@@ -41,7 +38,6 @@ graph TB
     CONFIG["config.json\n主配置"]
     MEM["memories/\nRULES.md, USER.md, MEMORY.md"]
     SKDIR["skills/\n技能目录"]
-    CRONDIR["cron/\njobs.json, history/"]
     STORE["data/store/\nstate.db (+ vocab.db, learner.db)"]
     MEDIA["data/\naudio/, images/, search/, cache/"]
     LOGS["logs/ + run/\n日志与 PID"]
@@ -49,16 +45,12 @@ graph TB
 
   BIN --> CLI
   BIN --> GWCMD
-  BIN --> CRONCMD
 
   CLI --> AGENT
   GWCMD --> TGADAPTER
   TGADAPTER --> TGSESSION
   TGSESSION --> AGENT
 
-  CRONCMD --> SCHED
-  SCHED --> CRONADAPTER
-  CRONADAPTER --> AGENT
 
   AGENT --> PROMPT
   AGENT --> HISTORY
@@ -75,7 +67,6 @@ graph TB
   TOOLS --> MEDIA
   AGENT --> STORE
   CLI --> CONFIG
-  SCHED --> CRONDIR
   Runtime --> LOGS
 ```
 
@@ -122,7 +113,7 @@ sequenceDiagram
 
 ## 3. CLI 启动与命令分发
 
-**用户敲 `anya ...` 以后，命令是怎么被分发到具体实现的。长期交互依靠 `gateway`，定时学习任务依靠 `cron`。**
+**用户敲 `anya ...` 以后，命令是怎么被分发到具体实现的。长期交互依靠 `gateway`。**
 
 ```mermaid
 flowchart TD
@@ -135,7 +126,6 @@ flowchart TD
   CMD -->|doctor| DOCTOR["registerDoctor()\n环境体检"]
   CMD -->|skills| SKILLS["registerSkills()\n技能管理"]
   CMD -->|gateway| GATEWAY["registerGateway()\nTelegram 网关命令"]
-  CMD -->|cron| CRON["registerCron()\n定时任务命令"]
   CMD -->|sessions| SESSIONS["registerSessions()\n会话查询"]
   CMD -->|export| EXPORT["registerDataTransfer()\n打包 ~/.anya/ 为 tar.gz"]
   CMD -->|usage| USAGE["runUsage()\n查看使用统计"]
@@ -304,36 +294,7 @@ flowchart TD
 
 ---
 
-## 9. Cron 调度与结果投递
-
-**定时任务从 `jobs.json` 加载、触发、执行、投递的完整流程。**
-
-```mermaid
-flowchart TD
-  JOBS["cron/jobs.json\n任务定义文件"] --> LOAD["loadJobs().filter(enabled)\n读取启用任务"]
-  LOAD --> SYNC["syncJobs() 每 60s 同步\n支持热更新无需重启"]
-  SYNC --> REGISTER["croner Cron instances\n每个 job 独立调度实例"]
-  REGISTER --> FIRE["job trigger fires"]
-  FIRE --> EXEC["executeJob(job)\nnew CronAdapter + Agent.run(job.prompt, newSession=true)"]
-  EXEC --> RESULT["result.content"]
-  RESULT --> DELIVER{"deliver_to?"}
-  DELIVER -->|telegram| TG["Bot API sendMessage\n投递到 allowed_user_ids"]
-  DELIVER -->|cli| SILENT["静默执行，不发消息"]
-  TG --> LINK["写入 tg:userId session 历史\n用户在 TG 可见 cron 记录"]
-  RESULT --> HIST["写 cron/history/jobId_ts.json\n执行日志"]
-```
-
-**当前 3 个默认 cron job（来自 `src/cron/default_jobs.json`）：**
-
-```
-07:15  cron_word_seed    → cli (silent)   补充 vocab.db queued_new 词库
-08:30  cron_briefing     → telegram       推送每日 briefing
-21:00  cron_word_review  → telegram       每日单词复习推送
-```
-
----
-
-## 10. 配置加载机制
+## 9. 配置加载机制
 
 **配置是三层叠加：内置默认值 → 用户配置文件 → 环境变量，最终产出单例。**
 
@@ -350,7 +311,7 @@ flowchart TD
 
 ---
 
-## 11. 会话持久化模型
+## 10. 会话持久化模型
 
 **一轮 Agent 执行结束后，消息如何落到 SQLite。只写本轮新增消息，不重写全量历史。**
 
@@ -372,7 +333,7 @@ flowchart TD
 
 ---
 
-## 12. Skill 加载与使用路径
+## 11. Skill 加载与使用路径
 
 **skill 从 bundled 资产 → 用户目录 → 扫描索引 → 注入 prompt → 按需加载全文的完整路径。**
 
@@ -389,7 +350,7 @@ flowchart LR
 
 ---
 
-## 13. 运行时数据目录结构
+## 12. 运行时数据目录结构
 
 **`~/.anya/` 完整目录布局，来自 `src/lib/paths.ts` 定义。**
 
@@ -399,7 +360,6 @@ graph TD
   HOME --> SCHEMA["config.schema.json"]
   HOME --> MEM["memories/"]
   HOME --> SK["skills/"]
-  HOME --> CRON["cron/"]
   HOME --> DATA["data/"]
   HOME --> LOGS["logs/"]
   HOME --> RUN["run/\nPID 文件"]
@@ -410,8 +370,6 @@ graph TD
 
   SK --> BUNDLED[".bundled/\nanya init 复制的内置技能"]
 
-  CRON --> CJOBS["jobs.json\n任务定义"]
-  CRON --> CHIST["history/\n执行日志 JSON"]
 
   DATA --> STORE["store/\nSQLite 数据库"]
   DATA --> SEARCH["search/\n搜索缓存"]

@@ -7,7 +7,6 @@ import { registerDoctor } from './commands/doctor.js';
 import { registerConfig } from './commands/config.js';
 import { registerSkills } from './commands/skills.js';
 import { registerGateway } from './commands/gateway.js';
-import { registerCron } from './commands/cron.js';
 import { registerSessions } from './commands/sessions.js';
 import { registerDataTransfer } from './commands/dataTransfer.js';
 import { runInit } from '../src/commands/init.js';
@@ -50,7 +49,6 @@ registerConfig(program);
 registerDoctor(program);
 registerSkills(program);
 registerGateway(program);
-registerCron(program);
 registerSessions(program);
 registerDataTransfer(program);
 

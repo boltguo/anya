@@ -2,7 +2,7 @@
  * @module lib/logger
  * @description Structured JSON logging via pino.
  *
- * Creates separate logger instances for each service (agent, gateway, cron),
+ * Creates separate logger instances for each service (agent, gateway),
  * each writing to `~/.anya/logs/<service>.log`.
  *
  * Logs are append-only JSON lines. No rotation (daily volume is tiny).
@@ -47,11 +47,9 @@ export function setLogLevel(level: string): void {
   logLevel = level;
   agentLogger.level = level;
   gatewayLogger.level = level;
-  cronLogger.level = level;
 }
 
 // Per-service loggers
 export const agentLogger = createLogger('agent', logLevel);
 export const gatewayLogger = createLogger('gateway', logLevel);
-export const cronLogger = createLogger('cron', logLevel);
 

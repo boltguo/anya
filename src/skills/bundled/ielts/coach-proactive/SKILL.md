@@ -9,7 +9,7 @@ Trigger-based. Most runs produce no message — silence is valid.
 
 ## When to Use
 
-- Cron `coach_proactive_pass` (e.g. evening 21:00)
+- Manual invocation or callback `coach-proactive`
 - A training skill detects a strong signal and escalates
 
 **Not** for the learner's questions — that's `coach-passive`.

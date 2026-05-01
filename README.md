@@ -92,10 +92,6 @@ anya doctor              # 体检：检查 Node、ffmpeg、API key、数据库
 # 启动 Telegram Bot
 anya gateway start
 
-# 查看 / 管理定时任务（每日 briefing、词汇推送、assessment 同步）
-anya cron list
-anya cron enable daily-briefing
-
 # 查看会话历史 / 本月 API 用量
 anya sessions list
 anya usage
@@ -123,8 +119,7 @@ anya usage
 | `anya config <get\|set\|edit\|path>`          | 读写 `config.json`                                                      |
 | `anya doctor`                                 | 环境体检（Node、ffmpeg、API、DB）                                       |
 | `anya skills <list\|install\|remove\|reload>` | 管理本地与打包 skills                                                   |
-| `anya gateway <start\|login\|status>`         | Telegram Bot / OAuth 会话                                               |
-| `anya cron <list\|enable\|disable\|run>`      | 定时任务（见 [src/cron/default_jobs.json](src/cron/default_jobs.json)） |
+| `anya gateway <start\|stop\|status>`          | Telegram Bot 网关                                                       |
 | `anya sessions <list\|show\|delete>`          | 会话历史存档（SQLite）                                                  |
 | `anya export <file>`                          | 把 `~/.anya/` 打包成 tar.gz                                             |
 | `anya usage`                                  | 计费型服务的月度用量                                                    |
@@ -143,7 +138,7 @@ pnpm build       # 产出 dist/
 
 ## Agent 架构与数据流
 
-Anya 采用统一 Agent Core 架构，所有入口（CLI/Telegram/Cron）最终都汇聚到 `Agent.run()`，由其统一调度工具、技能和本地数据，所有运行态数据都落在 `~/.anya/`。
+Anya 采用统一 Agent Core 架构，所有入口（CLI/Telegram）最终都汇聚到 `Agent.run()`，由其统一调度工具、技能和本地数据，所有运行态数据都落在 `~/.anya/`。
 
 **数据流游泳池（Swimlane）图：**
 
@@ -204,7 +199,6 @@ sequenceDiagram
 │   └── MEMORY.md
 ├── skills/
 │   └── .bundled/
-├── cron/
 │   ├── jobs.json
 │   └── history/
 ├── data/
@@ -237,7 +231,7 @@ sequenceDiagram
                                       ↓
                                   study.db (写入练习数据)
                                       ↓
-                            每日 cron → learner-state → MEMORY.md (聚合刷新)
+                            用户手动触发 → learner-state → MEMORY.md (聚合刷新)
 ```
 
 ### 🔧 系统
@@ -309,13 +303,6 @@ sequenceDiagram
 | `coach-consultation` | **教练进度复盘**：用户的战略顾问，整合进度、弱点分析和下一步建议，自然对话输出 |
 | `coach-proactive` | 主动教练：根据触发条件决定是否提醒、鼓励或刷新学习计划 |
 
-### ⏰ 定时任务 Cron
-
-| Skill | 触发时间 | 说明 |
-|-------|---------|------|
-| `ielts-cron-briefing` | 每天 08:30 | **早安外刊与静默收割**：根据兴趣抓取真实新闻/播客邀请您阅读，并**静默**提取 5-8 个地道生词入库 |
-| `ielts-cron-word-review` | 每天 21:00 | SRS 复习推送：挑一个到期词推送到 Telegram |
-| `learner-state` | 每天 23:30 | 静默维护：聚合 study.db → EMA 平滑 → 刷新 MEMORY.md |
 
 ### 📦 支撑包 Support
 
@@ -337,7 +324,7 @@ sequenceDiagram
 - [src/tools/](src/tools/)
   Agent 可调用的工具：`db`、`memory`、`file`、`skill`、`clarify`、`tts`、`pron_assess`、`web_search`、`telegram`、`reset_context`，以及 `registry` 负责装配。
 - [src/commands/](src/commands/)
-  CLI 命令实现（config / gateway / cron / usage 等）。
+  CLI 命令实现（config / gateway / usage 等）。
 - [src/config/](src/config/)
   配置默认值、JSON schema、loader。
 - [src/storage/](src/storage/)
@@ -346,7 +333,6 @@ sequenceDiagram
   通用库：paths、pidfile、ffmpeg、stt、tts、tgFormat、logger、usage、approval。
 - [src/skills/bundled/](src/skills/bundled/)
   IELTS 技能包（上述 50 个 skill）。
-- [src/cron/](src/cron/)
   调度器 + 默认任务。
 
 ## 数据分工
@@ -356,7 +342,7 @@ sequenceDiagram
 | 文件 | 说明 |
 |------|------|
 | `USER.md` | 稳定用户档案：身份、目标、兴趣、学习偏好。由 `profile-manager` 管理 |
-| `MEMORY.md` | 派生学习状态：IELTS bands、weak dimensions、adaptive controls。**由 study.db 数据聚合驱动**，每日 cron 通过 `learner-state` 刷新 |
+| `MEMORY.md` | 派生学习状态：IELTS bands、weak dimensions、adaptive controls。**由 study.db 数据聚合驱动**，通过 `learner-state` 技能按需刷新 |
 | `study.db` | **唯一的练习事实数据库**。所有练习记录、错误、词汇、进度都存在这里 |
 | `state.db` | Agent 会话历史和消息存档 |
 
@@ -393,7 +379,7 @@ Schema 定义在 `src/skills/bundled/support/ielts-data-contract/templates/study
 
 | 表 | 说明 |
 |----|------|
-| `daily_tasks` | **每日任务清单**。由 cron 生成，标记完成状态 |
+| `daily_tasks` | **每日任务清单**。手动触发生成，标记完成状态 |
 | `band_trend` | **每日 band 趋势**。每天每科一行，由 learner-state 写入 |
 | `activity_log` | **每日活动汇总**。会话数、总时长、涉及科目、复习词数 |
 | `stage_transitions` | 学习阶段变迁记录 |

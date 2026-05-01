@@ -135,7 +135,7 @@ export interface LLMResponse {
  */
 export interface Adapter {
   /** Platform identifier for runtime branching (replaces constructor.name checks). */
-  readonly platform: 'cli' | 'telegram' | 'cron';
+  readonly platform: 'cli' | 'telegram';
 
   /** Send a text response to the user. */
   reply(content: string): Promise<void>;

@@ -36,7 +36,7 @@ Tiny drill, disproportionate exam payoff. Most learners leak 2-3 easy marks per 
 
 ## Persist
 
-**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — cron handles that via `learner-state`.
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
 
 - 1 `samples` row (`load_score=1`, `feedback={family, acc, items_n}`).
 - `subcap_scores.listening.connected_speech` weighted by accuracy when family is numbers / phones / times.

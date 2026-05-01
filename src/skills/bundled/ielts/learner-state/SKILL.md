@@ -9,7 +9,7 @@ Data-driven MEMORY refresh. Queries `study.db`, computes bands via EMA smoothing
 
 ## When to Use
 
-- Daily cron (primary trigger — once per day)
+- Manual user trigger (primary — on-demand)
 - `我现在水平 / 我现在几分 / sync / refresh / 最近学得怎么样`
 - Callback `learner-state` (from main menu)
 
@@ -119,7 +119,7 @@ ON CONFLICT(date) DO UPDATE SET
 
 ### Step 6 — Output
 
-- Cron invocation → `[SILENT]`, no message to user.
+- Silent invocation (e.g., from another skill) → `[SILENT]`, no message to user.
 - User invocation → short summary: current bands, confidence, top weak dim, streak. Then buttons: `[🎯 next_best | 💬 coach-passive | 🏠 nav:main]`.
 
 ## What It Writes
@@ -141,7 +141,7 @@ Fields without new data evidence are preserved as-is.
 3. **Single MEMORY writer for bands** — placement + learner-state only.
 4. **Never estimate — always compute.** Bands come from Q1 + EMA, not LLM judgment.
 5. **Preserve fields without evidence.** Don't clear existing data.
-6. **Cron invocation = silent.** No Telegram messages.
+6. **Silent invocation = no output.** When called by another skill, suppress Telegram messages.
 7. **Cap band swing at ±1.0 per refresh.** Prevents wild jumps.
 8. **Coaching Strategy / Metacognition** may be supplemented with LLM observations based on query data, but bands/errors/weak dims must be pure computation.
 
