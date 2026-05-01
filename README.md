@@ -313,7 +313,7 @@ sequenceDiagram
 ## 代码结构
 
 - [bin/](bin/)
-  CLI 外壳。`anya.ts` 是入口，`bin/commands/*.ts` 用 commander 注册各子命令。
+  CLI 外壳。`anya.ts` 是入口，通过 commander 注册并管理所有的命令行子命令。
 - [src/agent/](src/agent/)
   Agent 主循环、prompt 拼装、上下文压缩、历史管理、错误分类器。
 - [src/providers/](src/providers/)

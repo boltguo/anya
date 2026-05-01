@@ -13,7 +13,7 @@
 ```mermaid
 graph TB
   subgraph Entry["入口层 / Entry Layer"]
-    BIN["bin/anya.ts\nCLI 总入口"]
+    BIN["bin/anya.ts\nCLI 总入口\n及命令注册"]
     CLI["CLI Commands\n命令入口"]
     GWCMD["gateway command\n网关命令"]
   end
@@ -122,12 +122,12 @@ flowchart TD
   PARSE --> CMD{"Which command?"}
 
   CMD -->|init| INIT["runInit()\n初始化 ~/.anya/"]
-  CMD -->|config| CONFIG["registerConfig()\n配置子命令"]
-  CMD -->|doctor| DOCTOR["registerDoctor()\n环境体检"]
-  CMD -->|skills| SKILLS["registerSkills()\n技能管理"]
-  CMD -->|gateway| GATEWAY["registerGateway()\nTelegram 网关命令"]
-  CMD -->|sessions| SESSIONS["registerSessions()\n会话查询"]
-  CMD -->|export| EXPORT["registerDataTransfer()\n打包 ~/.anya/ 为 tar.gz"]
+  CMD -->|config| CONFIG["configCmd\n配置子命令"]
+  CMD -->|doctor| DOCTOR["doctorCmd\n环境体检"]
+  CMD -->|skills| SKILLS["skillsCmd\n技能管理"]
+  CMD -->|gateway| GATEWAY["gatewayCmd\nTelegram 网关命令"]
+  CMD -->|sessions| SESSIONS["sessionsCmd\n会话查询"]
+  CMD -->|export| EXPORT["exportCmd\n打包 ~/.anya/ 为 tar.gz"]
   CMD -->|usage| USAGE["runUsage()\n查看使用统计"]
 ```
 
