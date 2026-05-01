@@ -18,8 +18,9 @@ CREATE TABLE IF NOT EXISTS samples (
     band_lexical        REAL,
     band_grammar        REAL,
     band_overall        REAL,
-    raw_score           INTEGER,                        
-    max_score           INTEGER,                        
+    accuracy            REAL,                           -- 0.0–1.0, queryable correct ratio (e.g. 6/8 = 0.75)
+    raw_score           INTEGER,                        -- items correct (numerator)
+    max_score           INTEGER,                        -- items total  (denominator)
     audio_path          TEXT,                           -- Essential for 'Revenge Protocol' audio reuse
     session_id          TEXT NOT NULL DEFAULT '',
     feedback            TEXT NOT NULL DEFAULT '',

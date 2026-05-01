@@ -42,8 +42,27 @@ After the discussion, you MUST send an inline keyboard in Chinese:
 - Row 1: `[🔄 再听一篇]`, `[🧭 练习其他]`
 
 ## 5. Persist (Data Contract)
-- **Table `samples`**: `skill_type="listening.podcast"`. Save `audio_path`. Save any clicked buttons to `ui_feedback` (e.g., "slower,transcript").
-- **Table `activity_log`**: Log the session.
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+
+1. **`samples`** row:
+   - `skill_type = 'listening.podcast'`
+   - `prompt` = the podcast script/topic
+   - `raw_content` = the user's gist response
+   - `accuracy = NULL` (comprehension is qualitative)
+   - `load_score = 2`
+   - `audio_path` = TTS file path
+   - `ui_feedback` = clicked buttons (e.g. `"slower,transcript"`)
+   - `feedback` = JSON:
+     ```json
+     {"comprehension_accuracy": 0.8, "items": 3, "correct": 2, "main_idea_grasped": true, "session_notes": "细节题偏弱"}
+     ```
+
+2. **`subcap_scores`** — at least 1:
+   - `listening.gist` — how well they grasped the main idea
+   - `listening.detail` — if follow-up questions were asked
+
+3. **`activity_log`** — upsert today
 
 ## 6. Hard Rules
 1. **NO Dictation**: NEVER ask the user to type exactly what they heard.

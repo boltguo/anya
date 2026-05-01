@@ -6,7 +6,13 @@ Every query uses `db name=study`. Parameterise values via `params`, never string
 
 ```
 # recent by skill
-db name=study sql="SELECT id, created_at, skill_type, band_overall FROM samples WHERE skill_type = ? ORDER BY created_at DESC LIMIT ?" params='["writing", 10]'
+db name=study sql="SELECT id, created_at, skill_type, accuracy, band_overall FROM samples WHERE skill_type = ? ORDER BY created_at DESC LIMIT ?" params='["writing", 10]'
+
+# accuracy trend by skill type
+db name=study sql="SELECT skill_type, COUNT(*) AS c, ROUND(AVG(accuracy), 2) AS avg_acc FROM samples WHERE accuracy IS NOT NULL GROUP BY skill_type"
+
+# recent accuracy for a specific skill (last 7 days)
+db name=study sql="SELECT id, created_at, accuracy, raw_score, max_score FROM samples WHERE skill_type = ? AND accuracy IS NOT NULL AND created_at >= date('now', '-7 days') ORDER BY created_at DESC" params='["listening.dictation"]'
 
 # band trend (all skills)
 db name=study sql="SELECT created_at, skill_type, band_overall FROM samples WHERE band_overall IS NOT NULL ORDER BY created_at DESC LIMIT ?" params='[20]'
@@ -14,8 +20,8 @@ db name=study sql="SELECT created_at, skill_type, band_overall FROM samples WHER
 # rewrite chain for a prompt
 db name=study sql="SELECT id, created_at, band_overall, redo_count FROM samples WHERE prompt_hash = ? ORDER BY created_at ASC" params='["<hash>"]'
 
-# stats overview
-db name=study sql="SELECT skill_type, COUNT(*) AS c, ROUND(AVG(band_overall),1) AS avg_band FROM samples WHERE band_overall IS NOT NULL GROUP BY skill_type"
+# stats overview (combined accuracy + band)
+db name=study sql="SELECT skill_type, COUNT(*) AS c, ROUND(AVG(accuracy),2) AS avg_acc, ROUND(AVG(band_overall),1) AS avg_band FROM samples GROUP BY skill_type"
 
 # today's consumed load
 db name=study sql="SELECT COALESCE(SUM(load_score),0) AS consumed FROM samples WHERE created_at >= date('now') AND load_score > 0"

@@ -172,18 +172,6 @@ async function toGeminiFormat(messages: Message[]): Promise<{
   return { systemInstruction, contents };
 }
 
-/**
- * Convert our tool schemas to Gemini functionDeclarations format.
- */
-function toGeminiFunctionDeclarations(
-  tools: Array<{ name: string; description: string; parameters: ToolParameterSchema }>,
-): Array<{ name: string; description: string; parameters: ToolParameterSchema }> {
-  return tools.map(t => ({
-    name: t.name,
-    description: t.description,
-    parameters: t.parameters,
-  }));
-}
 
 // ── Gemini Provider Implementation ──────────────────────────────────────────
 
@@ -220,7 +208,7 @@ export class GeminiProvider implements LLMProvider {
 
     if (tools.length > 0) {
       body.tools = [{
-        functionDeclarations: toGeminiFunctionDeclarations(tools),
+        functionDeclarations: tools,
       }];
       body.toolConfig = {
         functionCallingConfig: { mode: 'AUTO' },

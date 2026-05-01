@@ -15,7 +15,7 @@
  */
 
 import { isAbsolute } from 'node:path';
-import { Bot, InlineKeyboard, Keyboard, InputFile, Context } from 'grammy';
+import { Bot, InlineKeyboard, InputFile, Context } from 'grammy';
 import PQueue from 'p-queue';
 import type { Adapter } from '../../agent/types.js';
 import { agentLogger } from '../../lib/logger.js';
@@ -222,22 +222,24 @@ export class TelegramSessionAdapter implements Adapter {
   }
 
   /**
-   * Present an approval prompt with a one-time reply keyboard.
-   * User taps a button → sends text → intercepted by message handler → resolves promise.
+   * Present an approval prompt with inline keyboard buttons.
+   * User taps a button → callback_query fires → resolved by TelegramAdapter.
    * Times out after 5 minutes, defaulting to 'deny'.
    */
   async requestApproval(description: string): Promise<'allow' | 'deny' | 'always'> {
     const approvalId = `approval_${Date.now()}`;
 
-    const keyboard = new Keyboard()
-      .text('✅ Allow').text('❌ Deny').text('🔓 Always Allow')
-      .oneTime()
-      .resized();
+    const keyboard = new InlineKeyboard()
+      .text('✅ Allow', `${approvalId}:allow`)
+      .text('❌ Deny', `${approvalId}:deny`)
+      .text('🔓 Always', `${approvalId}:always`);
 
-    await this.ctx.reply(
-      `🔐 Approval Required\n\n${description}`,
-      { reply_markup: keyboard },
-    );
+    await this.enqueue(async () => {
+      await this.ctx.reply(
+        `🔐 Approval Required\n\n${description}`,
+        { reply_markup: keyboard },
+      );
+    });
 
     return new Promise<'allow' | 'deny' | 'always'>((resolve) => {
       this.pendingApprovals.set(approvalId, { resolve });
@@ -468,8 +470,8 @@ export class TelegramSessionAdapter implements Adapter {
     opts: { caption?: string; tag?: string; replyTo?: number | string; parseMode?: string } = {},
   ): Promise<number | null> {
     return this.enqueue(async () => {
-      const replyTo = opts.replyTo;
-      const rp = replyTo ? { message_id: replyTo as number } : undefined;
+      const replyTo = this.autoReplyTo(opts.replyTo);
+      const rp = replyTo ? { message_id: replyTo } : undefined;
       const source = isAbsolute(fileUrl) ? new InputFile(fileUrl) : fileUrl;
       const msg = await this.bot.api.sendDocument(this.chatId, source, {
         caption: opts.caption,

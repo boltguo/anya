@@ -36,9 +36,22 @@ If bank thin (< 10), generate + save with `origin='vocab-topic-seed'`.
 
 **Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
 
-- 1 `samples` row (`load_score=1`, `feedback={topic, items_shown, recall_correct, missed_list}`).
-- Update `words` counters + `srs_due` per item.
-- `word_events` rows.
+1. **`samples`** row:
+   - `skill_type = 'vocab'`, `prompt` = topic name (e.g. `"education"`)
+   - `raw_content` = recall results (e.g. `"recall:3/5, missed: elaborate, fluctuate"`)
+   - `accuracy` = recall correct / total (0.0–1.0)
+   - `raw_score` = correct count, `max_score` = recall question count
+   - `load_score = 1`
+   - `feedback` = JSON:
+     ```json
+     {"topic": "education", "items_shown": 10, "recall_items": 5, "recall_correct": 3, "accuracy": 0.6, "missed_list": ["elaborate", "fluctuate"], "session_notes": "chunk记忆偏弱"}
+     ```
+
+2. **`words`** — update counters + `srs_due` per item
+
+3. **`word_events`** — one row per recalled/missed word
+
+4. **`activity_log`** — upsert today, include `words_reviewed` count
 
 Queries: `support/ielts-data-contract/references/queries.md`.
 

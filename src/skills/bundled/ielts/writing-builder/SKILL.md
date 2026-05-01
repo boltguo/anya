@@ -37,8 +37,30 @@ After 3 tasks, you MUST send an inline keyboard in Chinese:
 - Row 1: `[🔄 再来一组]`, `[🧭 练习其他]`
 
 ## 5. Persist (Data Contract)
-- **Table `samples`**: `skill_type="writing.builder"`. Save clicked buttons to `ui_feedback`.
-- **Table `errors`**: Log grammar mistakes.
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+
+1. **`samples`** row:
+   - `skill_type = 'writing.builder'`
+   - `prompt` = the 3 micro-tasks (joined by ` | `)
+   - `raw_content` = the user's 3 responses (joined by ` | `)
+   - `accuracy` = tasks graded correct / total (e.g. 2/3 = 0.67)
+   - `raw_score` = correct count, `max_score` = 3
+   - `load_score = 2`
+   - `ui_feedback` = clicked buttons (e.g. `"SOS,SOS"`)
+   - `feedback` = JSON:
+     ```json
+     {"accuracy": 0.67, "items": 3, "correct": 2, "grammar_targets": ["Despite", "relative clause"], "sos_count": 1, "session_notes": "从句结构需要加强"}
+     ```
+
+2. **`errors`** — from `references/error-keys.md`:
+   - `verb_form_error`, `sentence_fragment`, `run_on_sentence`, `word_form_error`, `word_order_error`
+   - One row per grammar mistake, with `original_phrase` + `correction`
+
+3. **`subcap_scores`** — at least 1:
+   - `writing.grammar_accuracy` or `writing.cohesion`
+
+4. **`activity_log`** — upsert today
 
 ## 6. Hard Rules
 1. **High Intensity**: Keep instructions punchy.

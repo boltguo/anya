@@ -81,10 +81,32 @@ Keep the analysis concise but highly actionable.
   - (If the user explicitly types they want to quit or ignore the buttons, simply end the session warmly.)
 
 ## 5. Persist (Data Contract)
-You MUST use the `db` tool to log the practice data strictly following this schema. Do NOT update `MEMORY.md` directly.
-- **Table `samples`**: Insert a row with `skill_type="listening.dictation"`, `load_score=2`. Log the accuracy percentage in `feedback`. If TTS was used, save the `audio_path` here for future Revenge Protocol use.
-- **Table `errors`**: For every missed word, insert a row. Use canonical keys: `function_word_miss`, `spelling_error`, or `connected_speech_fail`.
-- **Table `activity_log`**: Log if any UI buttons (`放慢一点`, `有点难`, `给提示`) were used.
+You MUST use the `db` tool to log the practice data strictly following `support/ielts-data-contract/references/post-practice-protocol.md`.
+
+**Step-by-step writes after each 3-sentence group:**
+
+1. **`samples`** row — required fields:
+   - `skill_type = 'listening.dictation'`
+   - `prompt` = the 3 correct sentences (joined by ` | `)
+   - `raw_content` = the user's 3 typed responses (joined by ` | `)
+   - `accuracy` = correct_words / total_words (0.0–1.0)
+   - `raw_score` = number of correct words, `max_score` = total words
+   - `load_score = 2`
+   - `audio_path` = TTS file path (for Revenge Protocol reuse)
+   - `feedback` = JSON:
+     ```json
+     {"accuracy": 0.75, "items": 3, "correct": 2, "missed_words": ["on", "a"], "error_types": ["function_word_miss"], "session_notes": "冠词漏听"}
+     ```
+
+2. **`errors`** — one row per missed/wrong word:
+   - Keys from `references/error-keys.md`: `function_word_miss`, `spelling_error`, `connected_speech_fail`, `word_substitution`, `tense_miss`, `plural_miss`
+   - `original_phrase` = what user wrote, `correction` = correct word
+   - `rule_note` = brief Chinese explanation
+
+3. **`subcap_scores`** — at least 1:
+   - `listening.connected_speech` — weighted by accuracy
+
+4. **`activity_log`** — upsert today
 
 ## 6. Hard Rules
 1. **No Early Reveals**: NEVER show the English transcript on the first listen unless the user explicitly requests it or clicks `[😵 句子太难]`.

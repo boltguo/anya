@@ -36,9 +36,24 @@ Single-type specialist. One type per session.
 
 **Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
 
-- 1 `samples` row (`load_score=2`, `feedback={type, acc, q_count, errors_by_type}`).
-- `subcap_scores`: `reading.gist` for Heading / Gist; `.paraphrase_mapping` for Completion / Short Answer; `.argument_structure` for Matching Features; `.author_attitude` for MCQ-on-stance.
-- `errors`: `tfng_logic_error`, `heading_mismatch`, `keyword_matching_error`, `inference_error`, `detail_location_fail`.
+1. **`samples`** row:
+   - `skill_type = 'reading.typetrain'`
+   - `prompt` = the passage text
+   - `raw_content` = user's answers (e.g. `"Q1:TRUE, Q2:FALSE, Q3:NG"`)
+   - `accuracy` = correct / total (0.0–1.0)
+   - `raw_score` = correct count, `max_score` = question count
+   - `load_score = 2`
+   - `feedback` = JSON:
+     ```json
+     {"type": "TFNG", "accuracy": 0.83, "items": 6, "correct": 5, "errors_by_type": {"tfng_logic_error": 1}, "session_notes": "NOT GIVEN 判断偏弱"}
+     ```
+
+2. **`errors`** — from `references/error-keys.md`:
+   - `tfng_logic_error`, `heading_mismatch`, `keyword_matching_error`, `inference_error`, `detail_location_fail`
+
+3. **`subcap_scores`**: `reading.gist` (Heading/Gist), `reading.paraphrase_mapping` (Completion), `reading.argument_structure` (Matching), `reading.author_attitude` (MCQ)
+
+4. **`activity_log`** — upsert today
 
 Queries: `support/ielts-data-contract/references/queries.md`.
 

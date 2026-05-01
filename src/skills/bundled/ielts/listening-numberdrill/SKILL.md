@@ -38,9 +38,23 @@ Tiny drill, disproportionate exam payoff. Most learners leak 2-3 easy marks per 
 
 **Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
 
-- 1 `samples` row (`load_score=1`, `feedback={family, acc, items_n}`).
-- `subcap_scores.listening.connected_speech` weighted by accuracy when family is numbers / phones / times.
-- `errors` per miss.
+1. **`samples`** row:
+   - `skill_type = 'listening.numberdrill'`
+   - `prompt` = correct answers (joined by ` | `)
+   - `raw_content` = user's answers (joined by ` | `)
+   - `accuracy` = correct / total (0.0–1.0)
+   - `raw_score` = correct count, `max_score` = item count
+   - `load_score = 1`
+   - `feedback` = JSON:
+     ```json
+     {"family": "13-30", "accuracy": 0.75, "items": 8, "correct": 6, "error_types": ["number_confusion"], "session_notes": "-teen/-ty 区分偏弱"}
+     ```
+
+2. **`errors`** — from `references/error-keys.md`: `number_confusion`, `spelling_error`, `function_word_miss`
+
+3. **`subcap_scores`**: `listening.connected_speech` — weighted by accuracy
+
+4. **`activity_log`** — upsert today
 
 Queries: `support/ielts-data-contract/references/queries.md`.
 

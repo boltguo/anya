@@ -40,8 +40,31 @@ After the review, you MUST send an inline keyboard in Chinese:
 - Row 1: `[🔄 再读一篇]`, `[🧭 练习其他]`
 
 ## 5. Persist (Data Contract)
-- **Table `samples`**: `skill_type="reading.deepdive"`. Save any clicked buttons to `ui_feedback`.
-- **Table `words`**: Insert the harvested collocations so they enter the SRS review queue.
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+
+1. **`samples`** row:
+   - `skill_type = 'reading.deepdive'`
+   - `prompt` = the full passage text
+   - `raw_content` = the user's analysis/answer
+   - `accuracy = NULL` (qualitative assessment)
+   - `load_score = 2`
+   - `ui_feedback` = clicked buttons (e.g. `"句子太绕,生词太多"`)
+   - `feedback` = JSON:
+     ```json
+     {"comprehension": "partial", "structure_grasped": true, "killer_sentence_helped": true, "harvested_words": ["fluctuate", "notwithstanding"], "session_notes": "长难句拆解后理解到位"}
+     ```
+
+2. **`errors`** — from `references/error-keys.md` (if applicable):
+   - `inference_error`, `paraphrase_miss`, `keyword_matching_error`
+
+3. **`subcap_scores`** — at least 1:
+   - `reading.gist` — how well they grasped the core logic
+   - `reading.syntax_parsing` — if killer sentence was involved
+
+4. **Table `words`**: Insert harvested collocations into SRS queue
+
+5. **`activity_log`** — upsert today
 
 ## 6. Hard Rules
 1. **No Time Limits**: NEVER rush the user. This is an untimed drill.

@@ -36,9 +36,23 @@ Less intimidating than writing from scratch. Teaches the exact deltas between ba
 
 **Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
 
-- 1 `samples` row (`load_score=3`, `prompt_hash=<sample_hash>`, `redo_count=1`, `feedback={source_band, target_band, delta_achieved}`).
-- `subcap_scores`: `writing.lexical_sophistication` + `.cohesion_logic` + `.connector_density` emphasized.
-- Auto-harvest the teaching-point chunk.
+1. **`samples`** row:
+   - `skill_type = 'writing.rewrite'`
+   - `prompt` = the original sample paragraph
+   - `raw_content` = the user's rewritten version
+   - `accuracy = NULL` (band-scored)
+   - `band_task`, `band_coherence`, `band_lexical`, `band_grammar`, `band_overall` — all required
+   - `load_score = 3`, `prompt_hash`, `redo_count`
+   - `feedback` = JSON:
+     ```json
+     {"source_band": 5.0, "target_band": 6.5, "achieved_band": 6.0, "delta_axes": {"lexical": "+0.5", "structural": "+1.0", "cohesion": "+0.5"}, "session_notes": "词汇升级到位，连接词仍偏单一"}
+     ```
+
+2. **`subcap_scores`**: `writing.lexical_sophistication`, `writing.cohesion_logic`, `writing.connector_density`
+
+3. **`words`**: Auto-harvest the teaching-point chunk
+
+4. **`activity_log`** — upsert today
 
 Queries: `support/ielts-data-contract/references/queries.md`.
 

@@ -28,3 +28,25 @@ Your goal is to act as an empathetic listener first, and an English coach second
 - **Tone**: Warm, friendly, conversational, and non-judgmental.
 - **Correction Limits**: Do NOT correct every single grammatical mistake. Over-correcting ruins the journaling experience. Focus only on the most glaring unnatural phrasing and offer a "native-like" alternative.
 - **Idioms & Phrasal Verbs**: This is the perfect place to introduce everyday phrasal verbs (e.g., *catch up, wind down, burn out*) instead of academic vocabulary.
+
+## Persist (Data Contract)
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+
+1. **`samples`** row:
+   - `skill_type = 'writing.journal'`
+   - `prompt` = the topic or "free journal"
+   - `raw_content` = the user's full journal entry
+   - `accuracy = NULL` (journal is unscored)
+   - `load_score = 1`
+   - `feedback` = JSON:
+     ```json
+     {"word_count": 85, "corrections_given": 2, "phrasal_verbs_taught": ["wind down", "burn out"], "session_notes": "情绪表达自然，时态混用"}
+     ```
+
+2. **`errors`** — from `references/error-keys.md` (only the 1-2 you corrected):
+   - `l1_transfer`, `verb_form_error`, `collocation_error`
+
+3. **`words`**: If you taught phrasal verbs/idioms, insert into SRS queue
+
+4. **`activity_log`** — upsert today

@@ -49,7 +49,33 @@ When the user sends a voice message:
 After the batch of 3 sentences is successfully completed (i.e., they moved `next` 3 times), you MUST send an inline keyboard to close the loop:
 - Row 1: `[🔄 再练一组 (Another Batch)|speaking-shadowing]`, `[🧭 练习其他 (Main Menu)|nav:main]`
 
-## 5. Hard Rules
+## 5. Persist (Data Contract)
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+
+After the 3-sentence batch:
+
+1. **`samples`** row:
+   - `skill_type = 'speaking.shadowing'`
+   - `prompt` = the 3 sentences (joined by ` | `)
+   - `raw_content` = pron_assess scores summary (e.g. `"S1:92, S2:78, S3:85"`)
+   - `accuracy` = average pron score / 100 (e.g. 85/100 = 0.85)
+   - `raw_score` = sentences scored ≥85, `max_score` = 3
+   - `load_score = 2`
+   - `feedback` = JSON:
+     ```json
+     {"avg_score": 85, "items": 3, "scores": [92, 78, 85], "retries": 1, "weak_sounds": ["/θ/", "/ɪ/"], "session_notes": "th音偏弱"}
+     ```
+
+2. **`errors`** — from `references/error-keys.md`:
+   - `pronunciation_error` — for specific sound patterns
+
+3. **`subcap_scores`** — at least 1:
+   - `speaking.pronunciation` — based on average pron_assess score
+
+4. **`activity_log`** — upsert today
+
+## 6. Hard Rules
 1. **Never assess without the tool**: You MUST use `pron_assess` to get real data. Do not guess their pronunciation.
 2. **One sentence at a time**: Never give them a huge paragraph. Shadowing is about micro-correction.
 3. **Be encouraging**: Pronunciation practice is frustrating. Always highlight what they did right (e.g., "你的流利度特别好！").

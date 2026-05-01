@@ -104,27 +104,6 @@ export class TelegramAdapter {
     return count;
   }
 
-  /**
-   * Try to resolve a pending approval from a reply keyboard text.
-   * @returns true if the text was an approval response and was handled.
-   */
-  private tryResolveApproval(text: string): boolean {
-    const trimmed = text.trim();
-    let action: 'allow' | 'deny' | 'always' | null = null;
-
-    if (trimmed === '✅ Allow') action = 'allow';
-    else if (trimmed === '❌ Deny') action = 'deny';
-    else if (trimmed === '🔓 Always Allow') action = 'always';
-
-    if (!action || this.pendingApprovals.size === 0) return false;
-
-    // Resolve the most recent pending approval
-    const entries = [...this.pendingApprovals.entries()];
-    const [id, pending] = entries[entries.length - 1];
-    this.pendingApprovals.delete(id);
-    pending.resolve(action);
-    return true;
-  }
 
   /**
    * Chain `task` onto the serial queue for this chat. Returns immediately;
@@ -350,12 +329,6 @@ export class TelegramAdapter {
 
     this.bot.on('message:text', async (ctx) => {
       const input = ctx.message.text;
-
-      // ── Intercept approval reply keyboard responses ──
-      if (this.tryResolveApproval(input)) {
-        agentLogger.info({ msg: 'tg_approval_reply', chatId: ctx.chat.id, action: input });
-        return;
-      }
 
       agentLogger.info({ msg: 'tg_message', chatId: ctx.chat.id, userId: ctx.from?.id, text: input.substring(0, 100) });
       this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));

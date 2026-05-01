@@ -51,7 +51,34 @@ When you receive the user's callback click (`srs:easy`, `srs:hard`, or `srs:agai
 After the batch of 5-8 words is complete (including any `[❌ 忘了]` words that were re-tested), you MUST send an inline keyboard:
 - Row 1: `[🔄 再背一组|vocab-review]`, `[🧭 练习其他|nav:main]`
 
-## 5. Hard Rules
+## 5. Persist (Data Contract)
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+
+After the entire batch is complete:
+
+1. **`samples`** row — one per batch:
+   - `skill_type = 'vocab'`
+   - `prompt = 'review-batch'`
+   - `raw_content` = comma-separated results (e.g. `"resilient:pass, fluctuate:fail, elaborate:pass"`)
+   - `accuracy` = easy+hard / total (0.0–1.0). `again` = fail.
+   - `raw_score` = pass count, `max_score` = total words tested
+   - `load_score = 2`
+   - `feedback` = JSON:
+     ```json
+     {"items": 6, "correct": 5, "accuracy": 0.83, "format_mix": ["recall", "production"], "shaky_words": ["fluctuate"], "session_notes": "production偏弱"}
+     ```
+
+2. **`words`** table — per word during the batch (already in State B):
+   - Update `review_count`, `success_count`/`fail_count`, `last_result`, `srs_due`, `mastery`
+
+3. **`word_events`** — one row per word:
+   - `event_type` = `review_pass` | `review_fail`
+   - `session_type = 'vocab-review'`
+
+4. **`activity_log`** — upsert today, include `words_reviewed` count
+
+## 6. Hard Rules
 1. **No Info Dumping**: The Micro-lesson MUST be concise. Do not write paragraphs of text. Use the emojis and bolding as shown.
 2. **Active Recall First**: NEVER reveal the meaning before the user clicks a memory button. The effort of trying to remember is what builds neural pathways.
 3. **Audio Mandatory**: Every flashcard MUST include the TTS audio with SSML breaks as specified in State A.

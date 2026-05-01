@@ -17,9 +17,29 @@ description: "Use this skill whenever the user wants to practice writing a long-
 4. **Native Polish**: MUST provide a rewritten, native-like version of 1-2 awkward sentences from their draft.
 
 ## Persist (Data Contract)
-- **Table**: `samples`
-- **Fields**: `skill_type="writing.essay"`, record estimated band scores if applicable.
-- **Action**: Do NOT update `MEMORY.md`.
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+
+1. **`samples`** row:
+   - `skill_type = 'writing.essay'`
+   - `prompt` = the essay question/task
+   - `raw_content` = the user's full essay text
+   - `accuracy = NULL` (essays are band-scored, not accuracy-scored)
+   - `band_task`, `band_coherence`, `band_lexical`, `band_grammar`, `band_overall` — all required
+   - `load_score = 3`
+   - `feedback` = JSON:
+     ```json
+     {"word_count": 245, "band_task": 6.0, "band_coherence": 5.5, "band_lexical": 6.0, "band_grammar": 5.5, "error_count": 3, "session_notes": "论点展开不够充分"}
+     ```
+
+2. **`errors`** — from `references/error-keys.md`:
+   - `article_usage`, `verb_form_error`, `collocation_error`, `coherence_gap`, `run_on_sentence`, `task_incomplete`
+   - One row per distinct error, with `original_phrase` + `correction`
+
+3. **`subcap_scores`** — at least 2:
+   - `writing.argument_depth`, `writing.cohesion`, `writing.lexical_range`, `writing.grammar_accuracy`
+
+4. **`activity_log`** — upsert today
 
 ## Rules
 1. **Do NOT be overly strict**: Act as a coach. Praise a good vocabulary choice before correcting errors.

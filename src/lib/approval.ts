@@ -48,8 +48,3 @@ export function isPathAllowed(filePath: string, config: AnyaConfig): boolean {
 
   return false;
 }
-
-/**
- * Result of an approval request.
- */
-export type ApprovalResult = 'allow' | 'deny' | 'always';

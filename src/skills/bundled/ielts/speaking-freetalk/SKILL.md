@@ -38,7 +38,30 @@ After 3-4 turns, wrap up the conversation and send an inline keyboard in Chinese
 - Row 1: `[🔄 换个话题再聊]`, `[🧭 练习其他]`
 
 ## 5. Persist (Data Contract)
-- **Table `samples`**: `skill_type="speaking.freetalk"`. Save clicked buttons to `ui_feedback`.
+
+**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+
+1. **`samples`** row:
+   - `skill_type = 'speaking.freetalk'`
+   - `prompt` = the topic/question given
+   - `raw_content` = concatenated user responses (or transcription if voice)
+   - `accuracy = NULL` (freetalk is unscored)
+   - `load_score = 2`
+   - `feedback` = JSON:
+     ```json
+     {"turns": 4, "filler_count": 3, "self_corrections": 1, "scaffolding_used": false, "session_notes": "话题展开自然，词汇偏基础"}
+     ```
+
+2. **`errors`** — from `references/error-keys.md`:
+   - `filler_overuse`, `verb_form_error`, `l1_transfer`, `vocabulary_repetition`, `register_mismatch`
+   - Record only the 1-2 errors you gave stealth feedback on
+
+3. **`subcap_scores`** — at least 2:
+   - `speaking.fluency` — based on pauses, fillers, self-corrections
+   - `speaking.lexical_variety` — based on vocabulary range
+   - `speaking.interaction` — if applicable (debate/back-and-forth)
+
+4. **`activity_log`** — upsert today
 
 ## 6. Hard Rules
 1. **The 'I'm Stuck' Protocol**: If the user uses native language or hits SOS, you MUST NOT grade them. Provide a word bank immediately.

@@ -46,9 +46,23 @@ Breaks word-by-word translation habit. Forces big-picture reading.
 
 **Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
 
-- 1 `samples` row (`load_score=2`, `feedback={skim_sec, gist_correct, function_correct, trap_correct, wpm}`).
-- `subcap_scores.reading.gist` + `.pace` + `.argument_structure`.
-- `errors`: `speed_too_slow` if overtime by > 20%; `keyword_matching_error` for trap miss.
+1. **`samples`** row:
+   - `skill_type = 'reading.skim'`
+   - `prompt` = the passage text
+   - `raw_content` = user's answers (gist + quiz responses)
+   - `accuracy` = correct / total (0.0–1.0)
+   - `raw_score` = correct count, `max_score` = question count
+   - `load_score = 2`
+   - `feedback` = JSON:
+     ```json
+     {"accuracy": 0.8, "skim_sec": 75, "wpm": 180, "gist_correct": true, "function_correct": 3, "function_total": 4, "trap_correct": false, "session_notes": "略读速度OK，细节陷阱未识别"}
+     ```
+
+2. **`errors`** — from `references/error-keys.md`: `keyword_matching_error`, `time_pressure_skip`
+
+3. **`subcap_scores`**: `reading.gist`, `reading.pace`, `reading.argument_structure`
+
+4. **`activity_log`** — upsert today
 
 Queries: `support/ielts-data-contract/references/queries.md`.
 

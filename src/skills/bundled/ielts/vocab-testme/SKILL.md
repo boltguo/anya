@@ -34,10 +34,22 @@ Pulls items near the edge of knowledge (not `mastered`) and tests in mixed forma
 
 **Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
 
-- 1 `samples` row (`skill_type='vocab'`, `prompt='testme-batch'`, `load_score=2`, `feedback={items, per_q_results}`).
-- Update `words` counters + `srs_due`.
-- `word_events` rows.
-- Good production sentence → bump `transfer_level` to 3-4.
+1. **`samples`** row:
+   - `skill_type = 'vocab'`, `prompt = 'testme-batch'`
+   - `raw_content` = per-question results (e.g. `"Q1:resilient=pass, Q2:fluctuate=fail"`)
+   - `accuracy` = correct / total (0.0–1.0)
+   - `raw_score` = correct count, `max_score` = question count
+   - `load_score = 2`
+   - `feedback` = JSON:
+     ```json
+     {"items": 6, "correct": 5, "accuracy": 0.83, "format_mix": ["recall", "production", "collocation", "register"], "shaky_words": ["fluctuate"], "session_notes": "production偏弱"}
+     ```
+
+2. **`words`** — update counters + `srs_due` per word. Bump `transfer_level` on good production.
+
+3. **`word_events`** — one row per word tested
+
+4. **`activity_log`** — upsert today, include `words_reviewed` count
 
 Queries: `support/ielts-data-contract/references/queries.md`.
 

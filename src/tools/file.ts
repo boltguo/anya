@@ -10,7 +10,7 @@
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { register } from './registry.js';
-import { isPathAllowed, type ApprovalResult } from '../lib/approval.js';
+import { isPathAllowed } from '../lib/approval.js';
 import { persistConfig } from '../config/loader.js';
 import type { ToolContext } from '../agent/types.js';
 
@@ -36,7 +36,7 @@ async function checkFileAccess(
   }
 
   // fence_mode === 'ask'
-  const result: ApprovalResult = await context.adapter.requestApproval(
+  const result = await context.adapter.requestApproval(
     `Agent wants to ${operation} a file outside the security fence:\n   ${filePath}`
   );
 

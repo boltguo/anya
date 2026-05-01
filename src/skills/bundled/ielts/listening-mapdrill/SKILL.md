@@ -42,9 +42,23 @@ Read MEMORY and apply:
 
 **Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
 
-- 1 `samples` row (`load_score=2`, `feedback={acc, questions_n}`).
-- `subcap_scores.listening.discourse_marker` + `.academic_vocab` where applicable.
-- `errors` with canonical keys.
+1. **`samples`** row:
+   - `skill_type = 'listening.mapdrill'`
+   - `prompt` = the scene layout description + questions
+   - `raw_content` = user's answers
+   - `accuracy` = correct / total (0.0–1.0)
+   - `raw_score` = correct count, `max_score` = question count
+   - `load_score = 2`, `audio_path` = TTS path
+   - `feedback` = JSON:
+     ```json
+     {"accuracy": 0.8, "items": 5, "correct": 4, "error_types": ["distractor_trap"], "session_notes": "左右方位混淆"}
+     ```
+
+2. **`errors`** — from `references/error-keys.md`: `paraphrase_miss`, `number_confusion`, `function_word_miss`
+
+3. **`subcap_scores`**: `listening.discourse_marker`, `listening.academic_vocab`
+
+4. **`activity_log`** — upsert today
 
 Queries: `support/ielts-data-contract/references/queries.md`.
 
