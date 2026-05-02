@@ -22,7 +22,7 @@
 import type { Message, Adapter, MessageFile } from './types.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { buildSystemPrompt } from './promptBuilder.js';
-import { getProvider } from '../providers/gemini.js';
+import { OpenAIProvider } from '../providers/openai.js';
 import { getToolSchemas, dispatch } from '../tools/registry.js';
 import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle } from '../storage/sessionStore.js';
 import { agentLogger } from '../lib/logger.js';
@@ -152,7 +152,7 @@ export class Agent {
       const toolSchemas = getToolSchemas(this.config, isTelegram);
 
       const model = this.config.provider.model;
-      const provider = getProvider();
+      const provider = new OpenAIProvider();
 
       let response;
       try {

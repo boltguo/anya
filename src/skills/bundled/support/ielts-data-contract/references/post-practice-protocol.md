@@ -1,92 +1,64 @@
 # Post-Practice Write Protocol
 
-Every training skill **must** write to `study.db` after each practice session.
+Every training skill **must** use the `persist` tool to write practice data after each session.
 MEMORY.md is refreshed separately by `learner-state` — do NOT update MEMORY directly.
 
-## Mandatory Writes (in order)
+## The `persist` Tool
 
-### 1. Insert `samples` row
+> [!IMPORTANT]
+> Use the `persist` tool instead of raw `db` calls. It handles all SQL, transactions, and `activity_log` upserts automatically. Just fill in the structured parameters.
 
-```sql
-INSERT INTO samples (
-  created_at, skill_type, prompt, raw_content,
-  accuracy, raw_score, max_score,
-  band_overall, session_id, feedback, mode, completed,
-  duration_seconds, load_score, session_window, audio_path
-) VALUES (
-  datetime('now'), ?, ?, ?,
-  ?, ?, ?,
-  ?, ?, ?, ?, ?,
-  ?, ?, ?, ?
-)
+### Required Parameters
+
+| Parameter | Type | Notes |
+|-----------|------|-------|
+| `skill_type` | string | `listening.dictation`, `speaking.freetalk`, `writing.essay`, `vocab`, etc. |
+| `session_id` | string | From `[Session: tg:...]` in the prompt |
+| `prompt` | string | The question/sentence/topic. **Never empty.** |
+| `response` | string | The user's raw answer. **Never empty.** |
+| `feedback` | string | **Natural language** diagnostic paragraph (NOT JSON). |
+
+### Optional Parameters
+
+| Parameter | Type | Default | Notes |
+|-----------|------|---------|-------|
+| `accuracy` | number | null | 0.0–1.0 ratio. Omit for unscored (freetalk, journal). |
+| `raw_score` | integer | null | Items correct (numerator). |
+| `max_score` | integer | null | Items total (denominator). |
+| `load_score` | number | 2 | 1=light drill, 2=standard, 3=heavy. |
+| `audio_path` | string | null | TTS file path (listening skills, enables Revenge). |
+| `mode` | string | "study" | `study` \| `exam` \| `placement` |
+| `completed` | integer | 1 | 0 = abandoned. **Write even if abandoned.** |
+| `minutes` | integer | 1 | Approximate duration for `activity_log`. |
+| `section` | string | auto | `listening`/`speaking`/etc. Auto-inferred from `skill_type`. |
+| `words_reviewed` | integer | 0 | For vocab skills. |
+| `errors` | JSON string | [] | Array of error objects (see below). |
+| `subcap_scores` | JSON string | [] | Array of subcap objects (see below). |
+
+### Error Object Format
+
+Keys **must** come from `references/error-keys.md`.
+
+```json
+[
+  {"key": "function_word_miss", "category": "listening", "severity": "medium", "original": "", "correction": "the", "note": "冠词漏听"},
+  {"key": "word_substitution", "category": "listening", "severity": "medium", "original": "soft", "correction": "software", "note": "词汇截断"}
+]
 ```
 
-**Field rules:**
+### Subcap Score Object Format
 
-| Field | Required | Notes |
-|-------|----------|-------|
-| `skill_type` | ✅ | e.g. `listening.dictation`, `speaking.freetalk`, `writing.essay` |
-| `prompt` | ✅ | The question / source text / topic given to the user. **Never leave empty.** |
-| `raw_content` | ✅ | The user's raw response (typed text, transcription, etc.). **Never leave empty.** |
-| `accuracy` | ✅ for scored | 0.0–1.0 float. `NULL` for unscored activities (daily-article, material-discussion). |
-| `raw_score` | ✅ for scored | Items correct (numerator). |
-| `max_score` | ✅ for scored | Items total (denominator). |
-| `band_overall` | optional | Only for writing/speaking band-scored tasks. |
-| `feedback` | ✅ | **Natural language textual analysis.** Write a detailed diagnostic paragraph. Do not use JSON. |
-| `audio_path` | if applicable | For listening skills with TTS — essential for Revenge Protocol. |
-| `mode` | ✅ | `study` (default) \| `exam` \| `placement` |
-| `completed` | ✅ | `1` = finished, `0` = abandoned. **Write even if abandoned.** |
-
-### 2. Insert `errors` rows
-
-One row per distinct error detected. **Keys must come from `references/error-keys.md`.**
-
-```sql
-INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction, rule_note)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-```
-
-- `recurrence_key`: **Must** be from the canonical list in `references/error-keys.md`
-- `category`: `listening` | `reading` | `writing` | `speaking` | `grammar` | `vocabulary`
-- `severity`: `low` | `medium` | `high`
-
-### 3. Insert `subcap_scores` rows
-
-One row per sub-capability assessed:
-
-```sql
-INSERT INTO subcap_scores (sample_id, subcap_key, score, evidence, created_at)
-VALUES (?, ?, ?, ?, datetime('now'))
-```
-
-### 4. Upsert `activity_log`
-
-```sql
-INSERT INTO activity_log (date, sessions_count, minutes_total, sections_touched)
-VALUES (date('now'), 1, ?, ?)
-ON CONFLICT(date) DO UPDATE SET
-  sessions_count = activity_log.sessions_count + 1,
-  minutes_total = activity_log.minutes_total + excluded.minutes_total,
-  sections_touched = CASE
-    WHEN activity_log.sections_touched = '' THEN excluded.sections_touched
-    WHEN INSTR(activity_log.sections_touched, excluded.sections_touched) > 0 THEN activity_log.sections_touched
-    ELSE activity_log.sections_touched || ',' || excluded.sections_touched
-  END
-```
-
-## Getting sample_id
-
-After INSERT into `samples`, get the ID for linking errors and subcap_scores:
-
-```
-db name=study sql="SELECT last_insert_rowid() AS sample_id"
+```json
+[
+  {"key": "listening.connected_speech", "score": 4.5, "evidence": "弱读冠词遗漏"}
+]
 ```
 
 ---
 
 ## Feedback Spec
 
-`feedback` must be a natural language textual analysis. Do not use JSON. 
+`feedback` must be a natural language textual analysis. Do not use JSON.
 Write a concise but detailed diagnostic paragraph about what exactly the user missed, the root cause, and overall performance.
 
 Example: "The user missed the definite article 'the' and heard 'released' as 'release'. This indicates weak sensitivity to word-final sounds and connected speech of weak forms, though they successfully caught the main sentence structure."
@@ -97,60 +69,69 @@ Example: "The user missed the definite article 'the' and heard 'released' as 're
 
 ### Example: listening.dictation
 
-```
--- 1. samples
-db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, accuracy, raw_score, max_score, session_id, feedback, mode, completed, duration_seconds, load_score, audio_path) VALUES (datetime('now'), 'listening.dictation', 'The software engineer is coding a new game.', 'The soft engineer was coding new game', 0.5, 3, 6, 'tg:12345', 'The user missed the definite article a and heard software as soft. This indicates weak sensitivity to word-final sounds and function words.', 'study', 1, 45, 2, '/path/to/audio.ogg')"
+Call the `persist` tool natively with these arguments:
 
--- 2. get sample_id
-db name=study sql="SELECT last_insert_rowid() AS sample_id"
-
--- 3. errors (one per miss)
-db name=study sql="INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction, rule_note) VALUES (?, 'lexical_substitution', 'listening', 'medium', 'soft', 'software', '完整词汇未听清，截断了后半部分')" params='[42]'
-db name=study sql="INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction, rule_note) VALUES (?, 'verb_form_error', 'grammar', 'medium', 'was coding', 'is coding', '时态错误：原文用现在进行时')" params='[42]'
-db name=study sql="INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction, rule_note) VALUES (?, 'function_word_miss', 'grammar', 'medium', '', 'a', '冠词 a 在弱读位置被忽略')" params='[42]'
-
--- 4. subcap_scores
-db name=study sql="INSERT INTO subcap_scores (sample_id, subcap_key, score, evidence, created_at) VALUES (?, 'listening.connected_speech', 4.5, '弱读冠词和词尾辅音遗漏', datetime('now'))" params='[42]'
-
--- 5. activity_log
-db name=study sql="INSERT INTO activity_log (date, sessions_count, minutes_total, sections_touched) VALUES (date('now'), 1, 1, 'listening') ON CONFLICT(date) DO UPDATE SET sessions_count = activity_log.sessions_count + 1, minutes_total = activity_log.minutes_total + excluded.minutes_total, sections_touched = CASE WHEN activity_log.sections_touched = '' THEN excluded.sections_touched WHEN INSTR(activity_log.sections_touched, excluded.sections_touched) > 0 THEN activity_log.sections_touched ELSE activity_log.sections_touched || ',' || excluded.sections_touched END"
+```json
+{
+  "skill_type": "listening.dictation",
+  "session_id": "tg:12345",
+  "prompt": "The software engineer is coding a new game.",
+  "response": "The soft engineer was coding new game",
+  "accuracy": 0.5,
+  "raw_score": 3,
+  "max_score": 6,
+  "feedback": "The user heard 'software' as 'soft' and missed the article 'a'. This indicates weak sensitivity to word-final sounds and function words in connected speech.",
+  "audio_path": "/path/to/audio.ogg",
+  "load_score": 1,
+  "minutes": 1,
+  "errors": "[{\"key\":\"word_substitution\",\"category\":\"listening\",\"original\":\"soft\",\"correction\":\"software\",\"note\":\"完整词汇未听清\"},{\"key\":\"function_word_miss\",\"category\":\"grammar\",\"original\":\"\",\"correction\":\"a\",\"note\":\"冠词漏听\"},{\"key\":\"tense_miss\",\"category\":\"grammar\",\"original\":\"was coding\",\"correction\":\"is coding\",\"note\":\"时态错误\"}]",
+  "subcap_scores": "[{\"key\":\"listening.connected_speech\",\"score\":4.5,\"evidence\":\"弱读冠词和词尾辅音遗漏\"}]"
+}
 ```
 
 ### Example: speaking.freetalk
 
+Call the `persist` tool natively with these arguments:
+
+```json
+{
+  "skill_type": "speaking.freetalk",
+  "session_id": "tg:12345",
+  "prompt": "Should AI replace human teachers?",
+  "response": "I think AI can help but not replace teachers because...",
+  "feedback": "Good flow but lacked advanced vocabulary. A few filler words used.",
+  "load_score": 2,
+  "minutes": 3,
+  "errors": "[{\"key\":\"verb_form_error\",\"category\":\"grammar\",\"original\":\"can helps\",\"correction\":\"can help\",\"note\":\"情态动词后用原形\"}]",
+  "subcap_scores": "[{\"key\":\"speaking.fluency\",\"score\":5.5,\"evidence\":\"中等停顿\"},{\"key\":\"speaking.lexical_variety\",\"score\":5.0,\"evidence\":\"基础词汇为主\"}]"
+}
 ```
-db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, accuracy, session_id, feedback, mode, completed, duration_seconds, load_score) VALUES (datetime('now'), 'speaking.freetalk', 'Should AI replace human teachers?', 'I think AI can help but not replace teachers because...', NULL, 'tg:12345', 'The user maintained good flow but lacked advanced vocabulary. There were a few filler words used.', 'study', 1, 180, 2)"
 
-db name=study sql="SELECT last_insert_rowid() AS sample_id"
+### Example: vocab review
 
-db name=study sql="INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction, rule_note) VALUES (?, 'verb_form_error', 'grammar', 'medium', 'I think AI can helps', 'I think AI can help', '情态动词后用原形')" params='[43]'
+Call the `persist` tool natively with these arguments:
 
-db name=study sql="INSERT INTO subcap_scores (sample_id, subcap_key, score, evidence, created_at) VALUES (?, 'speaking.fluency', 5.5, '中等停顿，3次填充词', datetime('now'))" params='[43]'
-db name=study sql="INSERT INTO subcap_scores (sample_id, subcap_key, score, evidence, created_at) VALUES (?, 'speaking.lexical_variety', 5.0, '基础词汇为主，缺少话题相关高级表达', datetime('now'))" params='[43]'
-
-db name=study sql="INSERT INTO activity_log (date, sessions_count, minutes_total, sections_touched) VALUES (date('now'), 1, 3, 'speaking') ON CONFLICT(date) DO UPDATE SET sessions_count = activity_log.sessions_count + 1, minutes_total = activity_log.minutes_total + excluded.minutes_total, sections_touched = CASE WHEN activity_log.sections_touched = '' THEN excluded.sections_touched WHEN INSTR(activity_log.sections_touched, excluded.sections_touched) > 0 THEN activity_log.sections_touched ELSE activity_log.sections_touched || ',' || excluded.sections_touched END"
-```
-
-### Example: vocab (review / testme)
-
-```
-db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, accuracy, raw_score, max_score, session_id, feedback, mode, completed, load_score) VALUES (datetime('now'), 'vocab', 'review-batch', 'resilient:pass, fluctuate:fail, elaborate:pass', 0.83, 5, 6, 'tg:12345', 'The user successfully recalled most words but struggled with the production of the word fluctuate.', 'study', 1, 2)"
-
-db name=study sql="SELECT last_insert_rowid() AS sample_id"
-
--- Update word SRS counters (per word)
-db name=study sql="UPDATE words SET review_count = review_count + 1, success_count = success_count + 1, last_result = 'pass', last_seen_at = datetime('now'), srs_due = datetime('now', '+3 days'), updated_at = datetime('now') WHERE word = ?" params='["resilient"]'
-
--- Word event
-db name=study sql="INSERT INTO word_events (word, event_type, session_type, context, created_at) VALUES (?, 'review_pass', 'vocab-review', '', datetime('now'))" params='["resilient"]'
-
-db name=study sql="INSERT INTO activity_log (date, sessions_count, minutes_total, sections_touched, words_reviewed) VALUES (date('now'), 1, 3, 'vocab', 6) ON CONFLICT(date) DO UPDATE SET sessions_count = activity_log.sessions_count + 1, minutes_total = activity_log.minutes_total + excluded.minutes_total, words_reviewed = activity_log.words_reviewed + excluded.words_reviewed"
+```json
+{
+  "skill_type": "vocab",
+  "session_id": "tg:12345",
+  "prompt": "review-batch",
+  "response": "resilient:pass, fluctuate:fail",
+  "accuracy": 0.83,
+  "raw_score": 5,
+  "max_score": 6,
+  "feedback": "Recalled most words but struggled with 'fluctuate' in production.",
+  "load_score": 2,
+  "minutes": 3,
+  "words_reviewed": 6
+}
 ```
 
 ## Do NOT
 
 - Do NOT update MEMORY.md directly — `learner-state` skill handles that
-- Do NOT skip writes for abandoned sessions — write `completed=0`
+- Do NOT skip writes for abandoned sessions — use `completed=0`
 - Do NOT invent error keys — use `references/error-keys.md`
 - Do NOT use JSON in `feedback` — must be natural language analysis
-- Do NOT leave `prompt` or `raw_content` empty
+- Do NOT leave `prompt` or `response` empty
+- Do NOT use raw `db` calls for post-practice writes — **use the `persist` tool**

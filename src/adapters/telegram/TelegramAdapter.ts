@@ -416,16 +416,24 @@ export class TelegramAdapter {
       };
       const mimeType = mimeMap[ext] || 'image/jpeg';
 
-      // Pass image natively to Agent
+      // Dual-model architecture: Analyze image via Gemini Vision SDK, then pass text to Codex/OpenAI
+      const { analyzeImage } = await import('../../lib/vision.js');
+      const visionResult = await analyzeImage(imagePath, this.config, caption || undefined);
+
+      if (!visionResult.success || !visionResult.description) {
+        const errMsg = visionResult.error || 'Could not analyze image';
+        agentLogger.warn({ msg: 'tg_vision_failed', error: errMsg });
+        await ctx.reply(`🖼️ ${errMsg}`);
+        return;
+      }
+
       const input = caption
-        ? `[User sent a photo with caption: "${caption}"]`
-        : '[User sent a photo]';
-      const files: MessageFile[] = [{ path: imagePath, mimeType }];
+        ? `[User sent a photo with caption: "${caption}"]\n[Vision analysis: ${visionResult.description}]`
+        : `[User sent a photo]\n[Vision analysis: ${visionResult.description}]`;
 
-      agentLogger.info({ msg: 'tg_photo_ready', chatId: ctx.chat.id, imagePath });
+      agentLogger.info({ msg: 'tg_vision_done', chatId: ctx.chat.id, descLength: visionResult.description.length });
 
-      // Keep image for audit trail (don't delete)
-      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input, undefined, files));
+      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
     });
 
     // ── Callback query dispatcher (approvals + choices + custom) ──

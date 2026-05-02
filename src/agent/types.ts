@@ -115,6 +115,32 @@ export interface LLMResponse {
   durationMs?: number;
 }
 
+export interface ChatOptions {
+  /** Session ID for prompt caching. */
+  sessionId?: string;
+}
+
+export interface LLMProvider {
+  /** Provider identifier (e.g., 'openai', 'gemini'). */
+  readonly name: string;
+
+  /**
+   * Execute a chat completion request.
+   *
+   * @param messages - Full conversation history.
+   * @param tools - Available tools the model can call.
+   * @param config - Global agent configuration.
+   * @param options - Additional runtime options (e.g., caching).
+   * @returns Model response with tokens usage.
+   */
+  chat(
+    messages: Message[],
+    tools: Array<{ name: string; description: string; parameters: ToolParameterSchema }>,
+    config: import('../config/defaults.js').AnyaConfig,
+    options?: ChatOptions,
+  ): Promise<LLMResponse>;
+}
+
 // ── Platform Adapter ─────────────────────────────────────────────────────────
 
 /**

@@ -35,6 +35,7 @@ export interface AnyaConfig {
   /** Gemini AI Studio — API key for LLM + multimodality. */
   gemini: {
     api_key: string;
+    vision_model: string;
   };
 
   tools: {
@@ -102,7 +103,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   },
 
   provider: {
-    model: 'gemini-3-flash-preview',
+    model: 'gpt-5.4',
     max_tokens: 8192,
     temperature: 0.7,
     max_retries: 3,
@@ -110,13 +111,14 @@ export const DEFAULT_CONFIG: AnyaConfig = {
 
   gemini: {
     api_key: '',
+    vision_model: 'gemini-3-flash-preview',
   },
 
   tools: {
     enabled: [
       'read_file', 'write_file', 'list_dir', 'web_search',
       'memory', 'skill_view', 'clarify',
-      'tg', 'tts', 'pron_assess', 'db', 'reset_context'
+      'tg', 'tts', 'pron_assess', 'db', 'persist', 'reset_context'
     ],
     web_search: { backend: 'tavily', api_key: '', max_results: 5 },
   },

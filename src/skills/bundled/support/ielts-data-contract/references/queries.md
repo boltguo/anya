@@ -1,5 +1,8 @@
 # Common Query Recipes
 
+> [!WARNING]
+> DO NOT use the `db` tool to write `samples`, `errors`, `subcap_scores`, or `activity_log`. You MUST use the `persist` tool instead. This file only contains read queries for those tables.
+
 Every query uses `db name=study`. Parameterise values via `params`, never string-concat.
 
 ## Samples — reads
@@ -27,24 +30,11 @@ db name=study sql="SELECT skill_type, COUNT(*) AS c, ROUND(AVG(accuracy),2) AS a
 db name=study sql="SELECT COALESCE(SUM(load_score),0) AS consumed FROM samples WHERE created_at >= date('now') AND load_score > 0"
 ```
 
-## Samples — writes
-
-```
-# record a practice session (include mode, completed, duration_seconds)
-db name=study sql="INSERT INTO samples (created_at, skill_type, prompt, raw_content, band_overall, session_id, feedback, parent_sample_id, redo_count, prompt_hash, load_score, session_window, mode, completed, duration_seconds) VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" params='["writing", "Describe the chart...", "<essay>", 5.5, "sess-123", "{}", null, 0, "abc123def456", 3.0, "morning", "study", 1, 720]'
-
-# mode values: 'study' (default), 'exam' (mock/placement), 'placement'
-# completed: 1 = finished, 0 = abandoned
-```
-
 See `references/prompt-hash.md` for how to compute the 12-char `prompt_hash`.
 
 ## Errors
 
 ```
-# write
-db name=study sql="INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction) VALUES (?, ?, ?, ?, ?, ?)" params='[<id>, "tfng_logic_error", "reading", "medium", "...", "..."]'
-
 # top recurring errors (window)
 db name=study sql="SELECT recurrence_key, category, COUNT(*) AS c FROM errors WHERE sample_id IN (SELECT id FROM samples WHERE created_at >= date('now','-14 days')) GROUP BY recurrence_key ORDER BY c DESC LIMIT 10"
 ```
@@ -52,9 +42,6 @@ db name=study sql="SELECT recurrence_key, category, COUNT(*) AS c FROM errors WH
 ## Subcap scores
 
 ```
-# write
-db name=study sql="INSERT INTO subcap_scores (sample_id, subcap_key, score, evidence, created_at) VALUES (?, ?, ?, ?, datetime('now'))" params='[<id>, "writing.argument_depth", 5.0, "Assertions lack specifics"]'
-
 # radar (last 14d, ascending — weakest first)
 db name=study sql="SELECT subcap_key, ROUND(AVG(score),1) AS avg_score, COUNT(*) AS n FROM subcap_scores WHERE created_at >= date('now','-14 days') GROUP BY subcap_key ORDER BY avg_score ASC"
 ```
@@ -137,9 +124,6 @@ db name=study sql="SELECT date, section, band_estimate FROM band_trend WHERE dat
 ## Activity log (daily aggregation)
 
 ```
-# upsert today's activity (learner-state calls this)
-db name=study sql="INSERT INTO activity_log (date, sessions_count, minutes_total, sections_touched, words_reviewed) VALUES (date('now'), ?, ?, ?, ?) ON CONFLICT(date) DO UPDATE SET sessions_count = excluded.sessions_count, minutes_total = excluded.minutes_total, sections_touched = excluded.sections_touched, words_reviewed = excluded.words_reviewed" params='[3, 45, "speaking,writing", 12]'
-
 # weekly summary
 db name=study sql="SELECT date, sessions_count, minutes_total, sections_touched, words_reviewed FROM activity_log WHERE date >= date('now', '-7 days') ORDER BY date ASC"
 ```

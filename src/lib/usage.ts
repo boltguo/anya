@@ -8,6 +8,7 @@
  * - STT (Groq): calls, audio duration
  * - Pronunciation Assessment (Azure): calls, audio duration
  * - Web Search (Tavily): calls
+ * - Vision (Gemini): calls
  *
  * Azure TTS SSML billing: only text content is counted, XML tags are excluded.
  */
@@ -53,6 +54,10 @@ export interface MonthlyUsage {
     calls: number;
   };
 
+  vision: {
+    calls: number;
+  };
+
   /** Per-day STT breakdown, keyed by DD (01-31) */
   stt_daily: Record<string, DailySttUsage>;
 }
@@ -88,6 +93,7 @@ function emptyUsage(month: string): MonthlyUsage {
     stt: { calls: 0, duration_sec: 0 },
     pron_assess: { calls: 0, duration_sec: 0 },
     web_search: { calls: 0 },
+    vision: { calls: 0 },
     stt_daily: {},
   };
 }
@@ -109,6 +115,7 @@ export function loadUsage(month?: string): MonthlyUsage {
       stt: { ...empty.stt, ...(data.stt || {}) },
       pron_assess: { ...empty.pron_assess, ...(data.pron_assess || {}) },
       web_search: { ...empty.web_search, ...(data.web_search || {}) },
+      vision: { ...empty.vision, ...(data.vision || {}) },
       stt_daily: data.stt_daily || {},
     };
   } catch {
@@ -225,3 +232,13 @@ export function trackWebSearch(): void {
   usage.web_search.calls++;
   saveUsage(usage);
 }
+
+/**
+ * Track a Vision (Gemini) call.
+ */
+export function trackVision(): void {
+  const usage = loadUsage();
+  usage.vision.calls++;
+  saveUsage(usage);
+}
+

@@ -39,27 +39,25 @@ After 3-4 turns, wrap up the conversation and send an inline keyboard in Chinese
 
 ## 5. Persist (Data Contract)
 
-**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+> **STRICT PROHIBITION**: You are FORBIDDEN from using the `db` tool to write SQL. You MUST use the `persist` tool.
 
-1. **`samples`** row:
-   - `skill_type = 'speaking.freetalk'`
-   - `prompt` = the topic/question given
-   - `raw_content` = concatenated user responses (or transcription if voice)
-   - `accuracy = NULL` (freetalk is unscored)
-   - `load_score = 2`
-   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
-     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
+Call the `persist` tool natively with these JSON arguments:
 
-2. **`errors`** — from `references/error-keys.md`:
-   - `filler_overuse`, `verb_form_error`, `l1_transfer`, `vocabulary_repetition`, `register_mismatch`
-   - Record only the 1-2 errors you gave stealth feedback on
+```json
+{
+  "skill_type": "speaking.freetalk",
+  "session_id": "<session>",
+  "prompt": "<topic/question given>",
+  "response": "<concatenated user responses>",
+  "feedback": "<textual analysis of fluency, vocabulary, grammar>",
+  "load_score": 2,
+  "minutes": 3,
+  "errors": "[{\"key\":\"filler_overuse\",\"category\":\"speaking\",\"original\":\"um...like...\",\"correction\":\"\",\"note\":\"填充词过多\"}]",
+  "subcap_scores": "[{\"key\":\"speaking.fluency\",\"score\":5.5,\"evidence\":\"中等停顿\"},{\"key\":\"speaking.lexical_variety\",\"score\":5.0,\"evidence\":\"基础词汇为主\"}]"
+}
+```
 
-3. **`subcap_scores`** — at least 2:
-   - `speaking.fluency` — based on pauses, fillers, self-corrections
-   - `speaking.lexical_variety` — based on vocabulary range
-   - `speaking.interaction` — if applicable (debate/back-and-forth)
-
-4. **`activity_log`** — upsert today
+Error keys: `filler_overuse`, `verb_form_error`, `l1_transfer`, `vocabulary_repetition`, `register_mismatch` (record only 1-2 errors you gave stealth feedback on)
 
 ## 6. Hard Rules
 1. **The 'I'm Stuck' Protocol**: If the user uses native language or hits SOS, you MUST NOT grade them. Provide a word bank immediately.

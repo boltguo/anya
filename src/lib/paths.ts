@@ -34,6 +34,7 @@ export const ANYA_HOME = process.env.ANYA_HOME || join(homedir(), '.anya');
 // ── Configuration ────────────────────────────────────────────────────────────
 export const CONFIG_PATH = join(ANYA_HOME, 'config.json');
 export const CONFIG_SCHEMA_PATH = join(ANYA_HOME, 'config.schema.json');
+export const AUTH_PATH = join(ANYA_HOME, 'auth.json');
 
 // ── Identity & Memory ────────────────────────────────────────────────────────
 export const MEMORY_DIR = join(ANYA_HOME, 'memories');

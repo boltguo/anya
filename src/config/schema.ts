@@ -19,6 +19,7 @@ export const PartialAnyaConfigSchema = z.object({
   }).optional(),
   gemini: z.object({
     api_key: z.string().optional(),
+    vision_model: z.string().optional(),
   }).optional(),
   tools: z.object({
     enabled: z.array(z.string()).optional(),

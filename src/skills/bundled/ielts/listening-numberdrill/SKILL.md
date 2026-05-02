@@ -36,25 +36,28 @@ Tiny drill, disproportionate exam payoff. Most learners leak 2-3 easy marks per 
 
 ## Persist
 
-**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+> **STRICT PROHIBITION**: You are FORBIDDEN from using the `db` tool to write SQL. You MUST use the `persist` tool.
 
-1. **`samples`** row:
-   - `skill_type = 'listening.numberdrill'`
-   - `prompt` = the correct answer
-   - `raw_content` = the user's answer
-   - `accuracy` = correct / total (0.0–1.0)
-   - `raw_score` = correct count, `max_score` = item count
-   - `load_score = 1`
-   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
-     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
+Call the `persist` tool natively with these JSON arguments:
 
-2. **`errors`** — from `references/error-keys.md`: `number_confusion`, `spelling_error`, `function_word_miss`
+```json
+{
+  "skill_type": "listening.numberdrill",
+  "session_id": "<session>",
+  "prompt": "<correct answer(s)>",
+  "response": "<user's answer(s)>",
+  "accuracy": "<correct / total>",
+  "raw_score": "<correct count>",
+  "max_score": "<item count>",
+  "feedback": "<textual analysis>",
+  "load_score": 1,
+  "minutes": 1,
+  "errors": "[{\"key\":\"number_confusion\",\"category\":\"listening\",\"original\":\"30\",\"correction\":\"13\",\"note\":\"teen/ty 混淆\"}]",
+  "subcap_scores": "[{\"key\":\"listening.connected_speech\",\"score\":5.0,\"evidence\":\"...\"}]"
+}
+```
 
-3. **`subcap_scores`**: `listening.connected_speech` — weighted by accuracy
-
-4. **`activity_log`** — upsert today
-
-Queries: `support/ielts-data-contract/references/queries.md`.
+Error keys: `number_confusion`, `spelling_error`, `function_word_miss`
 
 ## Rules
 

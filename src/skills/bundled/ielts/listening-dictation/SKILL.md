@@ -20,7 +20,7 @@ Before generating or selecting ANY sentence, you MUST read the user's current li
 | **Advanced** (6.5+) | **17-25 words** | Complex sentences, 1+ connected speech feature (elision/assimilation). | Normal speed | **Inject 1 non-standard accent (e.g., Australian, Indian) every 3 sentences.** |
 
 ## 3. Workflow (Step-by-Step)
-Execute these steps strictly in order for each sentence. Default session length is **3 sentences**. After sentence 3, you MUST ask whether to continue with another group or end.
+Execute these steps strictly in order. Every practice session handles exactly **1 sentence**. After the sentence is evaluated, you MUST ask whether to continue with another sentence or practice something else.
 
 **Step 1: Target Acquisition (The "Revenge" Protocol)**
 - *Query `study.db`*: Look for sentences the user failed (e.g., missed function words) at least 3 days ago.
@@ -28,19 +28,16 @@ Execute these steps strictly in order for each sentence. Default session length 
 - *If none found*: Generate a new sentence adhering to the Scaling Table. Call the `tts` tool to generate the audio.
 
 **Step 2: Delivery & UI Setup**
-- Send the audio to the user.
-- **Reply rule (MANDATORY):**
-  - The **audio message should NOT reply** to any message.
-  - The **instruction / question message MUST reply to the audio message** so the thread is visually clear.
-- **Tone rule:** Sound natural and conversational, like a supportive coach chatting with the learner. Avoid blunt labels like "第 2 题，继续". Prefer warm, human prompts such as "来，听听这一句。把你听到的英文打出来。"
-- **MANDATORY UI**: Immediately after the audio, send a text or keyboard message that:
-  1. asks the learner to type what they heard,
-  2. tells them they can also tap the buttons below for help,
-  3. uses **Chinese button labels**.
-- Recommended keyboard layout (keep it compact):
+> **Combine audio + keyboard in the same LLM turn** — call `tg(type=voice)` and `tg(type=keyboard)` together.
+
+- Send the audio to the user via `tg(type=voice)`.
+- **In the same turn**, send the instruction keyboard via `tg(type=keyboard)` with `reply_to` pointing to the audio's tag.
+- **Reply rule:** Audio does NOT reply. Instruction keyboard MUST reply to the audio.
+- **Tone:** Natural and conversational. "来，听听这一句。把你听到的英文打出来。"
+- Recommended keyboard layout:
   - Row 1: `[🐢 放慢一点]`, `[💡 给点提示]`
   - Row 2: `[😵 句子太难]`
-- Wait for the user to type what they heard or click/type an option.
+- **CRITICAL STOP**: After sending the voice and instruction keyboard, you MUST immediately end your turn. DO NOT proceed to Step 3 or Step 4. Stop generating and WAIT for the user to reply.
 
 **Step 3: Handle Feedback (If an option is chosen)**
 - `[🐢 放慢一点]`: Briefly acknowledge, generate/send a slower version (-10% rate), and wait again. The new instruction message MUST again reply to the latest audio.
@@ -48,63 +45,42 @@ Execute these steps strictly in order for each sentence. Default session length 
 - `[💡 给点提示]`: Reply with first-letter hints (e.g., `T_ p______ i_...`) and invite another try.
 - Log any button usage to `activity_log`.
 
-**Step 4: Evaluation & Diff**
-- Once the user submits their dictation, perform a strict **word-by-word diff**.
-- Visually highlight the exact missing/wrong words.
-- Keep the correction readable in chat format.
+**Step 4: Evaluation, Feedback & Persist (ALL IN ONE TURN)**
 
-**Step 5: Review, Error Analysis & Gloss**
-After each answer, reveal the correct sentence and include:
-1. the correct full sentence,
-2. a concise Chinese translation,
-3. a short gloss for useful chunks or tricky pronunciation,
-4. **a brief error analysis / 易错点** when applicable.
+> Call `tg(type=keyboard)` and `persist(...)` together in the **same LLM turn**.
+> **STRICT PROHIBITION**: You are FORBIDDEN from using the `db` tool to write SQL. You MUST use the `persist` tool for post-practice logging.
 
-The feedback should not stop at only "哪里对/哪里错". Prefer useful guidance such as:
-- article / determiner misses (`a`, `the`, `this`),
-- singular/plural ending misses,
-- near-sound confusion (`task` vs `test`),
-- connected-speech decoding issues,
-- function-word drop due to weak attention.
+- Perform a strict **word-by-word diff** of the user's submission vs correct sentence.
+- Send a `tg(type=keyboard)` message containing:
+  1. The correct full sentence
+  2. A concise Chinese translation
+  3. A brief error analysis (article misses, connected speech, near-sound confusion, etc.)
+  4. Inline keyboard: Row 1: `[🔄 再来一句]`, `[🧭 练习其他]`
+- **In the same turn**, call the `persist` tool using these JSON arguments to save data:
 
-Keep the analysis concise but highly actionable.
+```json
+{
+  "skill_type": "listening.dictation",
+  "session_id": "<session>",
+  "prompt": "<correct sentence>",
+  "response": "<user's typed text>",
+  "accuracy": <correct_words / total_words>,
+  "raw_score": <correct count>,
+  "max_score": <total words>,
+  "feedback": "<textual analysis of what user missed and why>",
+  "audio_path": "<tts file path>",
+  "load_score": 1,
+  "minutes": 1,
+  "errors": "[{\"key\":\"function_word_miss\",\"category\":\"listening\",\"correction\":\"the\",\"note\":\"冠词漏听\"}]",
+  "subcap_scores": "[{\"key\":\"listening.connected_speech\",\"score\":4.5,\"evidence\":\"弱读冠词遗漏\"}]"
+}
+```
 
-## 4. End-of-Group UX (MANDATORY)
-- A standard group = **3 sentences**.
-- After the 3rd sentence is reviewed, you MUST send an **inline keyboard in Chinese** asking what to do next.
-- Recommended compact layout:
-  - Row 1: `[🔄 再来一组]`, `[🧭 练习其他]`
-- Do not end with plain text only when the 3-sentence group is complete.
+Error keys: `function_word_miss`, `spelling_error`, `connected_speech_fail`, `word_substitution`, `tense_miss`, `plural_miss`
+
 - **Note**: 
-  - If the user selects `[🔄 再来一组]`, immediately start the next group of 3 sentences.
-  - If the user selects `[🧭 练习其他]`, it acts as returning to the main menu or re-initiating practice. Do not generate further listening tasks. 
-  - (If the user explicitly types they want to quit or ignore the buttons, simply end the session warmly.)
-
-## 5. Persist (Data Contract)
-You MUST use the `db` tool to log the practice data strictly following `support/ielts-data-contract/references/post-practice-protocol.md`.
-
-**Step-by-step writes AFTER EACH SENTENCE:**
-
-1. **`samples`** row — required fields:
-   - `skill_type = 'listening.dictation'`
-   - `prompt` = the correct sentence
-   - `raw_content` = the user's typed response
-   - `accuracy` = correct_words / total_words (0.0–1.0)
-   - `raw_score` = number of correct words, `max_score` = total words
-   - `load_score = 1`
-   - `audio_path` = the specific TTS file path generated for this sentence (for Revenge Protocol reuse)
-   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance.
-     Example: `"The user missed the definite article 'the' and heard 'released' as 'release'. This indicates weak sensitivity to word-final sounds (especially passive voice '-ed') and connected speech of weak forms, though they successfully caught the main sentence structure."`
-
-2. **`errors`** — one row per missed/wrong word:
-   - Keys from `references/error-keys.md`: `function_word_miss`, `spelling_error`, `connected_speech_fail`, `word_substitution`, `tense_miss`, `plural_miss`
-   - `original_phrase` = what user wrote, `correction` = correct word
-   - `rule_note` = brief Chinese explanation
-
-3. **`subcap_scores`** — at least 1:
-   - `listening.connected_speech` — weighted by accuracy
-
-4. **`activity_log`** — upsert today
+  - If the user selects `[🔄 再来一句]`, immediately start the next sentence.
+  - If the user selects `[🧭 练习其他]`, return to the main menu.
 
 ## 6. Hard Rules
 1. **No Early Reveals**: NEVER show the English transcript on the first listen unless the user explicitly requests it or clicks `[😵 句子太难]`.
@@ -112,4 +88,4 @@ You MUST use the `db` tool to log the practice data strictly following `support/
 3. **Circuit Breaker**: If their accuracy drops below 40% on a sentence, you MUST immediately drop down one tier in the Scaling Table for the next sentence. Do not let them get frustrated.
 4. **Reply Hygiene**: Audio never replies. Prompt/instruction messages reply to the corresponding audio.
 5. **Natural Chat Tone**: Keep the teaching voice supportive, natural, and conversational — not robotic or overly terse.
-6. **Post-Group Choice**: After a 3-sentence set, always use inline keyboard choices in Chinese for next action.
+6. **Post-Sentence Choice**: After every sentence, always use inline keyboard choices in Chinese for the next action.

@@ -43,6 +43,9 @@ for (const { from, to, dir } of assetCopies) {
   if (!fs.existsSync(from)) continue;
   fs.mkdirSync(path.dirname(to), { recursive: true });
   if (dir) {
+    if (fs.existsSync(to)) {
+      fs.rmSync(to, { recursive: true, force: true });
+    }
     fs.cpSync(from, to, { recursive: true, force: true });
   } else {
     fs.copyFileSync(from, to);

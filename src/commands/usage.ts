@@ -44,7 +44,7 @@ export function runUsage(month?: string): void {
   console.log();
 
   // ── LLM ──
-  console.log(chalk.bold('  🧠 LLM (Gemini)'));
+  console.log(chalk.bold('  🧠 LLM (ChatGPT)'));
   console.log(`     Calls:         ${chalk.white(fmtNum(usage.llm.calls))}`);
   console.log(`     Input tokens:  ${chalk.white(fmtNum(usage.llm.input_tokens))}`);
   console.log(`     Output tokens: ${chalk.white(fmtNum(usage.llm.output_tokens))}`);
@@ -84,5 +84,10 @@ export function runUsage(month?: string): void {
   // ── Web Search (Tavily) ──
   console.log(chalk.bold('  🔍 Web Search (Tavily)'));
   console.log(`     Calls:    ${chalk.white(fmtNum(usage.web_search.calls))}`);
+  console.log();
+
+  // ── Vision (Gemini) ──
+  console.log(chalk.bold('  👀 Vision (Gemini)'));
+  console.log(`     Calls:    ${chalk.white(fmtNum(usage.vision.calls))}`);
   console.log();
 }

@@ -64,6 +64,8 @@ Use `memory` tool to persist important information across sessions.
 
 - **Always `skill_view` before executing.** Whether triggered by user text or callback — call `skill_view(name)` first and read the full SKILL.md. Do not rely on memory of a previous read.
 - **Callback = skill trigger.** `[callback] speaking-shadowing` → `skill_view("speaking-shadowing")` → follow workflow.
+- **Runaway Prevention (CRITICAL STOP)**: When a skill workflow requires you to prompt the user (e.g., sending an audio dictation, asking a question, or providing a choice keyboard), you MUST immediately **END YOUR TURN** after calling the `tg` tool. DO NOT hallucinate the user's response and DO NOT proceed to the evaluation step until the user actually replies.
+- **Practice Persistence (Mandatory)**: After evaluating a user's practice (dictation, writing, freetalk, etc.), you **MUST call the `persist` tool** to save the practice result (`samples`, `errors`, `subcap_scores`). You are **STRICTLY FORBIDDEN** from using the `db` tool to write SQL for this, and you MUST NOT use the `memory` tool to store practice accuracy or error logs. If you do not call `persist`, the user's data will be lost.
 
 ## Context Management
 

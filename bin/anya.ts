@@ -81,7 +81,7 @@ configCmd
 program
   .command('doctor')
   .description('Check environment and configuration')
-  .action(() => {
+  .action(async () => {
     console.log(chalk.bold.cyan('\nAnya Doctor\n'));
 
     const inited = isInitialized();
@@ -92,10 +92,17 @@ program
 
     const config = loadConfig();
 
-    // LLM — Gemini
-    const hasLlmKey = !!config.gemini?.api_key;
+    // ChatGPT — Codex
+    const { hasCodexAuth } = await import('../src/lib/auth.js');
+    const hasCodex = hasCodexAuth();
     console.log(
-      `  LLM:       ${hasLlmKey ? '[ok]' : '[!!]'} Gemini (${config.provider.model}) ${hasLlmKey ? '✓' : 'API key not set'}`,
+      `  ChatGPT:   ${hasCodex ? '[ok]' : '[!!]'} Codex OAuth (${config.provider.model}) ${hasCodex ? '✓' : 'not authenticated'}`,
+    );
+
+    // Vision — Gemini
+    const hasGeminiKey = !!config.gemini?.api_key;
+    console.log(
+      `  Gemini:    ${hasGeminiKey ? '[ok]' : '[!!]'} Vision (${config.gemini?.vision_model}) ${hasGeminiKey ? '✓' : 'API key not set'}`,
     );
 
     // Azure — TTS + pron assessment

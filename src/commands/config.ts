@@ -16,6 +16,7 @@ import { writeFileSync } from 'node:fs';
 import { loadConfig } from '../config/loader.js';
 import { CONFIG_PATH, isInitialized } from '../lib/paths.js';
 import type { AnyaConfig } from '../config/defaults.js';
+import { hasCodexAuth } from '../lib/auth.js';
 
 function maskKey(key: string): string {
   if (key.length <= 8) return '****';
@@ -49,8 +50,12 @@ export async function runConfigMenu(): Promise<void> {
       message: 'Configure',
       choices: [
         {
-          name: `Gemini API ${chalk.dim(`(${config.provider.model}${config.gemini?.api_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
-          value: 'llm',
+          name: `ChatGPT    ${chalk.dim(`(Codex OAuth${hasCodexAuth() ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+          value: 'openai',
+        },
+        {
+          name: `Gemini     ${chalk.dim(`(Image Vision${config.gemini?.api_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+          value: 'gemini',
         },
         {
           name: `Azure      ${chalk.dim(`(TTS + Pron${config.azure?.speech_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
@@ -76,7 +81,8 @@ export async function runConfigMenu(): Promise<void> {
     });
 
     switch (section) {
-      case 'llm': await configLLM(config); break;
+      case 'gemini': await configGemini(config); break;
+      case 'openai': await configOpenAI(config); break;
       case 'azure': await configAzure(config); break;
       case 'stt': await configSTT(config); break;
       case 'tavily': await configTavily(config); break;
@@ -113,12 +119,12 @@ export function runConfigShow(): void {
   console.log();
 }
 
-async function configLLM(config: AnyaConfig): Promise<void> {
+async function configGemini(config: AnyaConfig): Promise<void> {
   const currentKey = config.gemini?.api_key;
   
   console.log();
-  console.log(chalk.dim(`  Provider: Gemini`));
-  console.log(chalk.dim(`  Model:    ${config.provider.model}`));
+  console.log(chalk.dim(`  Provider: Gemini (Vision Only)`));
+  console.log(chalk.dim(`  Model:    ${config.gemini.vision_model}`));
   if (currentKey) {
     console.log(chalk.dim(`  API Key:  ${currentKey.substring(0, 6)}****`));
   } else {
@@ -279,5 +285,23 @@ async function configTelegram(config: AnyaConfig): Promise<void> {
 
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
   console.log(chalk.green('\n  [ok] Telegram configured.'));
+  await autoRestartGateway();
+}
+
+async function configOpenAI(config: AnyaConfig): Promise<void> {
+  const { codexDeviceLogin, hasCodexAuth } = await import('../lib/auth.js');
+  
+  console.log();
+  if (hasCodexAuth()) {
+    console.log(chalk.green('  ✓ OpenAI Codex is already authenticated.'));
+    const reauth = await confirm({ message: 'Do you want to re-authenticate?', default: false });
+    if (!reauth) {
+      console.log(chalk.green('\n  [ok] OpenAI Codex is ready to use.'));
+      return;
+    }
+  }
+
+  await codexDeviceLogin();
+  console.log(chalk.green('\n  [ok] OpenAI Codex configured successfully.'));
   await autoRestartGateway();
 }
