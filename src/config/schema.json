@@ -144,6 +144,29 @@
         }
       }
     },
+    "feishu": {
+      "type": "object",
+      "description": "Feishu (Lark) bot configuration.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "app_id": {
+          "type": "string",
+          "description": "Feishu App ID."
+        },
+        "app_secret": {
+          "type": "string",
+          "description": "Feishu App Secret."
+        },
+        "allowed_user_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Feishu Open IDs allowed to interact with the bot."
+        }
+      }
+    },
     "ui": {
       "type": "object",
       "description": "UI display settings.",

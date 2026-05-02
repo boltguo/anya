@@ -70,7 +70,11 @@ export async function runConfigMenu(): Promise<void> {
           value: 'tavily',
         },
         {
-          name: `Telegram ${chalk.dim(`(${config.telegram?.enabled ? chalk.green('on') : 'off'})`)}`,
+          name: `Feishu     ${chalk.dim(`(${config.feishu?.enabled ? chalk.green('on') : 'off'})`)}`,
+          value: 'feishu',
+        },
+        {
+          name: `Telegram   ${chalk.dim(`(${config.telegram?.enabled ? chalk.green('on') : 'off'})`)}`,
           value: 'telegram',
         },
         {
@@ -86,6 +90,7 @@ export async function runConfigMenu(): Promise<void> {
       case 'azure': await configAzure(config); break;
       case 'stt': await configSTT(config); break;
       case 'tavily': await configTavily(config); break;
+      case 'feishu': await configFeishu(config); break;
       case 'telegram': await configTelegram(config); break;
       case 'cancel': return;
     }
@@ -110,6 +115,7 @@ export function runConfigShow(): void {
   if (display.gemini?.api_key) display.gemini.api_key = maskKey(display.gemini.api_key);
   if (display.tools?.web_search?.api_key) display.tools.web_search.api_key = maskKey(display.tools.web_search.api_key);
   if (display.telegram?.bot_token) display.telegram.bot_token = maskKey(display.telegram.bot_token);
+  if (display.feishu?.app_secret) display.feishu.app_secret = maskKey(display.feishu.app_secret);
   if (display.stt?.groq_api_key) display.stt.groq_api_key = maskKey(display.stt.groq_api_key);
   if (display.azure?.speech_key) display.azure.speech_key = maskKey(display.azure.speech_key);
 
@@ -303,5 +309,57 @@ async function configOpenAI(config: AnyaConfig): Promise<void> {
 
   await codexDeviceLogin();
   console.log(chalk.green('\n  [ok] OpenAI Codex configured successfully.'));
+  await autoRestartGateway();
+}
+
+async function configFeishu(config: AnyaConfig): Promise<void> {
+  const currentAppId = config.feishu?.app_id;
+  const currentSecret = config.feishu?.app_secret;
+  
+  console.log();
+  if (config.feishu?.enabled && currentAppId && currentSecret) {
+    console.log(chalk.dim(`  App ID:     ${currentAppId}`));
+    console.log(chalk.dim(`  App Secret: ${maskKey(currentSecret)}`));
+    console.log();
+    const update = await confirm({
+      message: 'Update Feishu settings?',
+      default: false,
+    });
+    if (!update) return;
+  } else {
+    console.log(chalk.dim('  Create an enterprise custom app on Feishu Open Platform (https://open.feishu.cn/)'));
+    console.log();
+  }
+
+  const appId = await input({
+    message: 'Feishu App ID:',
+    default: currentAppId || undefined,
+  });
+
+  if (!appId.trim()) {
+    console.log(chalk.yellow('\n  Cancelled.'));
+    return;
+  }
+
+  const appSecret = await input({
+    message: 'Feishu App Secret:',
+    default: currentSecret || undefined,
+  });
+
+  if (!appSecret.trim()) {
+    console.log(chalk.yellow('\n  Cancelled.'));
+    return;
+  }
+
+  if (!config.feishu) {
+    config.feishu = { enabled: true, app_id: '', app_secret: '', allowed_user_ids: [] };
+  }
+  
+  config.feishu.enabled = true;
+  config.feishu.app_id = appId.trim();
+  config.feishu.app_secret = appSecret.trim();
+
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  console.log(chalk.green('\n  [ok] Feishu configured.'));
   await autoRestartGateway();
 }

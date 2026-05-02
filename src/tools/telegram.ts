@@ -20,9 +20,9 @@ import { TelegramSessionAdapter } from '../adapters/telegram.js';
  * Extract the TelegramSessionAdapter from the tool context.
  * @throws {Error} If the current session is not running via Telegram.
  */
-function getTgAdapter(context: ToolContext): TelegramSessionAdapter {
-  if (!(context.adapter instanceof TelegramSessionAdapter)) {
-    throw new Error('This tool is only available when running via Telegram.');
+function getTgAdapter(context: ToolContext): any {
+  if (typeof (context.adapter as any).sendMessage !== 'function') {
+    throw new Error('This tool requires an adapter that supports messaging.');
   }
   return context.adapter;
 }

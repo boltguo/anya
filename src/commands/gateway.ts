@@ -31,9 +31,9 @@ export async function runGatewayStart(_bgChild = false): Promise<void> {
   }
 
   const config = loadConfig();
-  if (!config.telegram.enabled || !config.telegram.bot_token) {
-    console.log('\n  Telegram is not configured.');
-    console.log('  Run "anya init" or set telegram.enabled=true and telegram.bot_token in config.\n');
+  if (!config.telegram?.enabled && !config.feishu?.enabled) {
+    console.log('\n  Neither Telegram nor Feishu is configured.');
+    console.log('  Run "anya init" or set telegram.enabled=true / feishu.enabled=true in config.\n');
     return;
   }
 
@@ -52,9 +52,21 @@ export async function runGatewayStart(_bgChild = false): Promise<void> {
       process.exit(0);
     });
 
-    const { TelegramAdapter } = await import('../adapters/telegram.js');
-    const adapter = new TelegramAdapter(config);
-    await adapter.start();
+    const startups: Promise<void>[] = [];
+
+    if (config.telegram?.enabled && config.telegram?.bot_token) {
+      const { TelegramAdapter } = await import('../adapters/telegram.js');
+      const adapter = new TelegramAdapter(config);
+      startups.push(adapter.start());
+    }
+
+    if (config.feishu?.enabled && config.feishu?.app_id && config.feishu?.app_secret) {
+      const { FeishuAdapter } = await import('../adapters/feishu/FeishuAdapter.js');
+      const adapter = new FeishuAdapter(config);
+      startups.push(adapter.start());
+    }
+    
+    await Promise.all(startups);
   } else {
     // Default: spawn a detached background child process
     const { spawn } = await import('node:child_process');

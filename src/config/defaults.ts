@@ -58,6 +58,13 @@ export interface AnyaConfig {
     allowed_user_ids: number[];
   };
 
+  feishu: {
+    enabled: boolean;
+    app_id: string;
+    app_secret: string;
+    allowed_user_ids: string[];
+  };
+
   stt: {
     groq_api_key: string;
     model: string;
@@ -125,6 +132,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
 
   security: { allowed_paths: ['~/.anya/'], fence_mode: 'deny' },
   telegram: { enabled: false, bot_token: '', allowed_user_ids: [] },
+  feishu: { enabled: true, app_id: '', app_secret: '', allowed_user_ids: [] },
   stt: { groq_api_key: '', model: 'whisper-large-v3-turbo' },
   tts: { voice: 'en-US-AriaNeural', rate: '+0%' },
   azure: { speech_key: '', speech_region: 'eastasia' },
