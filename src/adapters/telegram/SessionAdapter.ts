@@ -126,24 +126,51 @@ export class TelegramSessionAdapter implements Adapter {
     await this.outboundQueue.onIdle();
 
     if (!this.hasSentContent && content) {
+      let parsedContent = content;
+      let replyMarkup: InlineKeyboard | undefined;
+
+      // Extract inline buttons formatted as [label|data] anywhere in the text
+      const extractedButtons = [...parsedContent.matchAll(/\[([^\]]+)\|([^\]]+)\]/g)];
+      if (extractedButtons.length > 0) {
+        replyMarkup = new InlineKeyboard();
+        for (const match of extractedButtons) {
+          replyMarkup.text(match[1].trim(), match[2].trim()).row();
+        }
+        // Remove the button text and clean up dangling list items/newlines
+        parsedContent = parsedContent
+          .replace(/\[([^\]]+)\|([^\]]+)\]/g, '')
+          .replace(/^[\s*-]+$/gm, '')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+      }
+
+      // If text becomes completely empty after removing buttons, add a fallback text
+      if (!parsedContent && replyMarkup) {
+        parsedContent = '👇';
+      }
+
       const replyTo = this.autoReplyTo();
       const replyParams = replyTo ? { message_id: replyTo } : undefined;
       const maxLen = 4000;
 
-      const segments = splitMarkdownForTelegram(content, maxLen);
+      const segments = splitMarkdownForTelegram(parsedContent, maxLen);
 
       for (let idx = 0; idx < segments.length; idx++) {
         const segment = segments[idx];
         const formatted = markdownToTelegramHtml(segment);
         const rp = idx === 0 ? replyParams : undefined;
+        // Attach keyboard only to the last segment
+        const markup = idx === segments.length - 1 ? replyMarkup : undefined;
 
         const msg = await this.bot.api.sendMessage(this.chatId, formatted, {
           parse_mode: 'HTML',
           reply_parameters: rp,
+          reply_markup: markup,
         }).catch(async (err) => {
           agentLogger.warn({ msg: 'tg_html_parse_fallback', error: err?.message, formattedLen: formatted.length, segmentIdx: idx });
           return this.bot.api.sendMessage(this.chatId, stripMarkdown(segment), {
             reply_parameters: rp,
+            reply_markup: markup,
           }).catch((err2) => {
             agentLogger.error({ msg: 'tg_reply_dropped', error: err2?.message, segmentIdx: idx });
             return null;
