@@ -61,7 +61,7 @@ When the user submits their dictated text:
        "audio_path": "<tts file path>",
        "load_score": 1,
        "minutes": 1,
-       "errors": "[{\"key\":\"number_confusion\",\"category\":\"listening\",\"correction\":\"30\",\"note\":\"teen/ty 混淆\"}]"
+       "errors": "[{\"key\":\"number_confusion\",\"category\":\"listening\",\"correction\":\"30\",\"note\":\"<IN ENGLISH: note about teen/ty confusion>\"}]"
      }
      ```
      Error keys: `number_confusion`, `spelling_error`, `function_word_miss`

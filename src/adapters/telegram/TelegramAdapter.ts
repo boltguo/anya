@@ -270,7 +270,10 @@ export class TelegramAdapter {
         `🎤 <b>STT (Groq Whisper)</b>\n` +
         `├ Calls: <code>${fmtNum(usage.stt.calls)}</code>\n` +
         `└ Dur: <code>${fmtDuration(usage.stt.duration_sec)}</code>\n\n` +
-        `🔍 <b>Web:</b> <code>${fmtNum(usage.web_search.calls)}</code> | 👀 <b>Vision:</b> <code>${fmtNum(usage.vision.calls)}</code>`;
+        `🔍 <b>Web Search</b>\n` +
+        `└ Calls: <code>${fmtNum(usage.web_search.calls)}</code>\n\n` +
+        `👀 <b>Vision</b>\n` +
+        `└ Calls: <code>${fmtNum(usage.vision.calls)}</code>`;
 
       await ctx.reply(text, { parse_mode: 'HTML' });
       agentLogger.info({ msg: 'tg_usage_command', chatId: ctx.chat.id });

@@ -10,67 +10,71 @@ description: "Speaking Pronunciation Clinic. Trigger ONLY when the user explicit
 - Callback/System triggers: `speaking-shadowing`
 - Note: DO NOT use this for "听力跟读" or general "shadowing". Use `listening-shadowing` instead.
 
-## 2. Adaptive Batching & Context
-- A standard shadowing practice session consists of a **batch of 3 sentences**.
-- Topics should be drawn from the user's `Content Profile.engage` in `USER.md` (e.g., tech, gaming, daily life) to keep it interesting.
-- Difficulty should match `Background.current_level_estimate` (short simple sentences for weak, complex compound sentences for fluent).
+## 2. Adaptive Scaling
+Read the user's speaking level from `MEMORY.md`.
+- **Beginner (< 5.0)**: 5-8 words. Simple phonemes.
+- **Intermediate (5.0-6.0)**: 10-15 words. Focus on linking, stress, and common traps (th/s, r/l).
+- **Advanced (6.5+)**: 15-20 words. Fast connected speech, intonation, and rhythm.
 
-## 3. Workflow (State Machine)
+## 3. Workflow (State Machine - STRICT EXECUTION)
+You must follow these steps strictly to prevent hallucinations and ensure a standard procedure.
 
-Execute these steps strictly for each sentence in the batch:
+**CRITICAL TTS RULE**: The `tts` tool MUST ONLY be used to generate the target English practice audio. NEVER use the `tts` tool to speak conversational fillers. Use `tg(type=text)` for chat.
 
-### State A: The Prompt (Listen & Repeat)
-1. Generate a natural, engaging sentence (10-20 words).
-2. **MANDATORY Audio**: Use the `tts` tool to generate the native pronunciation audio. Send it to the user.
-3. **MANDATORY Text**: Send the text of the sentence. 
-4. Ask the user to listen to the audio and send back a Voice Message reading the sentence.
-5. **STOP AND WAIT**. Wait for the user's voice message.
+### State 0: Clean Slate (Run ONCE at start)
+- **MANDATORY**: Call the `reset_context` tool immediately when this skill starts. Pass NO arguments (leave summary empty).
 
-### State B: Assessment & Clinic
+### State A: Prepare & Deliver (Listen & Repeat)
+1. **Generate Content**: Create a natural, engaging sentence matching the Scaling Table above.
+2. **Generate Audio**: Use the `tts` tool to generate the native pronunciation audio. (Use Azure Neural voices).
+3. **Execute Parallel UI Actions**: You MUST invoke the `tg` tool multiple times concurrently to send the audio and instruction separately.
+   - **Action 1 (Voice)**: `tg(type="voice")` to send the generated audio file.
+   - **Action 2 (Text & Buttons)**: `tg(type="keyboard")` to send the instruction text.
+     - **Text**: "🎧 先听示范，然后按住录音键**朗读原句**，我来帮你揪出发音细节。\n\n原文：<tg-spoiler>[Insert original English text here]</tg-spoiler>"
+     - **Buttons**: `[["🐢 慢速示范|speak_slow", "😵 太长了，换短句|speak_hard"]]`
+4. **CRITICAL STOP**: End your turn immediately. WAIT for the user to send their voice message or click a button.
+
+### State B: Handle Feedback Buttons (Before recording)
+If the user clicks a button:
+- `speak_slow`: Briefly acknowledge via `tg(type=text)`, use `tts` with `rate="-10%"` on the SAME sentence, send new voice, and resend the instruction keyboard. Wait.
+- `speak_hard`: Acknowledge naturally via `tg(type=text)`, generate a NEW shorter sentence via `tts`, and go back to **State A**.
+
+### State C: Assessment & Clinic (User sends voice message)
 When the user sends a voice message:
-1. **MANDATORY Assessment**: Use the `pron_assess` tool, passing the user's `audio_path` and the `reference_text` of the sentence you gave them.
-2. **Feedback (The Clinic)**:
-   - Provide the Overall Score (0-100).
-   - If score is high (>85): Briefly praise their fluency and rhythm.
-   - If score is low or specific words have low accuracy (<80): Provide **Articulatory Guidance** for 1-2 specific sounds. (e.g., "注意 'think' 的 /θ/ 音，舌尖要轻轻咬在上下齿之间").
-   - Point out stress and intonation (e.g., "重音可以放在 'debug' 上").
-3. **MANDATORY UI**: Send an inline keyboard (`tg` tool `type: "keyboard"`) with this EXACT LAYOUT so they know what to do next. DO NOT talk about "刷分" or use gaming terminology:
-   - Row 1: `[["🔄 再来一句|shadow:next", "🧭 练习其他|nav:main"]]`
-   - Row 2: `[["🔁 刚才那句再练一遍|shadow:retry"]]`
+1. **MANDATORY Assessment**: Call the `pron_assess` tool, passing the user's `audio_path` and the `reference_text` (the correct sentence). Wait for the result.
+2. **Execute Parallel Actions**: You MUST invoke BOTH `tg` and `persist` tools **concurrently/in parallel**.
+   - **Action 1 - Send Feedback (MANDATORY `tg` tool)**: Use `tg(type=keyboard)`.
+     - **Text content**: Format the feedback strictly and cleanly using Markdown:
+       1. **Score Board**: "🎯 **得分**：综合 88 | 准确 90 | 流利 85 | 韵律 82" (Must use these 4 metrics from Azure).
+       2. **Diagnosis**: If the overall score is > 85, briefly praise them. If < 85, point out exactly which word failed in the Azure `words` array.
+       3. **Articulatory Guidance (The Clinic)**: Provide precise, physical instructions for 1-2 specific sounds that had low accuracy. Example: "👉 **/θ/ 音纠正**：舌尖要轻轻咬在上下齿之间，让气流摩擦而出，不要发成 /s/。" Mention stress and intonation based on the prosody score. Keep it professional, concise, and structured with bullet points.
+     - **Buttons (MANDATORY EXACT LAYOUT)**: `[["🔄 练下一句|speak_next", "🧭 练习其他|nav_main"], ["🔁 刚才那句再练一次|speak_retry"]]`
+   - **Action 2 - Data Update (MANDATORY `persist` tool)**: Log the practice data.
+     ```json
+     {
+       "skill_type": "speaking.shadowing",
+       "session_id": "<session>",
+       "prompt": "<correct sentence>",
+       "raw_content": "<transcription from pron_assess>",
+       "accuracy": <pron_assess accuracy score / 100>,
+       "raw_score": <pron_assess pron score>,
+       "max_score": 100,
+       "feedback": "<IN ENGLISH: textual analysis of specific phoneme or rhythm errors based on the 4 sub-scores>",
+       "audio_path": "<tts file path>",
+       "load_score": 2,
+       "minutes": 1,
+       "errors": "[{\"key\":\"pronunciation_error\",\"category\":\"speaking\",\"note\":\"<IN ENGLISH: specific phoneme error>\"}]",
+       "subcap_scores": "[{\"key\":\"speaking.fluency\",\"score\":<fluency score/10>, \"evidence\":\"<IN ENGLISH: fluency justification>\"}, {\"key\":\"speaking.pronunciation\",\"score\":<accuracy score/10>}]"
+     }
+     ```
 
-### State C: Handling the Choice
-- If `shadow:retry`: Do NOT generate a new sentence. Ask them to send another voice message for the SAME sentence. Go to State B.
-- If `shadow:next`: Move to the next sentence in the batch. Go to State A.
+### State D: Handling the Choice
+If the user clicks a button:
+- `speak_retry`: Do NOT generate a new sentence. Briefly reply via `tg(type=text)` asking them to record the SAME sentence again. Go to **State C** when they reply.
+- `speak_next`: Generate the next sentence and go to **State A**.
+- `nav_main`: Act exactly like the `/new` command. Use the `reset_context` tool with NO arguments (you MUST NOT provide a summary), then trigger `ielts-router` skill to show the main practice menu.
 
-## 4. End-of-Group UX (MANDATORY)
-After the batch of 3 sentences is successfully completed (i.e., they moved `next` 3 times), you MUST send an inline keyboard to close the loop:
-- Row 1: `[🔄 再练一组 (Another Batch)|speaking-shadowing]`, `[🧭 练习其他 (Main Menu)|nav:main]`
-
-## 5. Persist (Data Contract)
-
-**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
-
-After the 3-sentence batch:
-
-1. **`samples`** row:
-   - `skill_type = 'speaking.shadowing'`
-   - `prompt` = the current sentence
-   - `raw_content` = pron_assess scores summary (e.g. `"S1:92, S2:78, S3:85"`)
-   - `accuracy` = average pron score / 100 (e.g. 85/100 = 0.85)
-   - `raw_score` = sentences scored ≥85, `max_score` = 3
-   - `load_score = 2`
-   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
-     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
-
-2. **`errors`** — from `references/error-keys.md`:
-   - `pronunciation_error` — for specific sound patterns
-
-3. **`subcap_scores`** — at least 1:
-   - `speaking.pronunciation` — based on average pron_assess score
-
-4. **`activity_log`** — upsert today
-
-## 6. Hard Rules
+## 4. Hard Rules
 1. **Never assess without the tool**: You MUST use `pron_assess` to get real data. Do not guess their pronunciation.
-2. **One sentence at a time**: Never give them a huge paragraph. Shadowing is about micro-correction.
-3. **Be encouraging**: Pronunciation practice is frustrating. Always highlight what they did right (e.g., "你的流利度特别好！").
+2. **Reply Hygiene**: Send voice and instruction messages separately without using `reply_to`.
+3. **No Batching**: Process exactly ONE sentence per cycle. Do not wait for 3 sentences to save data.

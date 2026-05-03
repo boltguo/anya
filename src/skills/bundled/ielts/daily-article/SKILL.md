@@ -1,44 +1,46 @@
 ---
 name: daily-article
-description: "Daily authentic article. Sources an authentic article based on user interests, generates audio, and delivers it while silently seeding new vocabulary into the database."
+description: "Daily authentic article reading. Trigger for '今日阅读', '每日文章', 'daily article'."
 ---
 
 # Daily Authentic Article & Silent Seeding
 
 ## 1. When to Use
-- Manual trigger: User says "每日文章 / daily article / 今日阅读 / 来篇文章"
-- Callback `daily-article`
+- User phrases: "今日阅读", "每日文章", "daily article"
+- Callback/System triggers: `daily-article`
 
-## 2. Workflow (Step-by-Step)
-**Step 1: Source & Generate the Material**
-- Query `USER.md` for the user's interests and their `current_level_estimate` (or infer their level from `MEMORY.md`).
-- Use `web_search` to find a fresh, high-quality, authentic piece of news or a trending topic related to those interests.
-- Generate an engaging English article based on the search. 
-  - **CRITICAL**: You MUST adapt the article's length and vocabulary difficulty to the user's current level.
-    - **Beginner / weak**: 60-100 words, simple sentence structures (Band 4.5-5.0).
-    - **Intermediate / medium**: 100-150 words, some complex clauses (Band 5.5-6.0).
-    - **Advanced / fluent**: 150-250 words, rich academic or native phrasing (Band 6.5-7.5).
-  - Include a short Chinese translation or summary at the bottom.
+## 2. Adaptive Scaling
+Read the user's interests from `USER.md` and their level from `MEMORY.md`.
+- **Beginner (< 5.0)**: 60-100 words, simple sentence structures.
+- **Intermediate (5.0-6.0)**: 100-150 words, some complex clauses.
+- **Advanced (6.5+)**: 150-250 words, rich academic or native phrasing.
 
-**Step 2: Generate Audio**
-- Use the `tts` tool to generate the spoken audio of the English article. (Use normal speed, e.g., `en-US-AriaNeural`).
-- Save the returned `audio_path`.
+## 3. Workflow (State Machine - STRICT EXECUTION)
 
-**Step 3: Silent Vocabulary Seeding (MANDATORY BACKEND ACTION)**
-- Scan the sourced text. Identify **3 to 5** high-value, native phrases, idioms, or academic words that the user likely doesn't know.
-- **Deduplication Check**: Query the `words` table in `study.db` to ensure these words don't already exist.
-- **Silent Insert**: Use the `db` tool to INSERT the new words into the `words` table.
-  - Set `mastery="queued_new"`, `origin="daily_article"`, `srs_due=CURRENT_TIMESTAMP`.
-  - Include a concise Chinese definition and the EXACT sentence from the article as the `example_en`.
-- **CRITICAL RULE**: Do NOT tell the user you did this. This must be completely invisible to them.
+### State 0: Clean Slate & Search
+1. **MANDATORY**: Call the `reset_context` tool immediately. Pass NO arguments (leave summary empty).
+2. **Search**: Call the `web_search` tool to find a fresh, high-quality, authentic piece of news or a trending topic related to the user's interests from `USER.md`.
 
-**Step 4: Delivery via Telegram**
-- Use `tg(type:"text")` to send the article. Format the Chinese translation using an expandable blockquote (`<blockquote expandable>...</blockquote>`) so it doesn't clutter the chat unless tapped.
-- Use `tg(type:"voice")` to send the audio file.
+### State A: Generate & Seed Vocabulary
+1. **Generate Article**: Write an engaging English article based on the search results, adapting to the user's level.
+2. **Silent Vocabulary Seeding (MANDATORY BACKEND ACTION)**: 
+   - Scan your article. Identify **3 to 5** high-value, native phrases, idioms, or academic words that the user likely doesn't know.
+   - Use the `db` tool to query the `words` table to ensure these words don't already exist.
+   - Use the `db` tool to `INSERT` the new words into the `words` table.
+     - Set `mastery="queued_new"`, `origin="daily_article"`, `srs_due=CURRENT_TIMESTAMP`.
+     - Include a concise Chinese definition and the EXACT sentence from the article as the `example_en`.
+   - **CRITICAL RULE**: This must be completely invisible to the user. Do NOT tell them you added words.
 
-## 3. Persist (Data Contract)
-- **Table `words`**: MUST insert the 3-5 new words silently. Ensure no duplicates.
+### State B: Audio Delivery & Presentation
+Once the article is written and words are seeded, deliver the payload:
+1. **Generate Audio**: Use the `tts` tool to generate the spoken audio of the English article. Choose a high-quality podcast-style voice (e.g., `en-US-AriaNeural` or `en-GB-RyanNeural`).
+2. **Execute Parallel UI Actions**: You MUST invoke the `tg` tool multiple times concurrently (in the same turn) to send the audio and the text separately.
+   - **Action 1 (Voice)**: `tg(type="voice")` to send the generated audio file.
+   - **Action 2 (Text & Buttons)**: `tg(type="keyboard")` to send the article text.
+     - **Text**: Send the English article. Below it, include a short Chinese translation/summary wrapped in `<blockquote expandable>...</blockquote>` so it stays collapsed by default. Highlight the 3-5 words you seeded in **bold**.
+     - **Buttons**: `[["🧭 回到主菜单|nav_main"]]`
+3. **CRITICAL STOP**: End your turn. The skill is complete.
 
 ## 4. Hard Rules
-1. **Absolute Silence on Vocab**: NEVER write "I added some words to your list" in the message sent to the user. The vocabulary extraction must be a background process only.
-2. **Direct Telegram Delivery**: Use the `tg` tool to send the article text and voice audio directly.
+1. **Absolute Silence on Vocab**: NEVER write "I added some words to your list" in the message sent to the user.
+2. **No Conversational TTS**: The `tts` tool is ONLY for reading the article itself. Do not use TTS for conversational filler.

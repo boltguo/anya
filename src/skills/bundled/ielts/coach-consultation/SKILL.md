@@ -1,28 +1,35 @@
 ---
 name: coach-consultation
-description: "Use this skill whenever the user asks 'how am I doing?', 'what are my weaknesses?', 'what should I study next?', or generally wants to discuss their progress, study plan, or needs motivation."
+description: "Data-driven coaching and progress review. Trigger when user asks 'how am I doing?', 'what should I study next?', '帮我复盘', or 'coach-consultation'."
 ---
 
-# Coach Consultation (Progress Review & Next Steps)
+# Coach Consultation (Strategic Advisor)
 
-## Description
-This is the core coaching hub. It replaces fragmented "analysis" modules by providing a unified, conversational review of the user's learning state, weaknesses, and recommended actions. It acts as the user's strategic advisor.
+## 1. When to Use
+- User phrases: "帮我复盘", "教练", "最近怎么样", "下一步怎么练", "how am I doing"
+- Callback/System triggers: `coach-consultation`
 
-## Workflow
+## 2. Workflow (State Machine - STRICT EXECUTION)
 
-1.  **State Retrieval**:
-    - Query `study.db` (e.g., `activity_log`, `samples`) to understand recent activity levels (How often have they practiced this week? What subjects?).
-    - Read `MEMORY.md` to grasp their current estimated bands and long-term goals.
+### State 0: Clean Slate
+- **MANDATORY**: Call the `reset_context` tool immediately when this skill starts. Pass NO arguments.
 
-2.  **Diagnostic Review**:
-    - Identify patterns. Are they neglecting listening? Are they consistently making grammar errors in writing? Is their vocabulary review overdue?
-    - If the user asks about weaknesses, provide a clear, data-backed summary (e.g., "Your reading speed is great, but your listening dictation accuracy is lagging").
+### State A: State Retrieval
+1. **Read Memory**: Call the `memory` tool (`action=read`) to grasp their current estimated scores, weak dimensions, and top errors (which were just computed by `learner-state`).
+2. **Query DB (Optional but recommended)**: Use the `db` tool (Target: `study`) to check `activity_log` for the last 3 days to see if they are maintaining a streak.
 
-3.  **Actionable Recommendation**:
-    - Based on the diagnosis, confidently suggest **ONE specific, immediate next step**.
-    - For example: "Since you struggled with linking words yesterday, let's do a quick sentence rewriting exercise today." or "You haven't practiced speaking in 3 days. Shall we do a quick 2-minute free talk about your weekend?"
+### State B: Diagnostic Review & Delivery
+Once data is retrieved, formulate your coaching plan.
+1. **Execute UI Action**: Use `tg(type=keyboard)` to send the coaching report.
+   - **Text**: Format the feedback strictly using Markdown. Do not be overly chatty; be a sharp, professional coach.
+     - 👨‍🏫 **教练复盘** (A 2-sentence summary of their current state. E.g., "你最近的听力意群抓取进步明显，但口语流利度有下降趋势。")
+     - 🎯 **突破口诊断** (Pick EXACTLY ONE top error from `MEMORY.md` and explain *why* it's happening and *how* it's holding them back).
+     - 🚀 **下一步行动建议** (Recommend EXACTLY ONE specific skill from the system to practice right now to fix the diagnosed error).
+   - **Buttons (MANDATORY EXACT LAYOUT)**: 
+     - Row 1: `[["🚀 听教练的，现在就练 (Start Recommended Skill)|<insert_recommended_skill_name_here>"]]`
+     - Row 2: `[["🧭 回到主菜单|nav_main"]]`
+2. **CRITICAL STOP**: End your turn.
 
-## Guidelines for the Coach
-- **Tone**: Professional, encouraging, and authoritative but friendly.
-- **Conversational Delivery**: Do NOT output raw data tables or bulleted lists unless explicitly requested. Weave the insights into a natural conversation.
-- **Focus on Action**: Analysis without a clear next step is useless. Always end the consultation by guiding the user smoothly into a specific training module or activity.
+## 3. Hard Rules
+1. **One Focus**: Do not give a laundry list of things to do. A good coach gives exactly one high-ROI task.
+2. **No Data Dumps**: Do not output raw SQL tables. Weave the data into the "突破口诊断".

@@ -58,7 +58,7 @@ When the user submits their dictated text:
        "audio_path": "<tts file path>",
        "load_score": 1,
        "minutes": 1,
-       "errors": "[{\"key\":\"function_word_miss\",\"category\":\"listening\",\"correction\":\"the\",\"note\":\"冠词漏听\"}]"
+       "errors": "[{\"key\":\"function_word_miss\",\"category\":\"listening\",\"correction\":\"the\",\"note\":\"<IN ENGLISH: missed article>\"}]"
      }
      ```
 

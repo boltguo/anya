@@ -57,7 +57,7 @@ When the user submits their gist summary:
        "audio_path": "<tts file path>",
        "load_score": 2,
        "minutes": 1,
-       "subcap_scores": "[{\"key\":\"listening.gist\",\"score\":5.0,\"evidence\":\"Understood main topic but missed the pivot\"}]"
+       "subcap_scores": "[{\"key\":\"listening.gist\",\"score\":5.0,\"evidence\":\"<IN ENGLISH: Understood main topic but missed the pivot>\"}]"
      }
      ```
 

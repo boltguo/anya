@@ -261,6 +261,10 @@ sequenceDiagram
 | `listening-numberdrill` | 数字/日期/时间/拼写专项（13 vs 30、double-0、人名拼写） |
 | `listening-podcast` | **播客泛听浸泡**：不要求做题，训练在长程真实语料中抓取大意和猜测语境的能力 |
 
+*(TODO / Future Enhancements)*
+- *`listening-accents` (计划中)*: 杂音与方言抗干扰训练（印度/苏格兰口音、背景噪音），提升真实环境生存率。
+- *`listening-response` (计划中)*: 交互式听力/听后秒回。播放高度口语化短句，要求用户在极限时间内选出/说出地道回应，训练“听觉-反应”神经反射弧。
+
 ### 📖 阅读 Reading
 
 | Skill | 说明 |

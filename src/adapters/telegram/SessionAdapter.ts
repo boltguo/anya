@@ -188,25 +188,27 @@ export class TelegramSessionAdapter implements Adapter {
     read_file: '📄 Reading file',
     write_file: '✏️ Writing file',
     list_dir: '📁 Browsing directory',
-    web_search: '🔍 Searching',
+    web_search: '🌐 Searching web',
     memory: '🧠 Updating memory',
-    skill_view: '🧩 Loading skill',
+    skill_view: '🎓 Loading skill',
     clarify: '💬 Asking question',
     tg: '💬 Sending message',
     tts: '🔊 Generating audio',
     pron_assess: '🗣️ Assessing pronunciation',
     db: '🗄️ Querying database',
+    persist: '💾 Saving data',
+    reset_context: '🧹 Clearing context',
   };
 
   /** Current status text */
-  private statusText = '🤔 Thinking...';
+  private statusText = '🧠 Thinking...';
 
   /**
    * Send the initial "thinking" status immediately.
    * Called right after construction, before agent.run().
    */
   async sendThinking(): Promise<void> {
-    this.statusText = '🤔 Thinking...';
+    this.statusText = '🧠 Thinking...';
     const msg = await this.ctx.reply(this.statusText, { parse_mode: undefined }).catch(() => null);
     if (msg) this.statusMessageId = msg.message_id;
   }
@@ -219,7 +221,7 @@ export class TelegramSessionAdapter implements Adapter {
 
   showToolResult(_toolName: string, _result: string, _isError: boolean): void {
     // Reset to thinking — next tool call or end-of-turn will update
-    this.statusText = '🤔 Thinking...';
+    this.statusText = '🧠 Thinking...';
     this.enqueue(() => this.flushStatus());
   }
 

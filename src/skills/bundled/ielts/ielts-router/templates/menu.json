@@ -3,7 +3,7 @@
     "text": "🌟 专属英语教练\n\n欢迎来到全能训练中心，选择你想提升的方向：",
     "buttons": [
       [
-        "📰 每日早报精读|daily-article"
+        "📰 今日阅读|daily-article"
       ],
       [
         "🗣️ 口语实战|nav:speaking",
@@ -17,7 +17,7 @@
         "📚 词汇网络|nav:vocab"
       ],
       [
-        "📊 能力评估|nav:analysis",
+        "📊 能力评估|learner-state",
         "🔍 错题与答疑|error-clinic"
       ]
     ]
@@ -96,20 +96,6 @@
       [
         "🧠 边缘记忆抽查|vocab-testme",
         "🔖 语境生词捕获|vocab-harvest"
-      ],
-      [
-        "← 返回|nav:main"
-      ]
-    ]
-  },
-  "analysis": {
-    "text": "📊 诊断与规划 — 数据驱动的语言学习\n\n基于你的练习数据，重新校准学习方向。",
-    "buttons": [
-      [
-        "🧭 当前能力雷达|learner-state"
-      ],
-      [
-        "💬 找教练聊进度|coach-consultation"
       ],
       [
         "← 返回|nav:main"
