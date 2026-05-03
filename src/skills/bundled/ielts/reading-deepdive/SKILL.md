@@ -1,6 +1,6 @@
 ---
 name: reading-deepdive
-description: "MUST trigger for intensive reading comprehension. Focuses on deep syntax analysis and logic mapping without time limits. Trigger for 'deep reading', 'analyze article', '精读'."
+description: "MUST trigger for intensive reading comprehension. Focuses on deep syntax analysis and logic mapping without time limits. Trigger for 'deep reading' or 'analyze article'."
 ---
 
 # Reading Deep Dive (Syntax & Logic)

@@ -1,68 +1,71 @@
 ---
 name: listening-podcast
-description: "MUST trigger for extensive listening practice where the goal is grasping the main idea, not dictation. Trigger for 'listen to a podcast', 'news', 'extensive listening'."
+description: "Extensive listening practice for grasping the main idea, not dictation. Trigger for '泛听', 'listen to a podcast', 'news', 'extensive listening'."
 ---
 
 # Listening Podcast (Extensive & Gist)
 
-## 1. When to Use (Trigger Contexts)
+## 1. When to Use
 - User phrases: "泛听", "listen to a podcast", "news", "extensive listening"
 - Callback/System triggers: `listening-podcast`
 
 ## 2. Adaptive Scaling (CRITICAL Constraint)
 Read the user's listening level from `MEMORY.md`.
-- **Beginner (< 5.0)**: 40-60 seconds audio. Clear context (e.g., daily life).
-- **Intermediate (5.0-6.0)**: 1-1.5 minutes audio. Light academic or news context.
-- **Advanced (6.5+)**: 1.5-2 minutes. **MUST inject 10-15% spoken fillers ("um", "you know")** and use non-standard accents (e.g., British, Australian) to simulate real-world noise.
+- **Beginner (< 5.0)**: 30-40 seconds audio. Clear context (e.g., daily life).
+- **Intermediate (5.0-6.0)**: 1 minute audio. Light academic or news context.
+- **Advanced (6.5+)**: 1.5-2 minutes. **MUST inject 10-15% spoken fillers ("um", "you know")** and use non-standard accents (e.g., `en-GB`, `en-AU`) to simulate real-world noise.
 
-## 3. Workflow (Step-by-Step)
-Default session is **1 audio clip** followed by discussion.
+## 3. Workflow (State Machine - STRICT EXECUTION)
+You must follow these steps strictly to prevent hallucinations.
 
-**Step 1: Audio Delivery & UI Setup**
-- Generate TTS for the selected script.
-- Send the audio to the user.
-- **Reply rule (MANDATORY):** Audio does NOT reply. The instruction message MUST reply to the audio.
-- **Tone rule:** Sound like a friend sharing a podcast. "听听这段很有意思的播客。你觉得他最想表达的核心观点是什么？"
-- **MANDATORY UI**: Send an inline keyboard:
-  - Row 1: `[🐢 放慢一点]`, `[📖 看原文剧本]`
-  - Row 2: `[😵 没听懂大意]`
+**CRITICAL TTS RULE**: The `tts` tool MUST ONLY be used to generate the target English practice audio. NEVER use the `tts` tool to speak conversational fillers. Use `tg(type=text)` for chat.
 
-**Step 2: Handle Feedback (If clicked)**
-- `[🐢 放慢一点]`: Resend at -10% rate.
-- `[📖 看原文剧本]`: Reveal the English transcript immediately.
-- `[😵 没听懂大意]`: Give a 2-sentence summary in Chinese, and ask a simpler specific question.
-- Log button usage to `ui_feedback` in `samples`.
+### State 0: Clean Slate (Run ONCE at start)
+- **MANDATORY**: Call the `reset_context` tool immediately when this skill starts. Pass a summary like: `"Starting extensive listening podcast."`
 
-**Step 3: Gist Evaluation & Discussion**
-- Evaluate the user's response. Do NOT focus on grammar here; focus on comprehension.
-- If they missed the gist, explain how discourse markers (e.g., "However", "Despite") shifted the meaning.
+### State A: Prepare & Deliver (Listen)
+1. **Generate Content**: Create a podcast script matching the Scaling Table above.
+2. **Generate Audio**: Use the `tts` tool to generate the audio. Send it via `tg(type=voice)`. (DO NOT generate TTS for your own conversational replies).
+3. **Send Instruction (Same Turn)**: Use `tg(type=keyboard)` along with the voice message. 
+   - **Text**: "🎧 听听这段播客。不用抓每一个字，**你觉得他最想表达的核心观点是什么？** (可以用中文回答)\n\n实在听不出可以点开看原文：<tg-spoiler>[Insert original English script here]</tg-spoiler>"
+   - **Buttons**: `[["🐢 慢速播放|pod_slow", "😵 完全听不懂|pod_hard"]]`
+4. **CRITICAL STOP**: End your turn immediately. WAIT for the user to type their answer or click a button.
 
-## 4. End-of-Group UX (MANDATORY)
-After the discussion, you MUST send an inline keyboard in Chinese:
-- Row 1: `[🔄 再听一篇]`, `[🧭 练习其他]`
+### State B: Handle Feedback Buttons (Before typing)
+If the user clicks a button:
+- `pod_slow`: Briefly acknowledge via `tg(type=text)`, use `tts` with `rate="-10%"` on the SAME script, send new voice, and resend the instruction keyboard. Wait.
+- `pod_hard`: Acknowledge naturally via `tg(type=text)`. Explain the background context briefly in Chinese, generate a NEW significantly shorter/simpler script via `tts`, and go back to **State A**.
 
-## 5. Persist (Data Contract)
+### State C: Evaluation & Data Update (User types the answer)
+When the user submits their gist summary:
+1. **Evaluate**: Do NOT correct minor grammar or spelling in their answer. Focus ONLY on comprehension. Did they catch the main idea? Did they get tricked by discourse markers like "However"?
+2. **Execute Parallel Actions**: You MUST invoke BOTH `tg` and `persist` tools **concurrently/in parallel**.
+   - **Action 1 - Send Feedback (MANDATORY `tg` tool)**: Use `tg(type=keyboard)`.
+     - **Text content**: Brief evaluation of their understanding in Chinese, pointing out the key phrase/turning point in the audio that carried the main idea.
+     - **Buttons (MANDATORY EXACT LAYOUT)**: `[["🔄 再听一篇|pod_next", "🧭 练习其他|nav_main"]]`
+   - **Action 2 - Data Update (MANDATORY `persist` tool)**: Log the practice data.
+     ```json
+     {
+       "skill_type": "listening.podcast",
+       "session_id": "<session>",
+       "prompt": "<the podcast script>",
+       "raw_content": "<user's summary>",
+       "accuracy": 0,
+       "raw_score": <1 if gist caught, 0 if missed>,
+       "max_score": 1,
+       "feedback": "<IN ENGLISH: textual analysis of whether they grasped the gist and why>",
+       "audio_path": "<tts file path>",
+       "load_score": 2,
+       "minutes": 1,
+       "subcap_scores": "[{\"key\":\"listening.gist\",\"score\":5.0,\"evidence\":\"Understood main topic but missed the pivot\"}]"
+     }
+     ```
 
-**Follow `support/ielts-data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+### State D: Post-Practice Loop
+- `pod_next`: Loop back to **State A** (generate new topic).
+- `nav_main`: Act exactly like the `/new` command. Use the `reset_context` tool with NO arguments (you MUST NOT provide a summary), then trigger `ielts-router` skill to show the main practice menu.
 
-1. **`samples`** row:
-   - `skill_type = 'listening.podcast'`
-   - `prompt` = the podcast script/topic
-   - `raw_content` = the user's gist response
-   - `accuracy = NULL` (comprehension is qualitative)
-   - `load_score = 2`
-   - `audio_path` = TTS file path
-   - `ui_feedback` = clicked buttons (e.g. `"slower,transcript"`)
-   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
-     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
-
-2. **`subcap_scores`** — at least 1:
-   - `listening.gist` — how well they grasped the main idea
-   - `listening.detail` — if follow-up questions were asked
-
-3. **`activity_log`** — upsert today
-
-## 6. Hard Rules
+## 4. Hard Rules
 1. **NO Dictation**: NEVER ask the user to type exactly what they heard.
-2. **Reply Hygiene**: Instruction messages MUST reply to the corresponding audio.
-3. **No Early Reveals**: Do not show the transcript unless `[📖 看原文剧本]` is clicked.
+2. **No Early Reveals**: NEVER show the English transcript outside of the spoiler tag.
+3. **No Conversational TTS**: The `tts` tool is ONLY for the practice material.

@@ -1,40 +1,37 @@
 {
   "main": {
-    "text": "📚 IELTS 训练中心\n\n选一个方向开始，每个菜单都能返回上一层。",
+    "text": "🌟 专属英语教练\n\n欢迎来到全能训练中心，选择你想提升的方向：",
     "buttons": [
       [
-        "📰 每日文章精读|daily-article"
+        "📰 每日早报精读|daily-article"
       ],
       [
-        "🗣️ 口语|nav:speaking",
-        "🎧 听力|nav:listening"
+        "🗣️ 口语实战|nav:speaking",
+        "🎧 听力磨耳朵|nav:listening"
       ],
       [
-        "📖 阅读|nav:reading",
-        "✍️ 写作|nav:writing"
+        "📖 阅读解析|nav:reading",
+        "✍️ 写作输出|nav:writing"
       ],
       [
-        "📚 词汇|nav:vocab"
+        "📚 词汇网络|nav:vocab"
       ],
       [
-        "📊 诊断分析|nav:analysis",
-        "💬 教练复盘|coach-consultation"
+        "📊 能力评估|nav:analysis",
+        "🔍 错题与答疑|error-clinic"
       ]
     ]
   },
   "speaking": {
-    "text": "🗣️ 口语训练 — 选择模式\n\n每个模式都针对不同的口语子能力；选完进去就不再切模式。",
+    "text": "🗣️ 口语训练 — 建立肌肉记忆与表达自信\n\n从发音矫正到自由对话，全方位提升口语流利度。",
     "buttons": [
       [
-        "🎙️ 跟读 shadowing|speaking-shadowing",
-        "🔁 复述 repeat|speaking-repeat"
+        "🎙️ 发音门诊 (正音)|speaking-shadowing",
+        "🔁 听后复述 (输入转输出)|speaking-repeat"
       ],
       [
-        "💬 自由表达|speaking-freetalk",
-        "🎭 情景对话|speaking-roleplay"
-      ],
-      [
-        "🔍 讲解上次错题|error-clinic"
+        "💬 自由闲聊 (Freetalk)|speaking-freetalk",
+        "🎭 情景模拟 (Roleplay)|speaking-roleplay"
       ],
       [
         "← 返回|nav:main"
@@ -42,66 +39,63 @@
     ]
   },
   "listening": {
-    "text": "🎧 听力训练 — 选择模式\n\n分题型和分能力两种入口。",
+    "text": "🎧 听力训练 — 打通耳朵的底层逻辑\n\n从抓取细节到意群跟读，逐步提升听力理解能力。",
     "buttons": [
       [
-        "✏️ 听写|listening-dictation",
-        "🎙️ 听力跟读|listening-shadowing"
+        "✏️ 句子精听听写|listening-dictation",
+        "🎙️ 意群节奏跟读|listening-shadowing"
       ],
       [
-        "🔢 数字日期拼写|listening-numberdrill",
+        "🔢 数字与细节抓取|listening-numberdrill",
         "📻 播客泛听浸泡|listening-podcast"
       ],
       [
-        "🔍 讲解上次错题|error-clinic",
         "← 返回|nav:main"
       ]
     ]
   },
   "reading": {
-    "text": "📖 阅读训练 — 选择模式\n\n计时和非计时分开；题型专项单列。",
+    "text": "📖 阅读训练 — 培养母语者的阅读直觉\n\n深挖语法逻辑，提升快速获取信息的能力。",
     "buttons": [
       [
         "🐢 核心外刊精读|reading-deepdive",
-        "📰 真实外刊闲聊|material-discussion"
+        "📰 话题材料漫谈|material-discussion"
       ],
       [
-        "⚡ 略读主旨|reading-skim-drill",
-        "🔖 抽生词到词汇|reading-vocab-extract"
+        "⚡ 快速略读扫意|reading-skim-drill",
+        "🔖 语境生词捕获|vocab-harvest"
       ],
       [
-        "🔍 讲解上次错题|error-clinic",
         "← 返回|nav:main"
       ]
     ]
   },
   "writing": {
-    "text": "✍️ 写作训练 — 选择模式\n\n单项拆解和长文综合分开练。",
+    "text": "✍️ 写作训练 — 结构化思维与精准表达\n\n从核心句型打磨到长文结构，消除中式英语。",
     "buttons": [
       [
-        "📝 长文综合写作|writing-essay",
-        "📔 英语日记碎碎念|writing-journal"
+        "🏋️ 核心句型构建|writing-builder",
+        "🔁 润色与升级改写|writing-rewrite"
       ],
       [
-        "🔁 样文改写|writing-rewrite",
-        "🏋️ 句法构造工厂|writing-builder"
+        "📔 英语日记碎碎念|writing-journal",
+        "📝 综合长文输出|writing-essay"
       ],
       [
-        "🔍 讲解上次错题|error-clinic",
         "← 返回|nav:main"
       ]
     ]
   },
   "vocab": {
-    "text": "📚 词汇训练 — 选择模式\n\n复习 / 抽词 / 话题 / 主动测试。",
+    "text": "📚 词汇网络 — 告别死记硬背\n\n通过语境和科学的记忆曲线，真正掌握主动词汇。",
     "buttons": [
       [
-        "🔄 间隔复习|vocab-review",
-        "🧠 考考我|vocab-testme"
+        "🔄 记忆曲线复习|vocab-review",
+        "🎯 话题词汇串联|vocab-topic"
       ],
       [
-        "📖 题源抽词|vocab-contextual",
-        "🎯 话题成组|vocab-topic"
+        "🧠 边缘记忆抽查|vocab-testme",
+        "🔖 语境生词捕获|vocab-harvest"
       ],
       [
         "← 返回|nav:main"
@@ -109,10 +103,10 @@
     ]
   },
   "analysis": {
-    "text": "📊 诊断分析 — 看清楚现在的状态再决定下一步\n\n每项只读取已有数据，不做新题。",
+    "text": "📊 诊断与规划 — 数据驱动的语言学习\n\n基于你的练习数据，重新校准学习方向。",
     "buttons": [
       [
-        "🧭 当前综合水平|learner-state"
+        "🧭 当前能力雷达|learner-state"
       ],
       [
         "💬 找教练聊进度|coach-consultation"

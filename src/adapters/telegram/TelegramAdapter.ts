@@ -195,7 +195,7 @@ export class TelegramAdapter {
     // ── Build command list from installed skills ──
     const skills = loadSkills();
     const botCommands: Array<{ command: string; description: string }> = [
-      { command: 'new', description: '🔄 New conversation' },
+      { command: 'new', description: '🔄 New practice session' },
     ];
 
     // Map skill names to short command names — only for skills with command: true
@@ -220,7 +220,7 @@ export class TelegramAdapter {
         `Hey! I'm ${name} 🌟\n\n` +
         `Just send me a message, or jump right in:\n\n` +
         `${cmdList}\n\n` +
-        `/new start fresh  ·  /kill force stop`,
+        `/new start practice  ·  /kill force stop`,
       );
     });
 
@@ -228,8 +228,9 @@ export class TelegramAdapter {
       const sessionKey = `tg:${ctx.chat.id}`;
       this.cancelPending();
       await createSession(sessionKey);
-      await ctx.reply('🔄 Fresh start! What\'s on your mind?');
-      agentLogger.info({ msg: 'tg_new_session', chatId: ctx.chat.id });
+      agentLogger.info({ msg: 'tg_new_session_trigger_practice', chatId: ctx.chat.id });
+      const input = `[/command: ielts-router] Run the "ielts-router" skill now.`;
+      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
     });
 
     this.bot.command('kill', async (ctx) => {
@@ -239,6 +240,40 @@ export class TelegramAdapter {
       const extra = cancelled > 0 ? ` Cancelled ${cancelled} pending task(s).` : '';
       await ctx.reply(`💀 Stopped.${extra}\nSession cleared — send a message to start over.`);
       agentLogger.info({ msg: 'tg_kill', chatId: ctx.chat.id, cancelled });
+    });
+
+    this.bot.command('usage', async (ctx) => {
+      const { loadUsage } = await import('../../lib/usage.js');
+      const usage = loadUsage();
+      const fmtNum = (n: number) => n.toLocaleString();
+      const fmtDuration = (sec: number) => {
+        if (sec < 60) return `${Math.round(sec)}s`;
+        if (sec < 3600) return `${Math.floor(sec / 60)}m ${Math.round(sec % 60)}s`;
+        return `${Math.floor(sec / 3600)}h ${Math.round((sec % 3600) / 60)}m`;
+      };
+      
+      const AZURE_FREE_CHARS = 500_000;
+      const AZURE_FREE_SPEECH_HOURS = 5;
+      
+      const text = `📊 <b>Anya Usage — ${usage.month}</b>\n\n` +
+        `🧠 <b>LLM (ChatGPT)</b>\n` +
+        `├ Calls: <code>${fmtNum(usage.llm.calls)}</code>\n` +
+        `├ Input: <code>${fmtNum(usage.llm.input_tokens)}</code>\n` +
+        `└ Output: <code>${fmtNum(usage.llm.output_tokens)}</code>\n\n` +
+        `📢 <b>TTS (Azure)</b>\n` +
+        `├ Calls: <code>${fmtNum(usage.tts.calls)}</code>\n` +
+        `├ Chars: <code>${fmtNum(usage.tts.chars)}</code> / ${fmtNum(AZURE_FREE_CHARS)}\n` +
+        `└ Dur: <code>${fmtDuration(usage.tts.duration_sec)}</code>\n\n` +
+        `🗣️ <b>Pronunciation (Azure)</b>\n` +
+        `├ Calls: <code>${fmtNum(usage.pron_assess.calls)}</code>\n` +
+        `└ Dur: <code>${fmtDuration(usage.pron_assess.duration_sec)}</code> / ${AZURE_FREE_SPEECH_HOURS}h\n\n` +
+        `🎤 <b>STT (Groq Whisper)</b>\n` +
+        `├ Calls: <code>${fmtNum(usage.stt.calls)}</code>\n` +
+        `└ Dur: <code>${fmtDuration(usage.stt.duration_sec)}</code>\n\n` +
+        `🔍 <b>Web:</b> <code>${fmtNum(usage.web_search.calls)}</code> | 👀 <b>Vision:</b> <code>${fmtNum(usage.vision.calls)}</code>`;
+
+      await ctx.reply(text, { parse_mode: 'HTML' });
+      agentLogger.info({ msg: 'tg_usage_command', chatId: ctx.chat.id });
     });
 
     this.bot.command('restart', async (ctx) => {
@@ -278,7 +313,6 @@ export class TelegramAdapter {
     // ── Command aliases: short Telegram commands → existing skills ──
     // No separate SKILL.md needed — just a mapping table.
     const commandAliases: Array<{ cmd: string; description: string; skill: string }> = [
-      { cmd: 'practice', description: '📝 Start practice', skill: 'ielts-router' },
       { cmd: 'init',     description: '🎯 Initialize study profile', skill: 'profile-manager' },
     ];
 
@@ -296,6 +330,7 @@ export class TelegramAdapter {
 
     // Append restart and kill last so they appear at the bottom of the menu
     botCommands.push(
+      { command: 'usage', description: '📊 Check API usage' },
       { command: 'restart', description: '♻️ Restart gateway' },
       { command: 'kill', description: '💀 Force stop & clear' },
     );

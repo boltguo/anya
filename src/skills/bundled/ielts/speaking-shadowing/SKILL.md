@@ -1,13 +1,14 @@
 ---
 name: speaking-shadowing
-description: "MUST trigger when the user wants to practice pronunciation, do shadowing (跟读), or improve their accent."
+description: "Speaking Pronunciation Clinic. Trigger ONLY when the user explicitly wants to correct their pronunciation of specific sounds (e.g. /θ/, /r/), or do deep phoneme-level practice."
 ---
 
 # Speaking Shadowing (Pronunciation Clinic)
 
 ## 1. When to Use
-- User phrases: "练发音", "跟读", "发音练习", "shadowing", "口语跟读"
+- User phrases: "练发音", "纠正口音", "怎么读", "pronunciation"
 - Callback/System triggers: `speaking-shadowing`
+- Note: DO NOT use this for "听力跟读" or general "shadowing". Use `listening-shadowing` instead.
 
 ## 2. Adaptive Batching & Context
 - A standard shadowing practice session consists of a **batch of 3 sentences**.
@@ -33,13 +34,9 @@ When the user sends a voice message:
    - If score is high (>85): Briefly praise their fluency and rhythm.
    - If score is low or specific words have low accuracy (<80): Provide **Articulatory Guidance** for 1-2 specific sounds. (e.g., "注意 'think' 的 /θ/ 音，舌尖要轻轻咬在上下齿之间").
    - Point out stress and intonation (e.g., "重音可以放在 'debug' 上").
-3. **MANDATORY UI**: Send an inline keyboard (`tg` tool `type: "keyboard"`) so they know what to do next:
-   - If they did well (Score >= 85): 
-     - Row 1: `[⏭️ 完美，下一句|shadow:next]`
-     - Row 2: `[🔄 我想再刷一遍分|shadow:retry]`
-   - If they struggled (Score < 85):
-     - Row 1: `[🔄 再试一次|shadow:retry]`
-     - Row 2: `[⏭️ 太难了，换一句|shadow:next]`
+3. **MANDATORY UI**: Send an inline keyboard (`tg` tool `type: "keyboard"`) with this EXACT LAYOUT so they know what to do next. DO NOT talk about "刷分" or use gaming terminology:
+   - Row 1: `[["🔄 再来一句|shadow:next", "🧭 练习其他|nav:main"]]`
+   - Row 2: `[["🔁 刚才那句再练一遍|shadow:retry"]]`
 
 ### State C: Handling the Choice
 - If `shadow:retry`: Do NOT generate a new sentence. Ask them to send another voice message for the SAME sentence. Go to State B.

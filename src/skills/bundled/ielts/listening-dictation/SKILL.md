@@ -11,81 +11,64 @@ description: "MUST trigger when the user asks for dictation, intensive listening
 - Diagnostic triggers: User recently had high `function_word_miss` or `connected_speech_fail` errors.
 
 ## 2. Adaptive Sentence Scaling (CRITICAL Constraint)
-Before generating or selecting ANY sentence, you MUST read the user's current listening level from `MEMORY.md` (or infer from their profile) and strictly adhere to this scaling table. **Never overwhelm the user.**
+**STOP AND READ MEMORY:** Before generating or selecting ANY sentence, you MUST read the user's current listening level from `MEMORY.md` (or infer from their profile) and strictly adhere to this scaling table. The previous system logs indicate difficulty was too high because the user's level wasn't checked first. **Never overwhelm the user.** Focus heavily on the user's "Listening Profile -> sentence_length_tolerance" and "working memory / chunking limit".
 
-| User Level (Band) | Word Count Limit | Syntactic Complexity | Audio Speed | Accent Variation |
+| User Level (Band) | Length / Cognitive Chunks | Syntactic Complexity | Audio Speed | Accent Variation |
 | :--- | :--- | :--- | :--- | :--- |
-| **Beginner** (< 5.0) | **6-10 words** | Simple SVO. No subordinate clauses. | Slower (-10%) | Standard US/UK only |
-| **Intermediate** (5.0-6.0)| **11-16 words** | Max 1 relative or subordinate clause. | Normal speed | Standard US/UK only |
-| **Advanced** (6.5+) | **17-25 words** | Complex sentences, 1+ connected speech feature (elision/assimilation). | Normal speed | **Inject 1 non-standard accent (e.g., Australian, Indian) every 3 sentences.** |
+| **Beginner** (< 5.0) | **4-7 words** (1 cognitive chunk) | Simple SVO. No subordinate clauses. | Slower (-10%) | Standard US/UK only |
+| **Intermediate** (5.0-6.0)| **8-12 words** (2 cognitive chunks)| Max 1 relative or subordinate clause. | Normal speed | Standard US/UK only |
+| **Advanced** (6.5+) | **13-20 words** (3+ chunks) | Complex sentences, 1+ connected speech feature (elision/assimilation). | Normal speed | **Inject 1 non-standard accent (e.g., Australian, Indian) every 3 sentences.** |
 
-## 3. Workflow (Step-by-Step)
-Execute these steps strictly in order. Every practice session handles exactly **1 sentence**. After the sentence is evaluated, you MUST ask whether to continue with another sentence or practice something else.
+## 3. Workflow (State Machine - STRICT EXECUTION)
+You must follow these steps strictly to prevent hallucinations and ensure a standard procedure.
 
-**Step 1: Target Acquisition (The "Revenge" Protocol)**
-- *Query `study.db`*: Look for sentences the user failed (e.g., missed function words) at least 3 days ago.
-- *If found*: **REUSE** the `audio_path` from the database. Do NOT call the TTS tool.
-- *If none found*: Generate a new sentence adhering to the Scaling Table. Call the `tts` tool to generate the audio.
+**CRITICAL TTS RULE**: The `tts` tool MUST ONLY be used to generate the target English practice sentence. NEVER use the `tts` tool to speak conversational fillers (e.g., "Let's make it easier", "Here is the next one"). If you need to speak to the user, use the `tg(type=text)` tool.
 
-**Step 2: Delivery & UI Setup**
-> **Combine audio + keyboard in the same LLM turn** — call `tg(type=voice)` and `tg(type=keyboard)` together.
+**State A: Prepare & Deliver (Listen)**
+1. **Analyze Level & Add Threshold**: Read `MEMORY.md`. Base your difficulty on their level, but add a **+5% difficulty threshold** (e.g., slightly faster, or 1-2 words longer) to push their limits and ensure progress.
+2. **Generate Audio**: Create the target sentence (or reuse from `study.db`) and use `tts` tool to get the audio. Send it via `tg(type=voice)`. (DO NOT generate TTS for your own conversational replies).
+3. **Send Instruction (Same Turn)**: Use `tg(type=keyboard)` along with the voice message.
+   - **Text**: Must include the hidden transcript. Example: "来，听听这一句。把你听到的英文打出来。\n\n实在听不出可以点开看原文：<tg-spoiler>[Insert original English text here]</tg-spoiler>"
+   - **Buttons**: `[["🐢 慢速播放|dict_slow", "😵 太难了，换简单点|dict_hard"]]`
+4. **CRITICAL STOP**: End your turn immediately. WAIT for the user to type their answer or click a button.
 
-- Send the audio to the user via `tg(type=voice)`.
-- **In the same turn**, send the instruction keyboard via `tg(type=keyboard)` with `reply_to` pointing to the audio's tag.
-- **Reply rule:** Audio does NOT reply. Instruction keyboard MUST reply to the audio.
-- **Tone:** Natural and conversational. "来，听听这一句。把你听到的英文打出来。"
-- Recommended keyboard layout:
-  - Row 1: `[🐢 放慢一点]`, `[💡 给点提示]`
-  - Row 2: `[😵 句子太难]`
-- **CRITICAL STOP**: After sending the voice and instruction keyboard, you MUST immediately end your turn. DO NOT proceed to Step 3 or Step 4. Stop generating and WAIT for the user to reply.
+**State B: Handle Feedback Buttons (Before typing)**
+If the user clicks a button:
+- `dict_slow`: Briefly acknowledge via `tg(type=text)`, use `tts` with `rate="-10%"` on the SAME sentence, send new voice, and resend the instruction keyboard. Wait.
+- `dict_hard`: **Lower the difficulty** (remove the +5% threshold, drop a tier). Acknowledge naturally via `tg(type=text)`, explain the hard vocabulary, generate a NEW simpler sentence via `tts`, and go back to **State A**.
 
-**Step 3: Handle Feedback (If an option is chosen)**
-- `[🐢 放慢一点]`: Briefly acknowledge, generate/send a slower version (-10% rate), and wait again. The new instruction message MUST again reply to the latest audio.
-- `[😵 句子太难]`: Acknowledge naturally, reveal the sentence, explain the hard vocabulary or chunk, and **drop the difficulty tier** for the next sentence.
-- `[💡 给点提示]`: Reply with first-letter hints (e.g., `T_ p______ i_...`) and invite another try.
-- Log any button usage to `activity_log`.
+**State C: Evaluation & Data Update (User types the answer)**
+When the user submits their dictated text:
+1. **Evaluate**: Perform a strict word-by-word diff.
+2. **Execute Parallel Actions**: You MUST invoke BOTH `tg` and `persist` tools **concurrently/in parallel**. Do not call one, wait for the result, and call the other.
+   - **Action 1 - Send Feedback (MANDATORY `tg` tool)**: Use `tg(type=keyboard)`.
+     - **Text content**: Correct full sentence, concise Chinese translation, and **specific error analysis** (point out exactly which words were missed, e.g., articles, plurals, connected speech).
+     - **Buttons**: `[["🔄 再来一句|dict_next", "🧭 练习其他|nav_main"]]`
+   - **Action 2 - Data Update (MANDATORY `persist` tool)**: Log the practice data.
+     ```json
+     {
+       "skill_type": "listening.dictation",
+       "session_id": "<session>",
+       "prompt": "<correct sentence>",
+       "raw_content": "<user's typed text>",
+       "accuracy": <correct_words / total_words>,
+       "raw_score": <correct count>,
+       "max_score": <total words>,
+       "feedback": "<IN ENGLISH: textual analysis of what user missed and why>",
+       "audio_path": "<tts file path>",
+       "load_score": 1,
+       "minutes": 1,
+       "errors": "[{\"key\":\"function_word_miss\",\"category\":\"listening\",\"correction\":\"the\",\"note\":\"冠词漏听\"}]"
+     }
+     ```
 
-**Step 4: Evaluation, Feedback & Persist (ALL IN ONE TURN)**
-
-> Call `tg(type=keyboard)` and `persist(...)` together in the **same LLM turn**.
-> **STRICT PROHIBITION**: You are FORBIDDEN from using the `db` tool to write SQL. You MUST use the `persist` tool for post-practice logging.
-
-- Perform a strict **word-by-word diff** of the user's submission vs correct sentence.
-- Send a `tg(type=keyboard)` message containing:
-  1. The correct full sentence
-  2. A concise Chinese translation
-  3. A brief error analysis (article misses, connected speech, near-sound confusion, etc.)
-  4. Inline keyboard: Row 1: `[🔄 再来一句]`, `[🧭 练习其他]`
-- **In the same turn**, call the `persist` tool using these JSON arguments to save data:
-
-```json
-{
-  "skill_type": "listening.dictation",
-  "session_id": "<session>",
-  "prompt": "<correct sentence>",
-  "response": "<user's typed text>",
-  "accuracy": <correct_words / total_words>,
-  "raw_score": <correct count>,
-  "max_score": <total words>,
-  "feedback": "<textual analysis of what user missed and why>",
-  "audio_path": "<tts file path>",
-  "load_score": 1,
-  "minutes": 1,
-  "errors": "[{\"key\":\"function_word_miss\",\"category\":\"listening\",\"correction\":\"the\",\"note\":\"冠词漏听\"}]",
-  "subcap_scores": "[{\"key\":\"listening.connected_speech\",\"score\":4.5,\"evidence\":\"弱读冠词遗漏\"}]"
-}
-```
-
-Error keys: `function_word_miss`, `spelling_error`, `connected_speech_fail`, `word_substitution`, `tense_miss`, `plural_miss`
-
-- **Note**: 
-  - If the user selects `[🔄 再来一句]`, immediately start the next sentence.
-  - If the user selects `[🧭 练习其他]`, return to the main menu.
+**State D: Post-Practice Loop**
+- `dict_next`: Loop back to **State A** (re-analyze level, apply threshold, generate new sentence).
+- `nav_main`: Act exactly like the `/new` command. Use the `reset_context` tool with NO arguments (you MUST NOT provide a summary), then trigger `ielts-router` skill to show the main practice menu.
 
 ## 6. Hard Rules
 1. **No Early Reveals**: NEVER show the English transcript on the first listen unless the user explicitly requests it or clicks `[😵 句子太难]`.
 2. **Be Specific**: Diff every word. Do not just say "Good job" if they missed an `s`, an article, or a function word.
 3. **Circuit Breaker**: If their accuracy drops below 40% on a sentence, you MUST immediately drop down one tier in the Scaling Table for the next sentence. Do not let them get frustrated.
-4. **Reply Hygiene**: Audio never replies. Prompt/instruction messages reply to the corresponding audio.
-5. **Natural Chat Tone**: Keep the teaching voice supportive, natural, and conversational — not robotic or overly terse.
-6. **Post-Sentence Choice**: After every sentence, always use inline keyboard choices in Chinese for the next action.
+4. **Natural Chat Tone**: Keep the teaching voice supportive, natural, and conversational — not robotic or overly terse.
+5. **Post-Sentence Choice**: After every sentence, always use inline keyboard choices in Chinese for the next action.
