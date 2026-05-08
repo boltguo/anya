@@ -25,7 +25,8 @@ import type { AnyaConfig } from '../config/defaults.js';
 import { buildSystemPrompt } from './promptBuilder.js';
 import { CodexProvider } from '../providers/openai.js';
 import { getToolSchemas, dispatch } from '../tools/registry.js';
-import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle } from '../storage/sessionStore.js';
+import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle, getActiveSkill, setActiveSkill } from '../storage/sessionStore.js';
+import { getSkill } from '../skills/loader.js';
 import { agentLogger } from '../lib/logger.js';
 import { trackLlm } from '../lib/usage.js';
 import { truncateHistory, sanitizeHistory } from './history.js';
@@ -126,8 +127,18 @@ export class Agent {
     const maxHistory = this.config.advanced.max_history_messages || 200;
     history = truncateHistory(history, maxHistory);
     history = sanitizeHistory(history);
+    history = trimOldToolResults(history);
 
-    const systemPrompt = buildSystemPrompt(this.config);
+    // Build system prompt with session-level active skill injection
+    const baseSystemPrompt = buildSystemPrompt(this.config);
+    const activeSkillName = getActiveSkill(sessionId);
+    let systemPrompt = baseSystemPrompt;
+    if (activeSkillName) {
+      const skill = getSkill(activeSkillName);
+      if (skill) {
+        systemPrompt = `${baseSystemPrompt}\n\n## Active Skill Instructions (${activeSkillName})\n\n${skill.body}`;
+      }
+    }
 
     // Append timestamp to user input rather than the system prompt to maintain
     // system prompt stability across turns, optimizing cache hit rates.
@@ -266,8 +277,31 @@ export class Agent {
             sessionId,
           });
 
+          // Persist active skill to session when skill_view loads a valid SKILL.md
+          if (toolCall.name === 'skill_view' && !toolCall.args.file && !result.isError) {
+            const skillName = String(toolCall.args.name || '');
+            const skill = getSkill(skillName);
+            if (skill) {
+              await setActiveSkill(sessionId, skillName);
+              // Rebuild system prompt with newly activated skill
+              messages[0] = {
+                role: 'system',
+                content: `${buildSystemPrompt(this.config)}\n\n## Active Skill Instructions (${skillName})\n\n${skill.body}`,
+              };
+              // Replace full body in tool result with short confirmation —
+              // body is already in system prompt, no need to duplicate in history
+              result.content = `[Skill "${skillName}" loaded — instructions are now in active context]`;
+            }
+          }
+
+          // Read authoritative sent_content flag from tg_msg result
           if (toolCall.name === 'tg_msg' && !result.isError) {
-            tgSent = true;
+            try {
+              const parsed = JSON.parse(result.content);
+              if (parsed.ok && parsed.sent_content) {
+                tgSent = true;
+              }
+            } catch { /* non-JSON result — don't set tgSent */ }
           }
 
           if (this.config.ui.show_tool_calls && this.adapter.showToolResult) {
@@ -348,3 +382,44 @@ function degradeForStorage(messages: Message[]): Message[] {
     return msg;
   });
 }
+
+// ── History Tool Result Trimming ────────────────────────────────────────────
+
+/**
+ * Number of most-recent tool result messages to preserve at full fidelity.
+ * Older tool results are truncated to {@link MAX_OLD_TOOL_CHARS} to reduce
+ * prompt token waste from stale SKILL.md bodies, persist JSON, etc.
+ */
+const KEEP_RECENT_TOOL_RESULTS = 6;
+const MAX_OLD_TOOL_CHARS = 200;
+
+/**
+ * Truncates old tool result messages in conversation history.
+ *
+ * Preserves the most recent {@link KEEP_RECENT_TOOL_RESULTS} tool messages
+ * at full length. Older tool results are trimmed to {@link MAX_OLD_TOOL_CHARS}
+ * characters to prevent stale content (SKILL.md bodies, large JSON, search
+ * results) from inflating prompt tokens on every subsequent LLM call.
+ *
+ * @param history - The conversation history array (mutated in place).
+ * @returns The same array with old tool results trimmed.
+ */
+function trimOldToolResults(history: Message[]): Message[] {
+  let toolCount = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role === 'tool') {
+      toolCount++;
+      if (toolCount > KEEP_RECENT_TOOL_RESULTS) {
+        const content = history[i].content || '';
+        if (content.length > MAX_OLD_TOOL_CHARS) {
+          history[i] = {
+            ...history[i],
+            content: content.substring(0, MAX_OLD_TOOL_CHARS) + '\n[...truncated]',
+          };
+        }
+      }
+    }
+  }
+  return history;
+}
+

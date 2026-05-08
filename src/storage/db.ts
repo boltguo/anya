@@ -33,6 +33,7 @@ function initializeSchema(db: DatabaseSync): void {
       id TEXT PRIMARY KEY,
       session_key TEXT NOT NULL,
       title TEXT DEFAULT '',
+      active_skill TEXT DEFAULT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       message_count INTEGER DEFAULT 0
@@ -57,6 +58,13 @@ function initializeSchema(db: DatabaseSync): void {
 
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, seq);
   `);
+
+  // Migration: add active_skill column to existing databases
+  try {
+    db.exec('ALTER TABLE sessions ADD COLUMN active_skill TEXT DEFAULT NULL');
+  } catch {
+    // Column already exists — ignore
+  }
 
   // Note: raw_parts column stores serialized rawModelParts from the LLM
   // response. Used to preserve provider-specific output for replay fidelity.

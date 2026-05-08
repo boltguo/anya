@@ -80,11 +80,30 @@ export class ContextCompressor implements ContextEngine {
   }
 
   /**
-   * @inheritdoc
+   * Determines whether the current context should be compressed.
+   *
+   * Triggers compression in two scenarios:
+   * 1. **Context limit**: Approaching the model's maximum context window (e.g., 75% of 400K).
+   * 2. **Economic threshold**: Token count exceeds a practical ceiling (30K) with enough
+   *    messages to indicate accumulated stale history. This prevents unbounded token
+   *    growth in models with very large context windows where the limit would never fire.
    */
   shouldCompress(messages: Message[], estimatedTokens: number, contextLimit: number): boolean {
+    const hasEnoughMessages = messages.length > PROTECT_HEAD + PROTECT_TAIL + 2;
+    if (!hasEnoughMessages) return false;
+
+    // Original: approaching model context limit
     const threshold = contextLimit * this.thresholdRatio;
-    return estimatedTokens > threshold && messages.length > PROTECT_HEAD + PROTECT_TAIL + 2;
+    if (estimatedTokens > threshold) return true;
+
+    // Economic: prevent unbounded token spend on long conversations.
+    // Conservative ceiling — only fires for genuinely bloated sessions since
+    // compressed results aren't persisted and each trigger costs a summarizer call.
+    const ECONOMIC_TOKEN_CEILING = 60_000;
+    const ECONOMIC_MESSAGE_FLOOR = 50;
+    if (estimatedTokens > ECONOMIC_TOKEN_CEILING && messages.length > ECONOMIC_MESSAGE_FLOOR) return true;
+
+    return false;
   }
 
   /**

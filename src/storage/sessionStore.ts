@@ -296,3 +296,34 @@ export function searchMessages(query: string, limit: number = 20): Array<{
     content: r.content,
   }));
 }
+
+/**
+ * Retrieves the active skill name for a session.
+ *
+ * Used by {@link Agent.run} to re-inject the skill's SKILL.md into the system
+ * prompt on every turn, since Agent instances are transient (new per message).
+ *
+ * @param sessionId - The session UUID.
+ * @returns The skill name or null if no skill is active.
+ */
+export function getActiveSkill(sessionId: string): string | null {
+  const db = getDb();
+  const rows = db.prepare('SELECT active_skill FROM sessions WHERE id = ?').all(sessionId) as Array<{ active_skill: string | null }>;
+  return rows.length > 0 ? rows[0].active_skill : null;
+}
+
+/**
+ * Sets or clears the active skill for a session.
+ *
+ * Called when the LLM invokes `skill_view` on a new skill, persisting the
+ * skill name so subsequent turns can re-inject its instructions.
+ *
+ * @param sessionId - The session UUID.
+ * @param skillName - The skill name to activate, or null to clear.
+ */
+export async function setActiveSkill(sessionId: string, skillName: string | null): Promise<void> {
+  await withWriteRetry(() => {
+    const db = getDb();
+    db.prepare('UPDATE sessions SET active_skill = ? WHERE id = ?').run(skillName, sessionId);
+  });
+}

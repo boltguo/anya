@@ -79,6 +79,15 @@ function resolveReplyTo(raw: unknown, tg: TelegramSessionAdapter): number | stri
   return val === 'user' ? tg.getUserMessageId() : val;
 }
 
+/**
+ * Unifies `text` and `caption` arguments.
+ * The LLM sometimes uses `caption` instead of `text` for media messages.
+ * Priority: text > caption > undefined.
+ */
+function getCaption(args: Record<string, unknown>): string | undefined {
+  return (args.text as string) || (args.caption as string) || undefined;
+}
+
 // ── Single unified Telegram tool ─────────────────────────────────────────────
 //
 // All Telegram interactions go through this one tool.
@@ -124,8 +133,10 @@ register({
     const type = String(args.type);
 
     // Normalize literal \n sequences the LLM sometimes emits in JSON args
-    if (typeof args.text === 'string') {
-      args.text = (args.text as string).replace(/\\n/g, '\n');
+    for (const field of ['text', 'caption'] as const) {
+      if (typeof args[field] === 'string') {
+        args[field] = (args[field] as string).replace(/\\n/g, '\n');
+      }
     }
 
     switch (type) {
@@ -136,7 +147,7 @@ register({
           replyTo, tag: args.tag as string,
           parseMode: parseMode as any,
         });
-        return JSON.stringify({ ok: true, message_id: msgId });
+        return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
       }
 
       case 'audio': {
@@ -144,11 +155,11 @@ register({
         if (!url) return JSON.stringify({ ok: false, error: 'url is required for audio type' });
         const replyTo = resolveReplyTo(args.reply_to, tg);
         const parseMode = (args.parse_mode as string) || 'HTML';
-        const msgId = await tg.sendAudio(url, renderText(args.text as string, parseMode), {
+        const msgId = await tg.sendAudio(url, renderText(getCaption(args), parseMode), {
           replyTo, tag: args.tag as string,
           parseMode: parseMode as any,
         });
-        return JSON.stringify({ ok: true, message_id: msgId });
+        return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
       }
 
       case 'voice': {
@@ -156,11 +167,11 @@ register({
         if (!url) return JSON.stringify({ ok: false, error: 'url is required for voice type' });
         const replyTo = resolveReplyTo(args.reply_to, tg);
         const parseMode = (args.parse_mode as string) || 'HTML';
-        const msgId = await tg.sendVoice(url, renderText(args.text as string, parseMode), {
+        const msgId = await tg.sendVoice(url, renderText(getCaption(args), parseMode), {
           replyTo, tag: args.tag as string,
           parseMode: parseMode as any,
         });
-        return JSON.stringify({ ok: true, message_id: msgId });
+        return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
       }
 
       case 'keyboard': {
@@ -170,7 +181,7 @@ register({
         const msgId = await tg.sendKeyboard(renderText(args.text as string, parseMode), buttons, {
           replyTo, tag: args.tag as string,
         });
-        return JSON.stringify({ ok: true, message_id: msgId });
+        return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
       }
 
       case 'quiz': {
@@ -181,7 +192,7 @@ register({
           Number(args.correct ?? 0),
           args.explanation as string,
         );
-        return JSON.stringify({ ok: true, ...result });
+        return JSON.stringify({ ok: true, ...result, sent_content: true });
       }
 
       case 'force_reply': {
@@ -190,7 +201,7 @@ register({
         const msgId = await tg.sendForceReply(renderText(args.text as string, parseMode), {
           replyTo, tag: args.tag as string,
         });
-        return JSON.stringify({ ok: true, message_id: msgId });
+        return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
       }
 
       case 'edit': {
@@ -201,18 +212,18 @@ register({
           isNaN(Number(msgRef)) ? msgRef : Number(msgRef),
           renderText(args.text as string, parseMode), buttons
         );
-        return JSON.stringify({ ok: true });
+        return JSON.stringify({ ok: true, sent_content: false });
       }
 
       case 'document': {
         const replyTo = resolveReplyTo(args.reply_to, tg);
         const parseMode = (args.parse_mode as string) || 'HTML';
         const msgId = await tg.sendDocument(String(args.url || ''), {
-          caption: renderText(args.text as string, parseMode),
+          caption: renderText(getCaption(args), parseMode),
           replyTo, tag: args.tag as string,
           parseMode: parseMode as any,
         });
-        return JSON.stringify({ ok: true, message_id: msgId });
+        return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
       }
 
       case 'delete': {
@@ -225,12 +236,12 @@ register({
         let ref: number | string = args.message_id as string;
         if (ref === 'user') ref = tg.getUserMessageId()!;
         await tg.react(ref, String(args.emoji || '👍'));
-        return JSON.stringify({ ok: true });
+        return JSON.stringify({ ok: true, sent_content: false });
       }
 
       case 'action': {
         await tg.sendChatAction(String(args.action || 'typing'));
-        return JSON.stringify({ ok: true });
+        return JSON.stringify({ ok: true, sent_content: false });
       }
 
       default:

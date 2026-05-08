@@ -119,17 +119,32 @@ export function getSkill(name: string): Skill | undefined {
 
 /**
  * Build the Level 0 skill index for system prompt injection.
- * Returns a compact list of name + description for all loaded skills.
+ *
+ * Groups skills by their directory category (e.g., `english`, `support`)
+ * and emits a compact category-level summary instead of listing every skill
+ * with its full description. This reduces system prompt tokens by ~500
+ * while preserving the LLM's ability to discover and route to skills.
  */
 export function buildSkillIndex(): string {
   const skills = loadSkills();
   if (skills.length === 0) return '';
 
-  const lines = ['## Available Skills\n'];
-  lines.push('Use `skill_view` to read the full procedure before executing a skill.\n');
-
+  // Group skills by category derived from directory path
+  const categories = new Map<string, string[]>();
   for (const skill of skills) {
-    lines.push(`- **${skill.name}**: ${skill.description}`);
+    // Extract category from filePath: .../skills/<category>/<name>/SKILL.md
+    const parts = skill.filePath.split('/');
+    const nameIdx = parts.lastIndexOf('SKILL.md');
+    const category = nameIdx >= 3 ? parts[nameIdx - 2] : 'other';
+    if (!categories.has(category)) categories.set(category, []);
+    categories.get(category)!.push(skill.name);
+  }
+
+  const lines = ['## Available Skills\n'];
+  lines.push('Use `skill_view` to load a skill\'s full procedure before executing it.\n');
+
+  for (const [category, names] of categories) {
+    lines.push(`- **${category}** (${names.length}): ${names.join(', ')}`);
   }
 
   return lines.join('\n');

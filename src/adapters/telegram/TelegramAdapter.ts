@@ -18,8 +18,8 @@ import { Agent, type RunResult } from '../../agent/Agent.js';
 import { registerAllTools } from '../../tools/registry.js';
 import { agentLogger } from '../../lib/logger.js';
 import { trackStt } from '../../lib/usage.js';
-import { loadSkills } from '../../skills/loader.js';
-import { createSession } from '../../storage/sessionStore.js';
+import { loadSkills, getSkill } from '../../skills/loader.js';
+import { createSession, setActiveSkill } from '../../storage/sessionStore.js';
 import { transcribeAudio } from '../../lib/stt.js';
 import { VOICE_DIR, IMAGE_RECEIVED_DIR, USER_MD_PATH } from '../../lib/paths.js';
 import type { AnyaConfig } from '../../config/defaults.js';
@@ -592,10 +592,14 @@ export class TelegramAdapter {
         const chatId = ctx.callbackQuery.message?.chat?.id;
         if (chatId) {
           const sessionKey = `tg:${chatId}`;
+
+          // Detect skill slug callbacks for soft reset
+          const matchedSkill = getSkill(data);
+          const isSkillSwitch = !!matchedSkill;
           const agentInput = `[callback] ${data}`;
 
-          agentLogger.info({ msg: 'tg_callback', chatId, userId, data, label: selectedLabel });
-          console.log(`[gateway] callback: ${selectedLabel} (${data})`);
+          agentLogger.info({ msg: 'tg_callback', chatId, userId, data, label: selectedLabel, skillSwitch: isSkillSwitch });
+          console.log(`[gateway] callback: ${selectedLabel} (${data})${isSkillSwitch ? ' [skill-switch]' : ''}`);
 
           this.enqueuePerChat(chatId, async () => {
             const sessionAdapter = new TelegramSessionAdapter(ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls);
@@ -603,7 +607,16 @@ export class TelegramAdapter {
 
             try {
               await sessionAdapter.sendThinking();
-              const result: RunResult = await agent.run(agentInput, { sessionKey });
+              const runOpts: Record<string, unknown> = { sessionKey };
+
+              // Skill switch → new session so old history is truly shed
+              if (isSkillSwitch) {
+                const newSid = await createSession(sessionKey);
+                await setActiveSkill(newSid, data);
+                runOpts.sessionId = newSid;
+              }
+
+              const result: RunResult = await agent.run(agentInput, runOpts as any);
               if (!result.tgSent && result.content) {
                 await sessionAdapter.reply(result.content);
               }
