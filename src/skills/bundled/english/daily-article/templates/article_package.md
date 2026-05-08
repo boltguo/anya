@@ -1,0 +1,93 @@
+# Daily Article Package
+
+Use this file as the output contract for `daily-article/SKILL.md`.
+
+The default delivery is a 3-part Telegram package:
+
+1. Pinned entry message
+2. Full article
+3. Audio
+
+## 1. Pinned Entry Message
+
+Use `tg_msg(type:"text")` to send each part.
+
+```md
+📰 <b>Today's Article</b>
+
+<b>{{headline}}</b>
+
+{{why_this_topic_fits_the_learner}}
+
+<b>Today's focus</b>: {{focus_line}}
+```
+
+Keep this block short. It is the pinned entry, not the full lesson.
+
+## 2. Full Article
+
+```md
+<b>{{headline}}</b>
+
+{{adapted_article}}
+
+<b>Key Words</b>
+1. {{word_1}}: {{simple_gloss}}
+2. {{word_2}}: {{simple_gloss}}
+3. {{word_3}}: {{simple_gloss}}
+
+<b>Useful Chunk</b>
+{{reusable_phrase_or_sentence_pattern}}
+```
+
+Article guidance by level:
+
+- `< 5.0`: 2 short paragraphs, clear topic sentence, Chinese bridge line allowed
+- `5.0-6.0`: 2-3 paragraphs, simple paraphrase, moderate lexical lift
+- `6.5+`: 3-4 paragraphs, richer transitions, more natural collocation
+
+## 3. Audio Caption
+
+```md
+🔊 Audio version of today's article
+
+Try this:
+- First listen for the main idea
+- Then listen again and notice {{focus_line}}
+```
+
+## 4. Follow-up Block
+
+Choose one follow-up based on the learner's weakest current area.
+
+### Speaking weak
+
+```md
+<b>Talk about it</b>
+1. Do you agree with the idea in today's article?
+2. How does this topic affect your daily life?
+```
+
+### Writing weak
+
+```md
+<b>Write one sentence</b>
+Use this starter:
+In my view, {{topic}} is important because ...
+```
+
+### Listening or Reading weak
+
+```md
+<b>Quick check</b>
+What is the main idea of paragraph 2?
+```
+
+## 5. Audio Guidance
+
+Default narration rules:
+
+- use one clear English voice
+- slow down for lower-level learners
+- do not narrate the glossary unless it helps a low-band learner
+- narration should match the adapted article, not the original source article

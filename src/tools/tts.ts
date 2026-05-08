@@ -18,7 +18,7 @@ import { textToSpeech } from '../lib/tts.js';
 
 register({
   name: 'tts',
-  description: `Generate speech audio via Azure TTS. Returns the file path — use tg(type="voice", url=filePath) to send it.
+  description: `Generate speech audio via Azure TTS. Returns the file path — use tg_msg(type="voice", url=filePath) to send it.
 
 **Simple mode**: pass \`text\` + optional \`voice\`/\`rate\`.
 **Dialogue mode**: pass \`segments\` JSON array for multi-voice audio with pauses.

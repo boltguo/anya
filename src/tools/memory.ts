@@ -2,8 +2,8 @@
  * @module tools/memory
  * @description Markdown-backed memory tool for the agent's profile and state.
  *
- * USER.md stores the stable user profile and preferences.
- * MEMORY.md stores the derived user model and current state.
+ * USER.md stores stable user facts, preferences, and behavior habits.
+ * MEMORY.md stores the learner's long-running level and ability state.
  *
  * These files are injected into the system prompt on every conversation.
  */
@@ -23,7 +23,7 @@ function resolvePath(target: string): { filePath: string; fileName: string } {
 
 register({
   name: 'memory',
-  description: 'Read or update the agent\'s profile markdown files. Use target="user" for the user profile and preferences. Use target="memory" for the derived user model, current state, and adaptive context. These files are injected into the system prompt every session.',
+  description: 'Read or update the agent\'s profile markdown files. Use target="user" for stable user facts, preferences, and behavior habits. Use target="memory" for the learner\'s long-running level, ability state, weak dimensions, and adaptive context. These files are injected into the system prompt every session.',
   parameters: {
     type: 'object',
     properties: {

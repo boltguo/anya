@@ -7,7 +7,7 @@
  * No interactive prompts — use `anya config` for API keys.
  */
 
-import { writeFileSync, copyFileSync, existsSync, cpSync } from 'node:fs';
+import { writeFileSync, copyFileSync, existsSync, cpSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
@@ -18,6 +18,7 @@ import {
   USER_MD_PATH,
   MEMORY_MD_PATH,
   SKILLS_DIR,
+  SOUL_PATH,
   RULES_PATH,
   isInitialized,
 } from '../lib/paths.js';
@@ -78,10 +79,12 @@ export async function runInit(): Promise<void> {
     console.log(chalk.yellow('  [warn] config.schema.json template not found'));
   }
 
-  // 4. Memory templates — RULES.md, USER.md, MEMORY.md all live under
-  //    src/config/ and are treated as infrastructure. The IELTS init skill
-  //    handles runtime onboarding; it does not own these files.
+  // 4. Prompt-layer templates:
+  //    SOUL.md = Anya identity, RULES.md = operating contract,
+  //    USER.md = user profile/behavior, MEMORY.md = learner level state.
+  //    The English onboarding skill fills USER/MEMORY; it does not own SOUL/RULES.
   for (const { label, dest, template } of [
+    { label: 'SOUL.md',   dest: SOUL_PATH,      template: 'SOUL.template.md' },
     { label: 'RULES.md',  dest: RULES_PATH,     template: 'RULES.template.md' },
     { label: 'USER.md',   dest: USER_MD_PATH,   template: 'USER.template.md' },
     { label: 'MEMORY.md', dest: MEMORY_MD_PATH, template: 'MEMORY.template.md' },
@@ -108,6 +111,15 @@ export async function runInit(): Promise<void> {
   }
   
   if (skillsSrc) {
+    for (const oldBundledPath of [
+      join(SKILLS_DIR, 'ielts'),
+      join(SKILLS_DIR, 'support', 'ielts-data-contract'),
+      join(SKILLS_DIR, 'support', 'ielts-band-descriptors'),
+    ]) {
+      if (existsSync(oldBundledPath)) {
+        rmSync(oldBundledPath, { recursive: true, force: true });
+      }
+    }
     cpSync(skillsSrc, SKILLS_DIR, { recursive: true, force: true });
     console.log(chalk.dim('  [ok] skills/'));
   } else {

@@ -27,7 +27,7 @@ import { getToolSchemas, dispatch } from '../tools/registry.js';
 import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle } from '../storage/sessionStore.js';
 import { agentLogger } from '../lib/logger.js';
 import { trackLlm } from '../lib/usage.js';
-import { truncateHistory, sanitizeHistory, applyContextReset } from './history.js';
+import { truncateHistory, sanitizeHistory } from './history.js';
 import { classifyApiError } from './errorClassifier.js';
 import { ContextCompressor, estimateTokens } from './contextCompressor.js';
 
@@ -51,7 +51,7 @@ export interface RunResult {
   sessionId: string;
   /** Total number of tool calls executed during this run. */
   toolCallCount: number;
-  /** Whether the tg tool already sent a message to the user. */
+  /** Whether the tg_msg tool already sent a message to the user. */
   tgSent: boolean;
 }
 
@@ -97,7 +97,6 @@ export class Agent {
     }
 
     let history = loadMessages(sessionId);
-    history = applyContextReset(history);
     const maxHistory = this.config.advanced.max_history_messages || 200;
     history = truncateHistory(history, maxHistory);
     history = sanitizeHistory(history);
@@ -246,7 +245,7 @@ export class Agent {
             sessionId,
           });
 
-          if (toolCall.name === 'tg' && !result.isError) {
+          if (toolCall.name === 'tg_msg' && !result.isError) {
             tgSent = true;
           }
 

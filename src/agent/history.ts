@@ -31,47 +31,6 @@ export function truncateHistory(history: Message[], maxHistory: number): Message
 }
 
 /**
- * Apply explicit context resets.
- * If the agent called the `reset_context` tool, we drop all history
- * before that tool call and prepend a system notification with the
- * carried over summary. This ensures the agent gets a clean slate.
- */
-export function applyContextReset(history: Message[]): Message[] {
-  let lastResetIndex = -1;
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i].role === 'tool' && history[i].toolName === 'reset_context') {
-      lastResetIndex = i;
-      break;
-    }
-  }
-
-  if (lastResetIndex === -1) return history;
-
-  const resetMsg = history[lastResetIndex];
-  const content = resetMsg.content || '';
-  
-  // Extract summary if present
-  let summary = 'None';
-  if (content.includes('Carried over summary:')) {
-    summary = content.split('Carried over summary:')[1].trim();
-  }
-
-  // Keep everything AFTER the reset tool result
-  const newHistory = history.slice(lastResetIndex + 1);
-
-  // Prepend a synthetic user message with the summary so the agent remembers it
-  // and sanitizeHistory doesn't drop it (since it starts with a user msg).
-  const syntheticUserMsg: Message = {
-    role: 'user',
-    content: `[System Notification: The conversation history was intentionally cleared by you prior to this message to save context. Carried over summary: ${summary}]`,
-  };
-
-  agentLogger.info({ msg: 'context_reset_applied', summaryLength: summary.length });
-
-  return [syntheticUserMsg, ...newHistory];
-}
-
-/**
  * Sanitize conversation history to comply with strict turn ordering.
  *
  * Requirements:

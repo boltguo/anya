@@ -1,36 +1,34 @@
-# Learner Profile
+# User Profile
 
 ## Status
 
 - initialized: false
 
-## Identity
+## About the User
 
-- Name: (not set)
-- Profession: (not set)
-- Hobbies: (not set)
+Not set yet. Summarize the user's name or preferred name, life/study/work
+context, interests, and any personal details that help Anya make examples feel
+relevant.
 
-## Goals
+## Learning Goals
 
-- English target: (not set)
-- Timeline: (not set)
-- Use case: (not set)
+Not set yet. Describe why the user is learning English, whether IELTS is the
+main goal, the target band or target ability, the timeline, and any exam date
+the user has mentioned.
 
-## Content Profile
+## Current Background
 
-- engage: (not set)
-- avoid: (not set)
-- daily_english: (not set)
+Not set yet. Describe the user's self-reported English level, past study
+experience, perceived strengths, perceived weaknesses, and what they find
+hardest in real use.
 
-## Background
+## Study Preferences & Habits
 
-- current_level_estimate: (not set)
-- english_strength: (not set)
-- english_weakness: (not set)
+Not set yet. Describe how the user likes to study, how much time they usually
+have, what kind of feedback they prefer, what motivates them, what frustrates
+them, and any repeated behavior patterns Anya should respect.
 
-## Preferences
+## Personalization Notes
 
-- Tone: (not set)
-- Study pattern: (not set)
-- Platform: Telegram (mobile)
-- UX: reply-keyboard for main menu, inline for feedback, grouped blocks, concise scoring on micro-drills
+Not set yet. Keep short durable notes that make future conversations more
+personal. Do not store practice logs, scores, or temporary emotions here.

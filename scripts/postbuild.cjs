@@ -33,6 +33,7 @@ for (const fp of walkJs('dist')) {
 // Copy runtime assets that init.ts and the skills loader look up relative
 // to the bin: RULES.template.md, config.schema.json, and the bundled skills tree.
 const assetCopies = [
+  { from: 'src/config/SOUL.template.md',   to: 'dist/config/SOUL.template.md' },
   { from: 'src/config/RULES.template.md',  to: 'dist/config/RULES.template.md' },
   { from: 'src/config/USER.template.md',   to: 'dist/config/USER.template.md' },
   { from: 'src/config/MEMORY.template.md', to: 'dist/config/MEMORY.template.md' },

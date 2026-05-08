@@ -118,7 +118,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
     enabled: [
       'read_file', 'write_file', 'list_dir', 'web_search',
       'memory', 'skill_view', 'clarify',
-      'tg', 'tts', 'pron_assess', 'db', 'persist', 'reset_context'
+      'tg_msg', 'tts', 'pron_assess', 'db', 'persist'
     ],
     web_search: { backend: 'tavily', api_key: '', max_results: 5 },
   },

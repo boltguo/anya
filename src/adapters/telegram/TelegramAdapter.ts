@@ -228,8 +228,23 @@ export class TelegramAdapter {
       const sessionKey = `tg:${ctx.chat.id}`;
       this.cancelPending();
       await createSession(sessionKey);
-      agentLogger.info({ msg: 'tg_new_session_trigger_practice', chatId: ctx.chat.id });
-      const input = `[/command: ielts-router] Run the "ielts-router" skill now.`;
+      try {
+        const userMd = fs.existsSync(USER_MD_PATH) ? fs.readFileSync(USER_MD_PATH, 'utf-8') : '';
+        if (userMd && !userMd.includes('initialized: false')) {
+          const menu = getMainMenu();
+          if (menu) {
+            agentLogger.info({ msg: 'tg_new_session_direct_menu', chatId: ctx.chat.id });
+            await ctx.reply(menu.text, {
+              reply_markup: menu.keyboard,
+              link_preview_options: { is_disabled: true },
+            });
+            return;
+          }
+        }
+      } catch { /* fall through to agent-routed planner */ }
+
+      agentLogger.info({ msg: 'tg_new_session_trigger_planner', chatId: ctx.chat.id });
+      const input = `[/command: planner] Run the "planner" skill now.`;
       this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
     });
 

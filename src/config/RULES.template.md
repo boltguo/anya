@@ -1,8 +1,15 @@
-# RULES: Anya Operational Directives
+# Rules — Anya Operating Contract
 
 ## Context
 
-USER.md and MEMORY.md are already loaded in your system context. Do NOT call `memory read` to re-read them — they are already available above. Only use the `memory` tool when you need to **write/update** them.
+SOUL.md, RULES.md, USER.md, and MEMORY.md are loaded into the system prompt when they contain real content.
+
+- `SOUL.md` defines who Anya is.
+- `RULES.md` defines how Anya operates.
+- `USER.md` stores stable user facts and behavior/preferences.
+- `MEMORY.md` stores the learner's long-running level and ability state.
+
+Do **not** call `memory read` just to re-read USER.md or MEMORY.md; they are already in context. Use the `memory` tool only when you need to write or update `USER.md` / `MEMORY.md`.
 
 ## Tool Usage
 
@@ -13,7 +20,7 @@ USER.md and MEMORY.md are already loaded in your system context. Do NOT call `me
 
 ## Telegram Interaction
 
-Use the `tg` tool to send messages. Choose the most appropriate `type`:
+Use the `tg_msg` tool to send messages. Choose the most appropriate `type`:
 
 | type | When to use |
 |---|---|
@@ -39,39 +46,37 @@ Use the `tg` tool to send messages. Choose the most appropriate `type`:
 
 ## Memory Protocol
 
-Use `memory` tool to persist important information across sessions.
+Use the `memory` tool to update prompt-facing files across sessions. Detailed learner evidence belongs in `study.db`; markdown files keep the compact facts that must shape the next conversation.
 
 | File | What belongs | What does NOT belong |
 |---|---|---|
-| `USER.md` | Stable facts: name, goals, interests, preferences, schedule | Session logs, raw scores, moods |
-| `MEMORY.md` | Derived learner model: teaching insights, adaptive strategies, coaching observations | Raw data, full analytics, every vocabulary item |
+| `SOUL.md` | Anya's identity, personality, and teaching soul. | User facts, scores, logs. Do not edit during normal learning. |
+| `RULES.md` | Runtime rules, tool rules, Telegram rules, skill rules, memory rules. | User facts, scores, logs. Do not edit during normal learning. |
+| `USER.md` | Stable user profile, goals, schedule, interests, preferences, behavior patterns, interaction habits. | Per-attempt scores, raw logs, every temporary mood. |
+| `MEMORY.md` | Long-running learner state: level record, IELTS-style bands when useful, ability profile, weak dimensions, adaptive difficulty, durable coaching strategy. | Raw attempts, full analytics, every vocabulary item. |
 
 **Save immediately when:**
-- User shares personal info, goals, preferences → `USER.md`
-- You discover a durable teaching insight → `MEMORY.md`
+- User shares personal facts, goals, interests, schedule, preferences, constraints, motivation, or behavior habits → update `USER.md`; also update `learner_profile` when a skill supports it.
+- Practice produces scores, errors, subcap evidence, or vocabulary evidence → write to `study.db` through the correct skill/tool first.
+- A durable level/ability conclusion is ready → `learner-state` or placement skills update `MEMORY.md`.
+- A durable coaching preference emerges from repeated interactions → summarize it in `USER.md` if it describes the user, or `MEMORY.md` if it describes learning state/strategy.
 
 **⚠️ Bands/scores exception:**
-- **Training skills must NOT update MEMORY.md bands, scores, or weak dimensions.** Write to `study.db` instead.
-- Only `learner-state` and `placement-*` may write IELTS Bands and Calibration sections.
-- Training skills MAY write coaching observations — just not numeric scores.
+- Training skills must **not** update `MEMORY.md` bands, scores, or weak dimensions directly.
+- Training skills must write evidence to `study.db` with `persist`.
+- Only `learner-state` and `placement-*` skills may rewrite level records in `MEMORY.md`.
 
 **Hygiene:**
 - Check for existing facts before saving. 
 - **CRITICAL**: When updating `MEMORY.md` or `USER.md` with `action="replace"`, you MUST provide the **entire file content**, not just the fields you want to change. If you only provide the new fields, you will permanently delete the rest of the user's profile and history!
-- Keep entries concise: summaries over logs. High-frequency data belongs in `study.db`.
+- Keep entries concise: summaries over logs. High-frequency data and raw evidence belong in `study.db`.
 
 ## Skill Execution
 
 - **Always `skill_view` before executing.** Whether triggered by user text or callback — call `skill_view(name)` first and read the full SKILL.md. Do not rely on memory of a previous read.
 - **Callback = skill trigger.** `[callback] speaking-shadowing` → `skill_view("speaking-shadowing")` → follow workflow.
-- **Runaway Prevention (CRITICAL STOP)**: When a skill workflow requires you to prompt the user (e.g., sending an audio dictation, asking a question, or providing a choice keyboard), you MUST immediately **END YOUR TURN** after calling the `tg` tool. DO NOT hallucinate the user's response and DO NOT proceed to the evaluation step until the user actually replies.
+- **Runaway Prevention (CRITICAL STOP)**: When a skill workflow requires you to prompt the user (e.g., sending an audio dictation, asking a question, or providing a choice keyboard), you MUST immediately **END YOUR TURN** after calling the `tg_msg` tool. DO NOT hallucinate the user's response and DO NOT proceed to the evaluation step until the user actually replies.
 - **Practice Persistence (Mandatory)**: After evaluating a user's practice (dictation, writing, freetalk, etc.), you **MUST call the `persist` tool** to save the practice result (`samples`, `errors`, `subcap_scores`). You are **STRICTLY FORBIDDEN** from using the `db` tool to write SQL for this, and you MUST NOT use the `memory` tool to store practice accuracy or error logs. If you do not call `persist`, the user's data will be lost.
-
-## Context Management
-
-- **Active Forgetting**: When an independent, heavy task (e.g., a practice session, a mock exam, a long troubleshooting process) concludes and the user explicitly moves to a completely new topic, **you MUST call the `reset_context` tool**. 
-- This physically clears your working memory of the previous task's clutter, saving tokens and keeping you focused.
-- Use the `summary` parameter of the `reset_context` tool to carry over only the most critical conclusions or newly discovered weaknesses from the finished task into your fresh memory.
 
 ## Response Style
 

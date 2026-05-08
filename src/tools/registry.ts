@@ -7,7 +7,7 @@
  * build LLM function declarations, and via {@link dispatch} to execute
  * tool calls returned by the model.
  *
- * Platform-specific tools (e.g., `tg` for Telegram) are filtered out
+ * Platform-specific tools (e.g., `tg_msg` for Telegram) are filtered out
  * when not applicable, saving prompt tokens.
  */
 
@@ -35,7 +35,6 @@ export async function registerAllTools(): Promise<void> {
     import('../tools/pronAssess.js'),
     import('../tools/db.js'),
     import('../tools/persist.js'),
-    import('../tools/resetContext.js'),
   ]);
 }
 
@@ -83,6 +82,7 @@ export function getAllTools(): ToolDefinition[] {
  */
 export function getEnabledTools(config: AnyaConfig): ToolDefinition[] {
   return config.tools.enabled
+    .map(name => name === 'tg' ? 'tg_msg' : name)
     .map(name => tools.get(name))
     .filter((t): t is ToolDefinition => t !== undefined);
 }
@@ -98,7 +98,7 @@ export function getEnabledTools(config: AnyaConfig): ToolDefinition[] {
  *
  * @param config - The current agent config.
  * @param isTelegram - Whether the current session is via Telegram.
- *                     When false, the `tg` tool is excluded.
+ *                     When false, the `tg_msg` tool is excluded.
  * @returns Array of tool schemas for the LLM.
  */
 export function getToolSchemas(config: AnyaConfig, isTelegram: boolean = false): Array<{
@@ -107,7 +107,7 @@ export function getToolSchemas(config: AnyaConfig, isTelegram: boolean = false):
   parameters: ToolParameterSchema;
 }> {
   return getEnabledTools(config)
-    .filter(t => isTelegram || t.name !== 'tg')
+    .filter(t => isTelegram || t.name !== 'tg_msg')
     .map(t => ({
       name: t.name,
       description: t.description,

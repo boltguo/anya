@@ -41,7 +41,7 @@ export class TelegramSessionAdapter implements Adapter {
   // A single message that gets created then edited in-place during tool exec.
   private statusMessageId?: number;
 
-  // Set when any tg tool sends content. reply() checks this to skip duplicates.
+  // Set when any tg_msg tool sends content. reply() checks this to skip duplicates.
   private hasSentContent = false;
 
   // Smart reply: first content message auto-replies to the user's message.
@@ -120,7 +120,7 @@ export class TelegramSessionAdapter implements Adapter {
    * Converts markdown to Telegram HTML via marked + whitelist post-process.
    * Falls back to plain text (stripped markdown) if HTML parsing fails.
    * Long messages are automatically split at safe boundaries.
-   * Skips sending if a `tg` tool already sent content (dedup).
+   * Skips sending if a `tg_msg` tool already sent content (dedup).
    */
   async reply(content: string): Promise<void> {
     await this.outboundQueue.onIdle();
@@ -192,12 +192,11 @@ export class TelegramSessionAdapter implements Adapter {
     memory: '🧠 Updating memory',
     skill_view: '🎓 Loading skill',
     clarify: '💬 Asking question',
-    tg: '💬 Sending message',
+    tg_msg: '💬 Sending message',
     tts: '🔊 Generating audio',
     pron_assess: '🗣️ Assessing pronunciation',
     db: '🗄️ Querying database',
     persist: '💾 Saving data',
-    reset_context: '🧹 Clearing context',
   };
 
   /** Current status text */

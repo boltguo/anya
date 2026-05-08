@@ -30,15 +30,15 @@ graph TB
     COMPRESS["contextCompressor\n长上下文压缩"]
     ERR["errorClassifier\n错误分类"]
     PROVIDER["GeminiProvider\n唯一主 LLM Provider\n(Gemini REST API)"]
-    TOOLS["Tool Registry\n10 个内置工具"]
+    TOOLS["Tool Registry\n11 个内置工具"]
     SKILLS["Skill Loader\n技能加载与索引"]
   end
 
   subgraph Data["运行时数据 / ~/.anya"]
     CONFIG["config.json\n主配置"]
-    MEM["memories/\nRULES.md, USER.md, MEMORY.md"]
+    MEM["memories/\nSOUL.md, RULES.md,\nUSER.md, MEMORY.md"]
     SKDIR["skills/\n技能目录"]
-    STORE["data/store/\nstate.db (+ vocab.db, learner.db)"]
+    STORE["data/store/\nstate.db + study.db"]
     MEDIA["data/\naudio/, images/, search/, cache/"]
     LOGS["logs/ + run/\n日志与 PID"]
   end
@@ -179,13 +179,14 @@ flowchart TD
 flowchart LR
   P1["1. config.agent.personality\nAgent 人格设定"] --> PROMPT["System Prompt\n最终系统提示词"]
   P1B["   config.user.native_language\n用户母语上下文（若配置）"] --> PROMPT
-  P2["2. memories/RULES.md\n操作规则"] --> PROMPT
-  P3["3. memories/USER.md\n用户画像"] --> MEMSEC["Memory 区块"]
-  P3B["   memories/MEMORY.md\nAgent 笔记"] --> MEMSEC
+  P2A["2. memories/SOUL.md\nAnya 灵魂与身份"] --> PROMPT
+  P2["3. memories/RULES.md\n操作规则"] --> PROMPT
+  P3["4. memories/USER.md\n用户画像与行为偏好"] --> MEMSEC["Memory 区块"]
+  P3B["   memories/MEMORY.md\n学习水平与能力状态"] --> MEMSEC
   MEMSEC --> PROMPT
-  P4["4. buildSkillIndex()\n技能索引（轻量）"] --> PROMPT
-  P5["5. Security 约束\nallowed_paths 规则"] --> PROMPT
-  P6["6. Platform Capabilities\n按 enabled tools 动态生成"] --> PROMPT
+  P4["5. buildSkillIndex()\n技能索引（轻量）"] --> PROMPT
+  P5["6. Security 约束\nallowed_paths 规则"] --> PROMPT
+  P6["7. Platform Capabilities\n按 enabled tools 动态生成"] --> PROMPT
 
   style MEMSEC fill:#fdebd0
   style P4 fill:#d6eaf8
@@ -198,7 +199,7 @@ flowchart LR
 
 **tool 如何注册、模型如何看见、`dispatch()` 如何执行。**
 
-当前内置工具：`file`、`webSearch`、`memory`、`skill`、`clarify`、`telegram`、`tts`、`pronAssess`、`db`、`resetContext` 等。
+当前内置工具：`file`、`webSearch`、`memory`、`skill`、`clarify`、`telegram`、`tts`、`pronAssess`、`db`、`persist` 等。
 
 ```mermaid
 flowchart TD
@@ -207,7 +208,7 @@ flowchart TD
   REG --> SCHEMAS["getToolSchemas(config, isTelegram)\n生成给模型看的 schema"]
   REG --> EXEC["dispatch(name, args, context)\n按名执行工具"]
 
-  SCHEMAS -->|"非 Telegram 时隐藏 tg 工具"| MODEL["Visible to LLM\n模型可见工具列表"]
+  SCHEMAS -->|"非 Telegram 时隐藏 tg_msg 工具"| MODEL["Visible to LLM\n模型可见工具列表"]
   MODEL --> CALL["LLM emits tool_call\n模型声明调用"]
   CALL --> EXEC
 
@@ -275,7 +276,7 @@ flowchart TD
 flowchart TD
   subgraph Sources["消息来源"]
     FINAL["reply()\n最终回复"]
-    TGTOOL["tg tool\n工具主动发消息"]
+    TGTOOL["tg_msg tool\n工具主动发消息"]
     STATUS["showToolCall/showToolResult\n状态提示"]
   end
 
@@ -364,9 +365,10 @@ graph TD
   HOME --> LOGS["logs/"]
   HOME --> RUN["run/\nPID 文件"]
 
+  MEM --> SOUL["SOUL.md\nAnya 灵魂与身份"]
   MEM --> RULES["RULES.md\nAgent 操作规则"]
-  MEM --> USER["USER.md\n用户画像"]
-  MEM --> MEMORY["MEMORY.md\nAgent 笔记"]
+  MEM --> USER["USER.md\n用户画像与行为习惯"]
+  MEM --> MEMORY["MEMORY.md\n学习水平与能力状态"]
 
   SK --> BUNDLED[".bundled/\nanya init 复制的内置技能"]
 
@@ -377,11 +379,74 @@ graph TD
   DATA --> AUDIO["audio/"]
   DATA --> IMAGES["images/"]
 
-  STORE --> STATEDB["state.db\n会话与消息历史"]
-  STORE --> OTHERDB["vocab.db / learner.db / ...\ndb tool 按需创建\n可用 skill templates sql 初始化"]
+  STORE --> STATEDB["state.db\n会话与消息历史\nRuntime-owned"]
+  STORE --> STUDYDB["study.db\n英语学习领域库\nSkill-owned"]
 
   AUDIO --> AVOICE["voice/\n用户语音下载"]
   AUDIO --> ATTS["tts/\n生成音频"]
 
   IMAGES --> RECEIVED["received/\nTelegram 收到的图片"]
 ```
+
+---
+
+## 13. 英语学习数据模型
+
+**`state.db` 和 `study.db` 分工固定：前者只保存 Agent 对话历史，后者保存英语学习域数据。所有训练技能共享同一个 `study.db`，避免再拆 `vocab.db`、`learner.db` 之类的平行库。**
+
+```mermaid
+erDiagram
+  learner_profile ||--o{ daily_tasks : plans
+  samples ||--o{ errors : has
+  errors }o--|| error_patterns : aggregates
+  samples ||--o{ subcap_scores : scores
+  words ||--o{ word_reviews : reviewed_by
+  band_trend }o--|| samples : derived_from
+  activity_log }o--|| samples : derived_from
+```
+
+核心表分层：
+
+| 层 | Tables | 作用 |
+| --- | --- | --- |
+| Learner / Planning | `learner_profile`, `daily_tasks` | 用户画像和每日训练 slot |
+| Practice Evidence | `samples`, `errors`, `error_patterns`, `subcap_scores` | 练习原始证据、错因、子能力评分 |
+| Vocabulary / SRS | `words`, `word_reviews` | 词汇本和复习证据 |
+| Progress Cache | `band_trend`, `activity_log` | 派生能力趋势和每日活跃 |
+
+写入原则：
+
+- `persist` 是英语学习数据的统一入口：练习证据、词汇/SRS、profile mirror、daily tasks 和学习摘要都走 typed actions。
+- `db` 工具对 `study.db` 写入做硬拦截；skills 不应该依赖 raw SQL 操作学习数据。
+- `feedback`、`prompt`、`raw_content` 是训练复盘和错题诊所的关键证据，完成的练习不能留空。
+
+---
+
+## 14. English Skills 能力聚合
+
+**技能继续保持细粒度实现，但用户入口和 planner 不直接平铺所有 skill，而是按能力域聚合。当前 bundled English package 是 30 个 skills：28 个工作流 skills + 2 个 support skills。**
+
+```mermaid
+graph TB
+  MENU["English Planner / Telegram Menu\n一级显示能力域"] --> ONBOARD["Onboarding\nprofile-manager\nplacement-quick\nplanner"]
+  MENU --> COACH["Coaching\nlearner-state\ncoach\nerror-clinic"]
+  MENU --> LISTEN["Listening\nlistening-dictation\nlistening-numberdrill\nlistening-podcast\nlistening-shadowing"]
+  MENU --> SPEAK["Speaking\nspeaking-freetalk\nspeaking-repeat\nspeaking-roleplay\nspeaking-shadowing\nspeaking-azure-score"]
+  MENU --> READ["Reading & Input\nreading-deepdive\nreading-skim-drill\nreading-typetrain\ndaily-article\nmaterial-discussion"]
+  MENU --> WRITE["Writing\nwriting-builder\nwriting-essay\nwriting-journal\nwriting-rewrite"]
+  MENU --> VOCAB["Vocabulary\nvocab-harvest\nvocab-review\nvocab-testme\nvocab-topic"]
+
+  SUPPORT["Support Skills\ndata-contract\nband-descriptors"] -.-> COACH
+  SUPPORT -.-> LISTEN
+  SUPPORT -.-> SPEAK
+  SUPPORT -.-> READ
+  SUPPORT -.-> WRITE
+  SUPPORT -.-> VOCAB
+```
+
+聚合规则：
+
+- **一级菜单展示能力域**：Listening、Speaking、Reading、Writing、Vocabulary、Coaching，而不是展示 29 个训练 skill。
+- **二级由 planner 分流**：结合用户意图、`error_patterns`、近期 `samples` 表现和 `activity_log` 负荷，选具体训练。
+- **Planner 输出训练 slot**：slot 应包含 `domain`、`skill`、`minutes`、`reason`，用于 Telegram 菜单和主动提醒。
+- **Support skills 不面向用户展示**：只作为 rubrics、schema、query recipes 被其他 skills 读取。

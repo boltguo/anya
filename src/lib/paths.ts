@@ -7,7 +7,10 @@
  * ~/.anya/                         (ANYA_HOME)
  * ├── config.json                  Configuration
  * ├── memories/                    Global rule memory
- * │   └── RULES.md                 Operational directives
+ * │   ├── SOUL.md                  Anya identity/soul
+ * │   ├── RULES.md                 Operational directives
+ * │   ├── USER.md                  User profile and behavior habits
+ * │   └── MEMORY.md                Learner level and ability state
  * ├── skills/                      Installed skills
  * ├── data/                        All persistent data
  * │   ├── store/                   SQLite databases
@@ -38,6 +41,7 @@ export const AUTH_PATH = join(ANYA_HOME, 'auth.json');
 
 // ── Identity & Memory ────────────────────────────────────────────────────────
 export const MEMORY_DIR = join(ANYA_HOME, 'memories');
+export const SOUL_PATH = join(MEMORY_DIR, 'SOUL.md');
 export const RULES_PATH = join(MEMORY_DIR, 'RULES.md');
 export const USER_MD_PATH = join(MEMORY_DIR, 'USER.md');
 export const MEMORY_MD_PATH = join(MEMORY_DIR, 'MEMORY.md');

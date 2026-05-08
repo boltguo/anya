@@ -8,15 +8,17 @@
  * ┌─────────────────────────────────────┐
  * │  1. Config Personality               │  "Who the agent is"
  * ├─────────────────────────────────────┤
- * │  2. RULES.md — Operational Rules     │  "How Anya operates"
+ * │  2. SOUL.md — Identity               │  "Who Anya is"
  * ├─────────────────────────────────────┤
- * │  3. Memory — USER.md + MEMORY.md     │  "Who the user is & adaptive context"
+ * │  3. RULES.md — Operational Rules     │  "How Anya operates"
  * ├─────────────────────────────────────┤
- * │  4. Skills Index — Available skills  │  "What Anya can do"
+ * │  4. Memory — USER.md + MEMORY.md     │  "User profile & learner level state"
  * ├─────────────────────────────────────┤
- * │  5. Security — Path rules            │  "What Anya must not do"
+ * │  5. Skills Index — Available skills  │  "What Anya can do"
  * ├─────────────────────────────────────┤
- * │  6. Platform Capabilities            │  "What tools/media are available"
+ * │  6. Security — Path rules            │  "What Anya must not do"
+ * ├─────────────────────────────────────┤
+ * │  7. Platform Capabilities            │  "What tools/media are available"
  * └─────────────────────────────────────┘
  * ```
  *
@@ -25,7 +27,7 @@
  */
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { RULES_PATH, USER_MD_PATH, MEMORY_MD_PATH } from '../lib/paths.js';
+import { SOUL_PATH, RULES_PATH, USER_MD_PATH, MEMORY_MD_PATH } from '../lib/paths.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { buildSkillIndex } from '../skills/loader.js';
 
@@ -47,23 +49,33 @@ export function buildSystemPrompt(config: AnyaConfig): string {
     sections.push(`Configured user context: native language = ${config.user.native_language.trim()}`);
   }
 
-  // ── 2. Operational Rules (RULES) ───────────────────────────────────
+  // ── 2. Identity (SOUL) ──────────────────────────────────────────────
+  const soul = loadFile(SOUL_PATH);
+  if (hasContent(soul)) {
+    sections.push('\n## Identity (SOUL)');
+    sections.push(soul);
+  }
+
+  // ── 3. Operational Rules (RULES) ───────────────────────────────────
   const rules = loadFile(RULES_PATH);
-  if (rules) {
+  if (hasContent(rules)) {
+    sections.push('\n## Operating & Behavioral Rules');
     sections.push(rules);
   }
 
-  // ── 3. Memory (USER.md + MEMORY.md) ────────────────────────────────
+  // ── 4. Memory (USER.md + MEMORY.md) ────────────────────────────────
   const userMemory = loadFile(USER_MD_PATH);
   const agentMemory = loadFile(MEMORY_MD_PATH);
-  if (userMemory || agentMemory) {
+  const hasUser = hasContent(userMemory);
+  const hasAgent = hasContent(agentMemory);
+  if (hasUser || hasAgent) {
     sections.push('\n## Memory\n');
-    if (userMemory) {
+    if (hasUser) {
       sections.push('### User Profile');
       sections.push(userMemory);
     }
-    if (agentMemory) {
-      sections.push('\n### Agent Notes');
+    if (hasAgent) {
+      sections.push('\n### Learner Level & Ability State');
       sections.push(agentMemory);
     }
   }
@@ -80,7 +92,7 @@ export function buildSystemPrompt(config: AnyaConfig): string {
   sections.push('- Use the database and file tools only for Anya-owned runtime data unless the user explicitly grants broader access.');
 
   // ── 6. Platform capabilities ────────────────────────────────────────
-  // Note: tg message types and formatting are covered in RULES.md.
+  // Note: tg_msg message types and formatting are covered in RULES.md.
   // This section only adds tool-specific capabilities not in RULES.
   const enabled = config.tools?.enabled ?? [];
   const caps: string[] = [];
@@ -95,10 +107,6 @@ export function buildSystemPrompt(config: AnyaConfig): string {
 
   if (enabled.includes('pron_assess')) {
     caps.push('- **Pronunciation**: `pron_assess` tool (Azure Speech). Use `audio_path` from voice metadata. Only call during speaking practice or explicit request — NOT for regular voice messages.');
-  }
-
-  if (enabled.includes('reset_context')) {
-    caps.push('- **Context Reset**: Use `reset_context` when a distinct task is completely finished and the user is moving to an unrelated topic. This clears old history to save tokens and helps you focus. Optionally carry over a brief summary of important facts.');
   }
 
   if (caps.length > 0) {
@@ -130,4 +138,17 @@ function loadFile(filePath: string): string {
   } catch {
     return '';
   }
+}
+
+function hasContent(text: string): boolean {
+  if (!text) return false;
+  const body = text
+    .split('\n')
+    .filter(line => {
+      const trimmed = line.trim();
+      return trimmed && !trimmed.startsWith('#');
+    })
+    .join('\n')
+    .trim();
+  return Boolean(body) && body !== '(empty)';
 }

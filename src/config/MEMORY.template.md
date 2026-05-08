@@ -1,4 +1,4 @@
-# Agent Memory — Learner State
+# Learner Memory — Level & Ability State
 
 ## Status
 
@@ -13,7 +13,7 @@
 - score_source: (not set)
 - latest_score_update: (not set)
 
-## IELTS Bands
+## Band Snapshot
 
 - Overall: (not set)
 - Listening: (not set)

@@ -2,7 +2,7 @@
  * @module tools/telegramTools
  * @description Unified Telegram interaction tool for the Anya Agent.
  *
- * Consolidates all Telegram API interactions into a single `tg` tool with
+ * Consolidates all Telegram API interactions into a single `tg_msg` tool with
  * a `type` parameter, reducing LLM function declaration overhead from
  * many separate tool schemas to just 1 (~1300 prompt tokens saved per call).
  *
@@ -78,7 +78,7 @@ function resolveReplyTo(raw: unknown, tg: TelegramSessionAdapter): number | stri
 //   action         → Show typing/recording indicator
 
 register({
-  name: 'tg',
+  name: 'tg_msg',
   description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), force_reply, edit, delete, react, action. Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
   parameters: {
     type: 'object',

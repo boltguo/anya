@@ -67,6 +67,13 @@ function validateSql(sql: string): string | null {
   return null;
 }
 
+function isReadOnlySql(sql: string): boolean {
+  const trimmedUpper = sql.trimStart().toUpperCase();
+  return trimmedUpper.startsWith('SELECT')
+    || trimmedUpper.startsWith('PRAGMA')
+    || trimmedUpper.startsWith('EXPLAIN');
+}
+
 /**
  * Find and execute a schema .sql file for a given database name.
  * Scans all skills directories for schema/<name>.sql files.
@@ -244,6 +251,9 @@ register({
         }
         const err = validateSql(q.sql);
         if (err) return JSON.stringify({ error: `Query "${q.sql.substring(0, 60)}...": ${err}` });
+        if (dbName === 'study' && !isReadOnlySql(q.sql)) {
+          return JSON.stringify({ error: 'study.db writes are blocked in db tool. Use persist action=practice, word_upsert, word_review, profile_upsert, task_upsert, task_complete, or another typed persist action.' });
+        }
       }
 
       let db: DatabaseSync;
@@ -313,6 +323,9 @@ register({
     // ── Single-statement mode ──
     const sqlError = validateSql(sql);
     if (sqlError) return JSON.stringify({ error: sqlError });
+    if (dbName === 'study' && !isReadOnlySql(sql)) {
+      return JSON.stringify({ error: 'study.db writes are blocked in db tool. Use persist action=practice, word_upsert, word_review, profile_upsert, task_upsert, task_complete, or another typed persist action.' });
+    }
 
     let params: unknown[] = [];
     if (paramsRaw !== undefined && paramsRaw !== null && paramsRaw !== '') {
