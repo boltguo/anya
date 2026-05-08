@@ -32,12 +32,41 @@ Execute for the current clip:
 3. **MANDATORY Hidden Text & Keyboard**: Use the `tg_msg` tool (type: `keyboard`) to send an instruction message along with the audio. 
    - **Instruction text**: "🎧 先盲听一遍，然后直接按住录音，**一边听一边跟我读（影子跟读）**。\n\n如果实在跟不上，可以点开看原文：<tg-spoiler>[Insert original English text here]</tg-spoiler>"
    - **Keyboard**: Provide options in case it's too fast. Row 1: `[["🐢 慢速播放|shadow_slow", "😵 太难了，降级|shadow_hard"]]`
-4. **STOP AND WAIT**. Wait for the user to send their voice message or click a button.
+4. **Initialize a per-round `ui_feedback` accumulator** (empty string). Every button tap below MUST append the exact button label so it can be persisted later as evidence — even if the learner eventually shadows the clip cleanly.
+5. **STOP AND WAIT**. Wait for the user to send their voice message or click a button.
 
 ### State A.1: Handle Feedback Buttons
 If the user clicks a button before recording:
-- `shadow_slow`: Acknowledge via `tg_msg(type=text)`, generate the SAME text with `rate="-10%"` using TTS, send the new audio, and wait again.
-- `shadow_hard`: Acknowledge via `tg_msg(type=text)`, drop the difficulty/length, generate a NEW simpler clip, and go back to State A.
+- `shadow_slow`:
+  - **Append `🐢 慢速播放` to the round's `ui_feedback` accumulator** (mandatory — survives into State B's persist call so a "kept up only at slow speed" attempt is not mistaken for native-tempo shadowing).
+  - Acknowledge via `tg_msg(type=text)`, generate the SAME text with `rate="-10%"` using TTS, send the new audio, and wait again.
+- `shadow_hard`:
+  - **STEP 1 — Negative Evidence Lock-in (MANDATORY, before generating the replacement).** A "drop the level" tap on a shadowing clip is exactly the signal `learner-state` needs to lower the listening tempo target; it MUST hit the database before the clip is replaced. Call `persist` immediately:
+
+    ```json
+    {
+      "action": "practice",
+      "skill_type": "listening.shadowing",
+      "session_id": "<session>",
+      "completed": 0,
+      "accuracy": 0,
+      "prompt": "<the original passage that was abandoned>",
+      "response": "",
+      "feedback": "Learner tapped '太难了，降级' before recording. Treat as negative evidence at the current scaling tier.",
+      "audio_path": "<tts file path of the abandoned audio>",
+      "ui_feedback": "😵 太难了，降级",
+      "section": "listening",
+      "domain": "listening",
+      "load_score": 0,
+      "minutes": 0,
+      "mode": "study",
+      "metadata": "{\"abandoned_reason\":\"too_hard\",\"scaling_tier\":\"<beginner|intermediate|advanced>\",\"clip_words\":<n>}"
+    }
+    ```
+
+    After `persist` returns, **reset the round** — start a fresh `ui_feedback` accumulator for the next clip.
+
+  - **STEP 2 — Replacement.** Acknowledge via `tg_msg(type=text)`, drop the difficulty/length, generate a NEW simpler clip, and go back to State A.
 
 ### State B: Evaluation & Clinic
 When the user sends their voice message:
@@ -63,9 +92,12 @@ When the user sends their voice message:
        "feedback": "<IN ENGLISH: fluency and rhythm feedback>",
        "audio_path": "<tts file path>",
        "load_score": 2,
-       "minutes": 1
+       "minutes": 1,
+       "ui_feedback": "<comma-joined exact labels of every button tapped this round, e.g. '🐢 慢速播放' — empty string if no button was tapped>"
      }
      ```
+
+     **`ui_feedback` is mandatory whenever any 🐢/😵 button was tapped this round**, even if `pron_assess` returns a high fluency score. Without it, `learner-state` will treat a "kept up only at slow speed" pass as native-tempo competence and over-promote the level. Abandoned-on-too-hard records are written by State A.1 (`shadow_hard`) — do NOT duplicate them here.
 
 ### State C: Handling UI Options
 If the user clicks a button:

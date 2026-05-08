@@ -192,7 +192,7 @@ export class TelegramSessionAdapter implements Adapter {
     memory: '🧠 Updating memory',
     skill_view: '🎓 Loading skill',
     clarify: '💬 Asking question',
-    tg_msg: '💬 Sending message',
+    tg_msg: '',  // suppress — the actual message arrives immediately after
     tts: '🔊 Generating audio',
     pron_assess: '🗣️ Assessing pronunciation',
     db: '🗄️ Querying database',
@@ -214,8 +214,9 @@ export class TelegramSessionAdapter implements Adapter {
   }
 
   showToolCall(toolName: string, _args: Record<string, unknown>): void {
-    const label = TelegramSessionAdapter.TOOL_LABEL[toolName] || `⚙️ ${toolName}`;
-    this.statusText = `${label}...`;
+    const label = TelegramSessionAdapter.TOOL_LABEL[toolName];
+    if (label === '') return; // suppress status for tools that deliver content directly
+    this.statusText = `${label || `⚙️ ${toolName}`}...`;
     this.enqueue(() => this.flushStatus());
   }
 

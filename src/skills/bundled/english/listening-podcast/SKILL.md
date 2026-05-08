@@ -27,12 +27,41 @@ You must follow these steps strictly to prevent hallucinations.
 3. **Send Instruction (Same Turn)**: Use `tg_msg(type=keyboard)` along with the voice message. 
    - **Text**: "🎧 听听这段播客。不用抓每一个字，**你觉得他最想表达的核心观点是什么？** (可以用中文回答)\n\n实在听不出可以点开看原文：<tg-spoiler>[Insert original English script here]</tg-spoiler>"
    - **Buttons**: `[["🐢 慢速播放|pod_slow", "😵 完全听不懂|pod_hard"]]`
-4. **CRITICAL STOP**: End your turn immediately. WAIT for the user to type their answer or click a button.
+4. **Initialize a per-round `ui_feedback` accumulator** (empty string). Every button tap below MUST append the exact button label so it can be persisted later as evidence — even if the learner eventually nails the gist.
+5. **CRITICAL STOP**: End your turn immediately. WAIT for the user to type their answer or click a button.
 
 ### State B: Handle Feedback Buttons (Before typing)
 If the user clicks a button:
-- `pod_slow`: Briefly acknowledge via `tg_msg(type=text)`, use `tts` with `rate="-10%"` on the SAME script, send new voice, and resend the instruction keyboard. Wait.
-- `pod_hard`: Acknowledge naturally via `tg_msg(type=text)`. Explain the background context briefly in Chinese, generate a NEW significantly shorter/simpler script via `tts`, and go back to **State A**.
+- `pod_slow`:
+  - **Append `🐢 慢速播放` to the round's `ui_feedback` accumulator** (mandatory — survives into State C's persist call so a "got the gist only after slow-down" attempt is not mistaken for native-speed comprehension).
+  - Briefly acknowledge via `tg_msg(type=text)`, use `tts` with `rate="-10%"` on the SAME script, send new voice, and resend the instruction keyboard. Wait.
+- `pod_hard`:
+  - **STEP 1 — Negative Evidence Lock-in (MANDATORY, before generating the replacement).** A "completely lost" reaction at this scaling tier is the single highest-value signal `learner-state` can use to drop the listening level; it MUST hit the database before being replaced. Call `persist` immediately:
+
+    ```json
+    {
+      "action": "practice",
+      "skill_type": "listening.podcast",
+      "session_id": "<session>",
+      "completed": 0,
+      "accuracy": 0,
+      "prompt": "<the original English script that was abandoned>",
+      "response": "",
+      "feedback": "Learner tapped '完全听不懂' before answering. Treat as strong negative evidence at the current scaling tier.",
+      "audio_path": "<tts file path of the abandoned audio>",
+      "ui_feedback": "😵 完全听不懂",
+      "section": "listening",
+      "domain": "listening",
+      "load_score": 0,
+      "minutes": 0,
+      "mode": "study",
+      "metadata": "{\"abandoned_reason\":\"too_hard\",\"scaling_tier\":\"<beginner|intermediate|advanced>\",\"script_seconds\":<approx>}"
+    }
+    ```
+
+    After `persist` returns, **reset the round** — start a fresh `ui_feedback` accumulator for the next clip.
+
+  - **STEP 2 — Replacement.** Acknowledge naturally via `tg_msg(type=text)`. Explain the background context briefly in Chinese, generate a NEW significantly shorter/simpler script via `tts`, and go back to **State A**.
 
 ### State C: Evaluation & Data Update (User types the answer)
 When the user submits their gist summary:
@@ -55,9 +84,12 @@ When the user submits their gist summary:
        "audio_path": "<tts file path>",
        "load_score": 2,
        "minutes": 1,
+       "ui_feedback": "<comma-joined exact labels of every button tapped this round, e.g. '🐢 慢速播放' — empty string if no button was tapped>",
        "subcap_scores": "[{\"key\":\"listening.gist\",\"score\":5.0,\"evidence\":\"<IN ENGLISH: Understood main topic but missed the pivot>\"}]"
      }
      ```
+
+     **`ui_feedback` is mandatory whenever any 🐢/😵 button was tapped this round**, even if the learner eventually summarised the gist correctly. Without it, `learner-state` will treat a "got it only after slow-down" pass as native-speed comprehension and over-promote the level. Abandoned-on-too-hard records are written by State B (`pod_hard`) — do NOT duplicate them here.
 
 ### State D: Post-Practice Loop
 - `pod_next`: Loop back to **State A** (generate new topic).

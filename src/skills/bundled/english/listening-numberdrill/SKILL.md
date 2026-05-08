@@ -31,12 +31,41 @@ You must follow these steps strictly to prevent hallucinations and ensure a stan
 3. **Send Instruction (Same Turn)**: Use `tg_msg(type=keyboard)` along with the voice message. 
    - **Text**: "🎧 听录音，把听到的**数字、时间、或拼写的单词**打出来。\n\n实在听不出可以点开看原文：<tg-spoiler>[Insert original English text here]</tg-spoiler>"
    - **Buttons**: `[["🐢 慢速播放|num_slow", "😵 太难了，换简单点|num_hard"]]`
-4. **CRITICAL STOP**: End your turn immediately. WAIT for the user to type their answer or click a button.
+4. **Initialize a per-round `ui_feedback` accumulator** (empty string). Every button tap below MUST append the exact button label so it can be persisted later as evidence — even if the learner eventually nails the trap.
+5. **CRITICAL STOP**: End your turn immediately. WAIT for the user to type their answer or click a button.
 
 ### State B: Handle Feedback Buttons (Before typing)
 If the user clicks a button:
-- `num_slow`: Briefly acknowledge via `tg_msg(type=text)`, use `tts` with `rate="-10%"` on the SAME sentence, send new voice, and resend the instruction keyboard. Wait.
-- `num_hard`: Acknowledge naturally via `tg_msg(type=text)`, explain the trap, generate a NEW simpler sentence via `tts`, and go back to **State A**.
+- `num_slow`:
+  - **Append `🐢 慢速播放` to the round's `ui_feedback` accumulator** (mandatory — survives into State C's persist call so a "passed only after slow-down" attempt is not mistaken for clean comprehension).
+  - Briefly acknowledge via `tg_msg(type=text)`, use `tts` with `rate="-10%"` on the SAME sentence, send new voice, and resend the instruction keyboard. Wait.
+- `num_hard`:
+  - **STEP 1 — Negative Evidence Lock-in (MANDATORY, before generating the replacement).** The trap the learner abandoned is a high-value signal; it MUST hit the database before being thrown away. Call `persist` immediately:
+
+    ```json
+    {
+      "action": "practice",
+      "skill_type": "listening.numberdrill",
+      "session_id": "<session>",
+      "completed": 0,
+      "accuracy": 0,
+      "prompt": "<the sentence that was just too hard>",
+      "response": "",
+      "feedback": "Learner tapped '太难了' before answering. Trap category was <e.g. teen-vs-ty>; treat as negative evidence at this difficulty.",
+      "audio_path": "<tts file path of the abandoned sentence>",
+      "ui_feedback": "😵 太难了",
+      "section": "listening",
+      "domain": "listening",
+      "load_score": 0,
+      "minutes": 0,
+      "mode": "study",
+      "metadata": "{\"abandoned_reason\":\"too_hard\",\"trap_category\":\"<category>\"}"
+    }
+    ```
+
+    After `persist` returns, **reset the round** — start a fresh `ui_feedback` accumulator for the next sentence.
+
+  - **STEP 2 — Replacement.** Acknowledge naturally via `tg_msg(type=text)`, explain the trap, generate a NEW simpler sentence via `tts`, and go back to **State A**.
 
 ### State C: Evaluation & Data Update (User types the answer)
 When the user submits their dictated text:
@@ -59,10 +88,13 @@ When the user submits their dictated text:
        "audio_path": "<tts file path>",
        "load_score": 1,
        "minutes": 1,
+       "ui_feedback": "<comma-joined exact labels of every button tapped this round, e.g. '🐢 慢速播放' — empty string if no button was tapped>",
        "errors": "[{\"key\":\"number_confusion\",\"category\":\"listening\",\"correction\":\"30\",\"note\":\"<IN ENGLISH: note about teen/ty confusion>\"}]"
      }
      ```
      Error keys: `number_confusion`, `spelling_error`, `function_word_miss`
+
+     **`ui_feedback` is mandatory whenever any 🐢/😵 button was tapped this round**, even if the learner ends up scoring 100%. Without it, `learner-state` will treat a "had to slow down to catch the digits" pass as proof of mastery and over-promote the level. Abandoned-on-too-hard records are written by State B (`num_hard`) — do NOT duplicate them here.
 
 ### State D: Post-Practice Loop
 - `num_next`: Loop back to **State A** (pick a new random trap, generate new sentence).

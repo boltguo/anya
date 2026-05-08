@@ -14,8 +14,23 @@
 import { register } from './registry.js';
 import type { ToolContext } from '../agent/types.js';
 import { TelegramSessionAdapter } from '../adapters/telegram.js';
+import { markdownToTelegramHtml } from '../lib/tgFormat.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * If parse_mode is HTML (the default) and the text contains markdown syntax,
+ * convert markdown → Telegram-flavored HTML so headings/bold/lists render properly.
+ * Pure HTML or empty input is left unchanged.
+ */
+function renderText(text: string | undefined, parseMode: string | undefined): string {
+  if (!text) return '';
+  const mode = parseMode || 'HTML';
+  if (mode !== 'HTML') return text;
+  // Cheap detection of common markdown markers (# headings, **bold**, list bullets, ``` code).
+  const looksLikeMarkdown = /(^|\n)\s{0,3}#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s+|`{3}/m.test(text);
+  return looksLikeMarkdown ? markdownToTelegramHtml(text) : text;
+}
 
 /**
  * Extracts and validates the TelegramSessionAdapter from the generic tool context.
@@ -116,9 +131,10 @@ register({
     switch (type) {
       case 'text': {
         const replyTo = resolveReplyTo(args.reply_to, tg);
-        const msgId = await tg.sendMessage(String(args.text || ''), {
+        const parseMode = (args.parse_mode as string) || 'HTML';
+        const msgId = await tg.sendMessage(renderText(args.text as string, parseMode), {
           replyTo, tag: args.tag as string,
-          parseMode: (args.parse_mode as any) || 'HTML',
+          parseMode: parseMode as any,
         });
         return JSON.stringify({ ok: true, message_id: msgId });
       }
@@ -127,9 +143,10 @@ register({
         const url = String(args.url || '');
         if (!url) return JSON.stringify({ ok: false, error: 'url is required for audio type' });
         const replyTo = resolveReplyTo(args.reply_to, tg);
-        const msgId = await tg.sendAudio(url, String(args.text || ''), {
+        const parseMode = (args.parse_mode as string) || 'HTML';
+        const msgId = await tg.sendAudio(url, renderText(args.text as string, parseMode), {
           replyTo, tag: args.tag as string,
-          parseMode: (args.parse_mode as any) || 'HTML',
+          parseMode: parseMode as any,
         });
         return JSON.stringify({ ok: true, message_id: msgId });
       }
@@ -138,9 +155,10 @@ register({
         const url = String(args.url || '');
         if (!url) return JSON.stringify({ ok: false, error: 'url is required for voice type' });
         const replyTo = resolveReplyTo(args.reply_to, tg);
-        const msgId = await tg.sendVoice(url, String(args.text || ''), {
+        const parseMode = (args.parse_mode as string) || 'HTML';
+        const msgId = await tg.sendVoice(url, renderText(args.text as string, parseMode), {
           replyTo, tag: args.tag as string,
-          parseMode: (args.parse_mode as any) || 'HTML',
+          parseMode: parseMode as any,
         });
         return JSON.stringify({ ok: true, message_id: msgId });
       }
@@ -148,7 +166,8 @@ register({
       case 'keyboard': {
         const buttons = parseArray(args.buttons);
         const replyTo = resolveReplyTo(args.reply_to, tg);
-        const msgId = await tg.sendKeyboard(String(args.text || ''), buttons, {
+        const parseMode = (args.parse_mode as string) || 'HTML';
+        const msgId = await tg.sendKeyboard(renderText(args.text as string, parseMode), buttons, {
           replyTo, tag: args.tag as string,
         });
         return JSON.stringify({ ok: true, message_id: msgId });
@@ -167,7 +186,8 @@ register({
 
       case 'force_reply': {
         const replyTo = resolveReplyTo(args.reply_to, tg);
-        const msgId = await tg.sendForceReply(String(args.text || ''), {
+        const parseMode = (args.parse_mode as string) || 'HTML';
+        const msgId = await tg.sendForceReply(renderText(args.text as string, parseMode), {
           replyTo, tag: args.tag as string,
         });
         return JSON.stringify({ ok: true, message_id: msgId });
@@ -176,19 +196,21 @@ register({
       case 'edit': {
         const msgRef = args.message_id as string;
         const buttons = args.buttons ? parseArray(args.buttons) : undefined;
+        const parseMode = (args.parse_mode as string) || 'HTML';
         await tg.editMessage(
           isNaN(Number(msgRef)) ? msgRef : Number(msgRef),
-          String(args.text || ''), buttons
+          renderText(args.text as string, parseMode), buttons
         );
         return JSON.stringify({ ok: true });
       }
 
       case 'document': {
         const replyTo = resolveReplyTo(args.reply_to, tg);
+        const parseMode = (args.parse_mode as string) || 'HTML';
         const msgId = await tg.sendDocument(String(args.url || ''), {
-          caption: args.text as string,
+          caption: renderText(args.text as string, parseMode),
           replyTo, tag: args.tag as string,
-          parseMode: (args.parse_mode as string) || 'HTML',
+          parseMode: parseMode as any,
         });
         return JSON.stringify({ ok: true, message_id: msgId });
       }

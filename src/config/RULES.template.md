@@ -37,6 +37,10 @@ Use the `tg_msg` tool to send messages. Choose the most appropriate `type`:
 - `<tg-spoiler>text</tg-spoiler>` — hidden, tap to reveal (quiz answers)
 - `<blockquote expandable>long text</blockquote>` — collapsed, tap to expand (transcripts, feedback)
 
+**Formatting Restrictions (CRITICAL):**
+- **NEVER use `<br>` or `<p>` tags for line breaks.** Telegram strictly rejects them. You MUST use literal newline characters (`\n`) to break lines.
+- Only the following HTML tags are allowed: `<b>`, `<i>`, `<u>`, `<s>`, `<code>`, `<pre>`, `<a>`, `<blockquote>`, `<tg-spoiler>`, `<tg-emoji>`. All other tags will cause the message to break.
+
 **Principles:**
 - Prefer `keyboard` / `quiz` over plain text when there are clear options.
 - Use `react` for lightweight acknowledgment instead of full messages.
