@@ -11,7 +11,7 @@ This module consolidates error explanations across all English skills (Reading, 
 ## Workflow
 
 1.  **Context Retrieval**:
-    - Use `persist` with `{"action":"study_summary","days":14}` to retrieve recent samples, recurring errors, and weak subcaps.
+    - Use `persist` with `{"action":"coach_context","days":14,"limit":8}` to retrieve recent samples, recurring errors, weak subcaps, due words, and personal-error cards.
     - Identify the domain of the error (e.g., was it a pronunciation issue in speaking, a spelling mistake in listening dictation, or a grammar flaw in writing?).
 
 2.  **Diagnosis & Explanation**:

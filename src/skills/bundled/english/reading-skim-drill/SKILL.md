@@ -49,7 +49,7 @@ Breaks word-by-word translation habit. Forces big-picture reading.
 1. **`samples`** row:
    - `skill_type = 'reading.skim'`
    - `prompt` = the passage text
-   - `raw_content` = user's answers (gist + quiz responses)
+   - `response` = user's answers (gist + quiz responses)
    - `accuracy` = correct / total (0.0–1.0)
    - `raw_score` = correct count, `max_score` = question count
    - `load_score = 2`

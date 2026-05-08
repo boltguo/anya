@@ -4,8 +4,9 @@
  *
  * All English learning data goes through this tool instead of raw SQL from
  * skills. The default action is `practice`, which writes post-practice
- * evidence in one transaction. Vocabulary, SRS review, profile updates, and
- * learner summaries are exposed as typed actions.
+ * evidence in one transaction. Vocabulary, SRS review, profile updates,
+ * learning-session lifecycle, progress snapshots, and learner summaries are
+ * exposed as typed actions.
  */
 
 import { register } from './registry.js';
@@ -52,13 +53,13 @@ interface WordEntry {
 
 register({
   name: 'persist',
-  description: 'Typed gateway for English study.db. Default action="practice" writes practice evidence. Other actions: word_upsert, word_review, due_words, word_lookup, study_summary, profile_upsert, task_upsert, due_tasks, task_complete. Skills must use this instead of raw db calls for learner data.',
+  description: 'Typed gateway for English study.db. Default action="practice" writes practice evidence. Other actions: word_upsert, word_review, due_words, word_lookup, study_summary, coach_context, profile_upsert, task_upsert, due_tasks, task_complete, session_start, session_end, progress_snapshot, progress_trend. Skills must use this instead of raw db calls for learner data.',
   parameters: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        description: 'practice (default) | word_upsert | word_review | due_words | word_lookup | study_summary | profile_upsert | task_upsert | due_tasks | task_complete',
+        description: 'practice (default) | word_upsert | word_review | due_words | word_lookup | study_summary | coach_context | profile_upsert | task_upsert | due_tasks | task_complete | session_start | session_end | progress_snapshot | progress_trend',
       },
       skill_type: { type: 'string', description: 'Practice skill identifier, e.g. listening.dictation, writing.essay, vocab.review.' },
       session_id: { type: 'string', description: 'Session key from the user input, e.g. tg:12345.' },
@@ -115,7 +116,7 @@ register({
       card_type: { type: 'string', description: 'recall | production | collocation | meaning.' },
       context: { type: 'string', description: 'Short review context.' },
       limit: { type: 'integer', description: 'Row limit for read actions.' },
-      days: { type: 'integer', description: 'Lookback window for study_summary.' },
+      days: { type: 'integer', description: 'Lookback window for study_summary or coach_context.' },
 
       profile: { type: 'string', description: 'JSON object for profile_upsert.' },
       date: { type: 'string', description: 'YYYY-MM-DD date for task actions. Defaults to today.' },
@@ -126,6 +127,33 @@ register({
       reason: { type: 'string', description: 'Why this task is planned.' },
       planned_minutes: { type: 'integer', description: 'Planned task duration.' },
       sample_id: { type: 'integer', description: 'Completed sample id for task_complete.' },
+
+      study_session_id: { type: 'integer', description: 'study_sessions id for session_end.' },
+      session_key: { type: 'string', description: 'Learning session key, e.g. tg:12345.' },
+      platform: { type: 'string', description: 'telegram | cli | cron | web.' },
+      entrypoint: { type: 'string', description: 'new | cron_morning | manual | etc.' },
+      skills_used: { type: 'string', description: 'JSON array of skill slugs used in a learning session.' },
+      plan: { type: 'string', description: 'JSON plan object/array for a learning session.' },
+      summary_text: { type: 'string', description: 'Session recap for session_end.' },
+      status: { type: 'string', description: 'active | closed | abandoned.' },
+      week: { type: 'string', description: 'ISO week for progress_snapshot/progress_trend, e.g. 2026-W19.' },
+      period_start: { type: 'string', description: 'Snapshot period start, YYYY-MM-DD.' },
+      period_end: { type: 'string', description: 'Snapshot period end, YYYY-MM-DD.' },
+      current_level: { type: 'string', description: 'Current learner level at snapshot time.' },
+      listening_score: { type: 'number', description: 'Learner-state computed score, usually 0-100.' },
+      speaking_score: { type: 'number', description: 'Learner-state computed score, usually 0-100.' },
+      reading_score: { type: 'number', description: 'Learner-state computed score, usually 0-100.' },
+      writing_score: { type: 'number', description: 'Learner-state computed score, usually 0-100.' },
+      vocab_active_count: { type: 'integer' },
+      vocab_mature_count: { type: 'integer' },
+      total_minutes: { type: 'integer' },
+      active_days: { type: 'integer' },
+      sessions_count: { type: 'integer' },
+      samples_count: { type: 'integer' },
+      due_words_count: { type: 'integer' },
+      weak_subcaps: { type: 'string', description: 'JSON array computed by learner-state.' },
+      top_errors: { type: 'string', description: 'JSON array computed by learner-state.' },
+      notes: { type: 'string', description: 'Progress snapshot notes.' },
     },
   },
 
@@ -147,6 +175,8 @@ register({
           return JSON.stringify(wordLookup(db, args));
         case 'study_summary':
           return JSON.stringify(studySummary(db, args));
+        case 'coach_context':
+          return JSON.stringify(coachContext(db, args));
         case 'profile_upsert':
           return JSON.stringify(profileUpsert(db, args));
         case 'task_upsert':
@@ -155,6 +185,14 @@ register({
           return JSON.stringify(dueTasks(db, args));
         case 'task_complete':
           return JSON.stringify(taskComplete(db, args));
+        case 'session_start':
+          return JSON.stringify(sessionStart(db, args));
+        case 'session_end':
+          return JSON.stringify(sessionEnd(db, args));
+        case 'progress_snapshot':
+          return JSON.stringify(progressSnapshot(db, args));
+        case 'progress_trend':
+          return JSON.stringify(progressTrend(db, args));
         default:
           return JSON.stringify({ error: `Unknown persist action: ${action}` });
       }
@@ -168,12 +206,12 @@ function logPractice(db: ReturnType<typeof getDatabase>, args: Record<string, un
   const skillType = String(args.skill_type || '');
   const completed = Number(args.completed ?? 1);
   const prompt = String(args.prompt || (completed === 0 ? '[abandoned]' : ''));
-  const rawContent = String(args.response || (completed === 0 ? '[abandoned]' : ''));
+  const response = String(args.response ?? args.raw_content ?? (completed === 0 ? '[abandoned]' : ''));
   const feedback = String(args.feedback || (completed === 0 ? 'Session abandoned before evaluation.' : ''));
 
   if (!skillType) return { error: 'Missing skill_type' };
   if (!prompt) return { error: 'Missing prompt' };
-  if (!rawContent) return { error: 'Missing response' };
+  if (!response) return { error: 'Missing response' };
   if (!feedback) return { error: 'Missing feedback' };
 
   const sessionId = String(args.session_id || '');
@@ -198,7 +236,7 @@ function logPractice(db: ReturnType<typeof getDatabase>, args: Record<string, un
   try {
     const sampleStmt = db.prepare(`
       INSERT INTO samples (
-        created_at, skill_type, domain, section, prompt, raw_content,
+        created_at, skill_type, domain, section, prompt, response,
         accuracy, raw_score, max_score, session_id, feedback, mode, completed,
         load_score, audio_path, image_path, source_url, minutes, duration_seconds,
         band_task, band_coherence, band_lexical, band_grammar, band_pronunciation, band_overall,
@@ -209,7 +247,7 @@ function logPractice(db: ReturnType<typeof getDatabase>, args: Record<string, un
       )
     `);
     const sampleResult = sampleStmt.run(
-      skillType, domain, section, prompt, rawContent,
+      skillType, domain, section, prompt, response,
       accuracy, rawScore, maxScore, sessionId, feedback, mode, completed,
       loadScore, audioPath, imagePath, sourceUrl, minutes, durationSeconds,
       optionalNumber(args.band_task), optionalNumber(args.band_coherence),
@@ -320,6 +358,86 @@ function taskComplete(db: ReturnType<typeof getDatabase>, args: Record<string, u
     WHERE id = ?
   `).run(optionalNumber(args.sample_id), taskId);
   return { ok: true, action: 'task_complete', changes: Number(result.changes) };
+}
+
+function sessionStart(db: ReturnType<typeof getDatabase>, args: Record<string, unknown>): unknown {
+  const sessionKey = String(args.session_key || args.session_id || '').trim();
+  const result = db.prepare(`
+    INSERT INTO study_sessions (
+      session_key, platform, entrypoint, status, skills_used, plan, created_at, updated_at
+    ) VALUES (
+      ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now')
+    )
+  `).run(
+    sessionKey,
+    String(args.platform || ''),
+    String(args.entrypoint || 'manual'),
+    normalizeJsonString(args.skills_used),
+    normalizeJsonString(args.plan),
+  );
+  return {
+    ok: true,
+    action: 'session_start',
+    study_session_id: normalizeRowId(result.lastInsertRowid),
+  };
+}
+
+function sessionEnd(db: ReturnType<typeof getDatabase>, args: Record<string, unknown>): unknown {
+  const id = optionalNumber(args.study_session_id);
+  const sessionKey = String(args.session_key || args.session_id || '').trim();
+  if (id === null && !sessionKey) return { error: 'Missing study_session_id or session_key' };
+
+  const status = String(args.status || 'closed');
+  const summary = String(args.summary_text || args.summary || '');
+  const skillsUsed = normalizeJsonString(args.skills_used);
+  const duration = optionalNumber(args.duration_seconds);
+  const minutes = optionalNumber(args.minutes);
+
+  const sampleAgg = db.prepare(`
+    SELECT COUNT(*) AS samples_count, COALESCE(SUM(minutes), 0) AS minutes_total
+    FROM samples
+    WHERE session_id = ?
+  `).get(sessionKey) as { samples_count?: number; minutes_total?: number } | undefined;
+
+  const samplesCount = optionalNumber(args.samples_count) ?? Number(sampleAgg?.samples_count ?? 0);
+  const minutesTotal = minutes ?? Number(sampleAgg?.minutes_total ?? 0);
+
+  const sql = id !== null
+    ? `
+      UPDATE study_sessions
+      SET ended_at = datetime('now'),
+          duration_seconds = COALESCE(?, CAST((julianday('now') - julianday(started_at)) * 86400 AS INTEGER)),
+          status = ?,
+          skills_used = CASE WHEN ? != '' THEN ? ELSE skills_used END,
+          summary = ?,
+          samples_count = ?,
+          minutes_total = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `
+    : `
+      UPDATE study_sessions
+      SET ended_at = datetime('now'),
+          duration_seconds = COALESCE(?, CAST((julianday('now') - julianday(started_at)) * 86400 AS INTEGER)),
+          status = ?,
+          skills_used = CASE WHEN ? != '' THEN ? ELSE skills_used END,
+          summary = ?,
+          samples_count = ?,
+          minutes_total = ?,
+          updated_at = datetime('now')
+      WHERE id = (
+        SELECT id FROM study_sessions
+        WHERE session_key = ? AND status = 'active'
+        ORDER BY started_at DESC
+        LIMIT 1
+      )
+    `;
+
+  const result = id !== null
+    ? db.prepare(sql).run(duration, status, skillsUsed, skillsUsed, summary, samplesCount, minutesTotal, id)
+    : db.prepare(sql).run(duration, status, skillsUsed, skillsUsed, summary, samplesCount, minutesTotal, sessionKey);
+
+  return { ok: true, action: 'session_end', changes: Number(result.changes) };
 }
 
 function upsertWords(db: ReturnType<typeof getDatabase>, args: Record<string, unknown>): unknown {
@@ -527,6 +645,106 @@ function studySummary(db: ReturnType<typeof getDatabase>, args: Record<string, u
   return { ok: true, action: 'study_summary', days, samples, bands, errors, subcaps, activity, vocab };
 }
 
+function coachContext(db: ReturnType<typeof getDatabase>, args: Record<string, unknown>): unknown {
+  const days = clampInt(Number(args.days ?? 14), 1, 180);
+  const wordLimit = clampInt(Number(args.limit ?? 8), 1, 20);
+  const date = String(args.date || new Date().toISOString().slice(0, 10));
+  const summary = studySummary(db, { days }) as Record<string, unknown>;
+  const profile = db.prepare('SELECT * FROM learner_profile WHERE id = 1').get() ?? null;
+  const dueWordsResult = dueWords(db, { limit: wordLimit }) as Record<string, unknown>;
+  const dueTasksResult = dueTasks(db, { date }) as Record<string, unknown>;
+  const recentPersonalErrors = db.prepare(`
+    SELECT word, item_kind, chinese, definition, example_en, topics,
+           mastery, review_count, fail_count, srs_due, origin
+    FROM words
+    WHERE item_kind = 'personal_error'
+    ORDER BY fail_count DESC, updated_at DESC
+    LIMIT 6
+  `).all();
+
+  return {
+    ok: true,
+    action: 'coach_context',
+    days,
+    date,
+    profile,
+    summary,
+    due_words: dueWordsResult.rows ?? [],
+    due_words_count: dueWordsResult.count ?? 0,
+    due_tasks: dueTasksResult.rows ?? [],
+    due_tasks_count: dueTasksResult.count ?? 0,
+    personal_error_cards: recentPersonalErrors,
+  };
+}
+
+function progressSnapshot(db: ReturnType<typeof getDatabase>, args: Record<string, unknown>): unknown {
+  const period = progressPeriod(args);
+
+  db.prepare(`
+    INSERT INTO progress_snapshots (
+      week, period_start, period_end, current_level,
+      listening_score, speaking_score, reading_score, writing_score,
+      vocab_active_count, vocab_mature_count, total_minutes, active_days,
+      sessions_count, samples_count, due_words_count, weak_subcaps, top_errors,
+      notes, created_at, updated_at
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now')
+    )
+    ON CONFLICT(week) DO UPDATE SET
+      period_start = excluded.period_start,
+      period_end = excluded.period_end,
+      current_level = excluded.current_level,
+      listening_score = excluded.listening_score,
+      speaking_score = excluded.speaking_score,
+      reading_score = excluded.reading_score,
+      writing_score = excluded.writing_score,
+      vocab_active_count = excluded.vocab_active_count,
+      vocab_mature_count = excluded.vocab_mature_count,
+      total_minutes = excluded.total_minutes,
+      active_days = excluded.active_days,
+      sessions_count = excluded.sessions_count,
+      samples_count = excluded.samples_count,
+      due_words_count = excluded.due_words_count,
+      weak_subcaps = excluded.weak_subcaps,
+      top_errors = excluded.top_errors,
+      notes = excluded.notes,
+      updated_at = datetime('now')
+  `).run(
+    period.week,
+    period.start,
+    period.end,
+    String(args.current_level || ''),
+    optionalNumber(args.listening_score),
+    optionalNumber(args.speaking_score),
+    optionalNumber(args.reading_score),
+    optionalNumber(args.writing_score),
+    Number(args.vocab_active_count ?? 0),
+    Number(args.vocab_mature_count ?? 0),
+    Number(args.total_minutes ?? 0),
+    Number(args.active_days ?? 0),
+    Number(args.sessions_count ?? 0),
+    Number(args.samples_count ?? 0),
+    Number(args.due_words_count ?? 0),
+    normalizeJsonString(args.weak_subcaps),
+    normalizeJsonString(args.top_errors),
+    String(args.notes || ''),
+  );
+
+  const row = db.prepare('SELECT * FROM progress_snapshots WHERE week = ?').get(period.week);
+  return { ok: true, action: 'progress_snapshot', row };
+}
+
+function progressTrend(db: ReturnType<typeof getDatabase>, args: Record<string, unknown>): unknown {
+  const limit = clampInt(Number(args.limit ?? args.weeks ?? 8), 1, 52);
+  const rows = db.prepare(`
+    SELECT *
+    FROM progress_snapshots
+    ORDER BY period_end DESC
+    LIMIT ?
+  `).all(limit).reverse();
+  return { ok: true, action: 'progress_trend', rows, count: rows.length };
+}
+
 function profileUpsert(db: ReturnType<typeof getDatabase>, args: Record<string, unknown>): unknown {
   const profile = parseJsonObject(args.profile);
   const merged = { ...profile, ...args };
@@ -685,6 +903,49 @@ function normalizeRowId(value: number | bigint): number {
 
 function nowSql(): string {
   return new Date().toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function progressPeriod(args: Record<string, unknown>): { week: string; start: string; end: string } {
+  const explicitWeek = String(args.week || '').trim();
+  const now = new Date();
+  const target = explicitWeek ? dateFromIsoWeek(explicitWeek) : now;
+  const { week, start, end } = isoWeekRange(target);
+  return { week: explicitWeek || week, start, end };
+}
+
+function isoWeekRange(input: Date): { week: string; start: string; end: string } {
+  const date = new Date(Date.UTC(input.getUTCFullYear(), input.getUTCMonth(), input.getUTCDate()));
+  const day = date.getUTCDay() || 7;
+  const monday = new Date(date);
+  monday.setUTCDate(date.getUTCDate() - day + 1);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+
+  const thursday = new Date(monday);
+  thursday.setUTCDate(monday.getUTCDate() + 3);
+  const year = thursday.getUTCFullYear();
+  const firstThursday = new Date(Date.UTC(year, 0, 4));
+  const firstDay = firstThursday.getUTCDay() || 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDay + 4);
+  const weekNo = 1 + Math.round((thursday.getTime() - firstThursday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+
+  return {
+    week: `${year}-W${String(weekNo).padStart(2, '0')}`,
+    start: monday.toISOString().slice(0, 10),
+    end: sunday.toISOString().slice(0, 10),
+  };
+}
+
+function dateFromIsoWeek(week: string): Date {
+  const match = /^(\d{4})-W(\d{1,2})$/.exec(week);
+  if (!match) return new Date();
+  const year = Number(match[1]);
+  const weekNo = clampInt(Number(match[2]), 1, 53);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - jan4Day + 1 + (weekNo - 1) * 7);
+  return monday;
 }
 
 function clampInt(value: number, min: number, max: number): number {

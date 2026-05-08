@@ -17,14 +17,14 @@ Owner of `USER.md`. Builds or corrects a short natural-language user profile. On
 
 ## Workflow
 
-0. **Bootstrap study.db** — call `persist` with `{"action":"study_summary","days":1}` to ensure the database and schema exist.
+0. **Bootstrap study.db** — call `persist` with `{"action":"coach_context","days":1,"limit":3}` to ensure the database and schema exist and to see any existing structured profile mirror.
 1. Read `USER.md` + `MEMORY.md`.
 2. Decide mode:
    - **First-run** (`initialized: false` or `/profile-manager` with an empty profile) → collect the question bundles in `references/fields.md`, one bundle per turn. After enough information is collected, rewrite `USER.md` as concise natural-language sections and set `initialized: true` in **BOTH** `USER.md` and `MEMORY.md`. Then chain `placement-quick` (or `placement-quick` if asked). Hand off to `planner`.
    - **Targeted update** — parse intent, ask at most one clarifying question, then rewrite the relevant natural-language section.
    - **Profile lookup** — another skill reads USER via `memory target=user action=read`; this path rarely runs directly.
 3. Write `USER.md` through `memory target=user action=replace`.
-4. Mirror structured planning fields through `persist action="profile_upsert"` when profile facts are collected or changed.
+4. Mirror structured planning fields through `persist action="profile_upsert"` when profile facts are collected or changed. Use any existing `coach_context.profile` values to avoid asking for facts that are already stored.
 
 ## Resources
 

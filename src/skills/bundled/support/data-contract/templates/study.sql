@@ -37,7 +37,29 @@ CREATE TABLE IF NOT EXISTS learner_profile (
     updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- ─── 2. Daily plan ────────────────────────────────────────────────────────
+-- ─── 2. Study sessions ────────────────────────────────────────────────────
+-- One row per deliberate learning session. Conversation history still lives
+-- in state.db; this table records the learning wrapper: start/end, planned
+-- route, skills touched, and final recap.
+CREATE TABLE IF NOT EXISTS study_sessions (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_key         TEXT NOT NULL DEFAULT '',       -- Agent session key, e.g. tg:123
+    started_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    ended_at            TEXT,
+    duration_seconds    INTEGER,
+    platform            TEXT NOT NULL DEFAULT '',       -- telegram | cli | cron | web
+    entrypoint          TEXT NOT NULL DEFAULT '',       -- new | cron_morning | manual | etc.
+    status              TEXT NOT NULL DEFAULT 'active', -- active | closed | abandoned
+    skills_used         TEXT NOT NULL DEFAULT '',       -- JSON array of skill slugs
+    plan                TEXT NOT NULL DEFAULT '',       -- JSON object/array from planner or learner-state
+    summary             TEXT NOT NULL DEFAULT '',
+    samples_count       INTEGER NOT NULL DEFAULT 0,
+    minutes_total       INTEGER NOT NULL DEFAULT 0,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ─── 3. Daily plan ────────────────────────────────────────────────────────
 -- Planned study slots for a date. The router/menu reads this table to show
 -- what to do next; practice completion can link back to the produced sample.
 CREATE TABLE IF NOT EXISTS daily_tasks (
@@ -56,7 +78,7 @@ CREATE TABLE IF NOT EXISTS daily_tasks (
     sample_id           INTEGER REFERENCES samples(id) ON DELETE SET NULL
 );
 
--- ─── 3. Practice evidence ─────────────────────────────────────────────────
+-- ─── 4. Practice evidence ─────────────────────────────────────────────────
 -- One row per actual learning attempt: dictation answer, essay, speaking
 -- sample, reading drill, vocab quiz, placement item, or mock section.
 CREATE TABLE IF NOT EXISTS samples (
@@ -71,7 +93,7 @@ CREATE TABLE IF NOT EXISTS samples (
     duration_seconds    INTEGER,
     minutes             INTEGER NOT NULL DEFAULT 1,
     prompt              TEXT NOT NULL DEFAULT '',
-    raw_content         TEXT NOT NULL DEFAULT '',       -- user's raw answer / transcript
+    response            TEXT NOT NULL DEFAULT '',       -- user's raw answer / transcript
     feedback            TEXT NOT NULL DEFAULT '',       -- natural-language diagnosis
     translation         TEXT NOT NULL DEFAULT '',
     audio_path          TEXT,
@@ -94,7 +116,7 @@ CREATE TABLE IF NOT EXISTS samples (
     metadata            TEXT NOT NULL DEFAULT ''        -- JSON object for skill-owned extras
 );
 
--- ─── 4. Concrete errors ───────────────────────────────────────────────────
+-- ─── 5. Concrete errors ───────────────────────────────────────────────────
 -- Specific mistakes found in a sample. These rows are evidence; do not store
 -- vague observations here. `recurrence_key` must come from error-keys.md.
 CREATE TABLE IF NOT EXISTS errors (
@@ -109,7 +131,7 @@ CREATE TABLE IF NOT EXISTS errors (
     created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- ─── 5. Recurring weakness aggregate ──────────────────────────────────────
+-- ─── 6. Recurring weakness aggregate ──────────────────────────────────────
 -- Fast planner/coaching cache derived from `errors`. `persist` updates it in
 -- the same transaction when writing error rows.
 CREATE TABLE IF NOT EXISTS error_patterns (
@@ -125,7 +147,7 @@ CREATE TABLE IF NOT EXISTS error_patterns (
     rule_note           TEXT NOT NULL DEFAULT ''
 );
 
--- ─── 6. Sub-capability scores ─────────────────────────────────────────────
+-- ─── 7. Sub-capability scores ─────────────────────────────────────────────
 -- Fine-grained ability evidence, e.g. writing.argument_depth,
 -- listening.connected_speech, speaking.fluency. Used by learner-state.
 CREATE TABLE IF NOT EXISTS subcap_scores (
@@ -137,7 +159,7 @@ CREATE TABLE IF NOT EXISTS subcap_scores (
     created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- ─── 7. Vocabulary inventory ──────────────────────────────────────────────
+-- ─── 8. Vocabulary inventory ──────────────────────────────────────────────
 -- Unified notebook for words, chunks, sentence patterns, and personal-error
 -- cards. Separate paraphrase tables are intentionally omitted for now; use
 -- `item_kind`, `topics`, and `metadata` until a real feature needs more.
@@ -174,7 +196,7 @@ CREATE TABLE IF NOT EXISTS words (
     metadata            TEXT NOT NULL DEFAULT ''        -- JSON object for feature-specific extras
 );
 
--- ─── 8. Vocabulary review evidence ────────────────────────────────────────
+-- ─── 9. Vocabulary review evidence ────────────────────────────────────────
 -- One row per SRS attempt. The current state lives on `words`; this table
 -- preserves the evidence needed to debug or tune the review algorithm.
 CREATE TABLE IF NOT EXISTS word_reviews (
@@ -189,7 +211,7 @@ CREATE TABLE IF NOT EXISTS word_reviews (
     context             TEXT NOT NULL DEFAULT ''
 );
 
--- ─── 9. Ability trend cache ───────────────────────────────────────────────
+-- ─── 10. Ability trend cache ──────────────────────────────────────────────
 -- Daily derived band estimate per domain/section. `persist` may incrementally
 -- update this; `learner-state` may recompute it from samples/subcap_scores.
 CREATE TABLE IF NOT EXISTS band_trend (
@@ -202,7 +224,7 @@ CREATE TABLE IF NOT EXISTS band_trend (
     UNIQUE(date, section)
 );
 
--- ─── 10. Daily activity cache ─────────────────────────────────────────────
+-- ─── 11. Daily activity cache ─────────────────────────────────────────────
 -- Lightweight daily aggregate for streaks, fatigue, and coaching nudges.
 CREATE TABLE IF NOT EXISTS activity_log (
     date                TEXT PRIMARY KEY,               -- YYYY-MM-DD
@@ -213,8 +235,37 @@ CREATE TABLE IF NOT EXISTS activity_log (
     new_words_added     INTEGER NOT NULL DEFAULT 0
 );
 
+-- ─── 12. Weekly progress snapshots ────────────────────────────────────────
+-- Frozen aggregate maintained by `learner-state`. This is the long-arc
+-- learning history for cron reports, trend charts, and MEMORY refreshes.
+CREATE TABLE IF NOT EXISTS progress_snapshots (
+    week                TEXT PRIMARY KEY,               -- ISO week, e.g. 2026-W19
+    period_start        TEXT NOT NULL,                  -- YYYY-MM-DD
+    period_end          TEXT NOT NULL,                  -- YYYY-MM-DD
+    current_level       TEXT NOT NULL DEFAULT '',
+    listening_score     REAL,
+    speaking_score      REAL,
+    reading_score       REAL,
+    writing_score       REAL,
+    vocab_active_count  INTEGER NOT NULL DEFAULT 0,
+    vocab_mature_count  INTEGER NOT NULL DEFAULT 0,
+    total_minutes       INTEGER NOT NULL DEFAULT 0,
+    active_days         INTEGER NOT NULL DEFAULT 0,
+    sessions_count      INTEGER NOT NULL DEFAULT 0,
+    samples_count       INTEGER NOT NULL DEFAULT 0,
+    due_words_count     INTEGER NOT NULL DEFAULT 0,
+    weak_subcaps        TEXT NOT NULL DEFAULT '',       -- JSON array
+    top_errors          TEXT NOT NULL DEFAULT '',       -- JSON array
+    notes               TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ─── Indexes ──────────────────────────────────────────────────────────────
 
+CREATE INDEX IF NOT EXISTS idx_study_sessions_key ON study_sessions(session_key);
+CREATE INDEX IF NOT EXISTS idx_study_sessions_started ON study_sessions(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_study_sessions_status ON study_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_daily_tasks_date ON daily_tasks(date);
 CREATE INDEX IF NOT EXISTS idx_daily_tasks_done ON daily_tasks(date, completed);
 CREATE INDEX IF NOT EXISTS idx_samples_created ON samples(created_at);
@@ -236,3 +287,4 @@ CREATE INDEX IF NOT EXISTS idx_words_item_kind ON words(item_kind);
 CREATE INDEX IF NOT EXISTS idx_word_reviews_word ON word_reviews(word);
 CREATE INDEX IF NOT EXISTS idx_band_trend_section_date ON band_trend(section, date DESC);
 CREATE INDEX IF NOT EXISTS idx_activity_date ON activity_log(date DESC);
+CREATE INDEX IF NOT EXISTS idx_progress_snapshots_period ON progress_snapshots(period_end DESC);

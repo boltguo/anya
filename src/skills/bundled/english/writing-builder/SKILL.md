@@ -43,7 +43,7 @@ After 3 tasks, you MUST send an inline keyboard in Chinese:
 1. **`samples`** row:
    - `skill_type = 'writing.builder'`
    - `prompt` = the current micro-task
-   - `raw_content` = the user's response
+   - `response` = the user's response
    - `accuracy` = tasks graded correct / total (e.g. 2/3 = 0.67)
    - `raw_score` = correct count, `max_score` = 3
    - `load_score = 2`

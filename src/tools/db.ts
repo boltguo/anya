@@ -128,15 +128,13 @@ export function getDatabase(name: string): DatabaseSync {
   db.exec('PRAGMA foreign_keys = ON');
   db.exec('PRAGMA busy_timeout = 5000');
 
-  // Auto-init schema on first creation or if tables are empty
-  if (isNew) {
+  // Re-apply schema on open. Skill schemas are expected to be idempotent
+  // (`CREATE TABLE/INDEX IF NOT EXISTS`), so additive tables and indexes are
+  // picked up for existing DBs without raw SQL from skills.
+  try {
     autoInitSchema(db, safeName);
-  } else {
-    // Check if schema exists — re-init if empty (safe due to IF NOT EXISTS)
-    try {
-      const tables = db.prepare("SELECT count(*) as c FROM sqlite_master WHERE type='table'").get() as any;
-      if (tables?.c === 0) autoInitSchema(db, safeName);
-    } catch { /* ignore */ }
+  } catch {
+    if (isNew) throw new Error(`Failed to initialize schema for ${safeName}`);
   }
 
   dbCache.set(safeName, db);

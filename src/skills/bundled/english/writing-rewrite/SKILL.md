@@ -39,7 +39,7 @@ Less intimidating than writing from scratch. Teaches the exact deltas between ba
 1. **`samples`** row:
    - `skill_type = 'writing.rewrite'`
    - `prompt` = the original sample paragraph
-   - `raw_content` = the user's rewritten version
+   - `response` = the user's rewritten version
    - `accuracy = NULL` (band-scored)
    - `band_task`, `band_coherence`, `band_lexical`, `band_grammar`, `band_overall` — all required
    - `load_score = 3`, `prompt_hash`, `redo_count`

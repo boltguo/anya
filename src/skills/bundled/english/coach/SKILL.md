@@ -16,7 +16,7 @@ One coaching entry for both user-initiated review and system-triggered nudges.
 
 ### State A: State Retrieval
 1. **Read Memory**: Call the `memory` tool (`action=read`) to grasp their current estimated scores, weak dimensions, and top errors (which were just computed by `learner-state`).
-2. **Read activity summary**: Call `persist` with `{"action":"study_summary","days":7}` to check recent activity and vocabulary review volume.
+2. **Read coaching context**: Call `persist` with `{"action":"coach_context","days":7,"limit":8}` to get profile facts, recent activity, recurring errors, weak subcaps, due vocabulary, personal-error cards, and planned tasks.
 
 ### State B: Diagnostic Review & Delivery
 Once data is retrieved, formulate your coaching plan.
@@ -24,6 +24,7 @@ Once data is retrieved, formulate your coaching plan.
    - **Text**: Format the feedback strictly using Markdown. Do not be overly chatty; be a sharp, professional coach.
      - 👨‍🏫 **教练复盘** (A 2-sentence summary of their current state. E.g., "你最近的听力意群抓取进步明显，但口语流利度有下降趋势。")
      - 🎯 **突破口诊断** (Pick EXACTLY ONE top error from `MEMORY.md` and explain *why* it's happening and *how* it's holding them back).
+     - 📚 **记忆压力点** (If `coach_context.due_words` or personal-error cards are non-empty, mention ONE due word/card that connects to the diagnosis.)
      - 🚀 **下一步行动建议** (Recommend EXACTLY ONE specific skill from the system to practice right now to fix the diagnosed error).
    - **Buttons (MANDATORY EXACT LAYOUT)**: 
      - Row 1: `[["🚀 听教练的，现在就练 (Start Recommended Skill)|<insert_recommended_skill_name_here>"]]`
@@ -34,7 +35,7 @@ Once data is retrieved, formulate your coaching plan.
 
 Most trigger runs should produce no message. Silence is valid.
 
-1. Read `MEMORY.md` and `persist action="study_summary"` for the last 7 days.
+1. Read `MEMORY.md` and `persist action="coach_context"` for the last 7 days.
 2. Evaluate triggers in `references/triggers.md` in priority order.
 3. If none fire, output `[SILENT]` and stop.
 4. If one fires, send a short message (≤ 4 sentences) with exactly one action button.

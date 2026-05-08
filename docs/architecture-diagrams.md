@@ -30,7 +30,7 @@ graph TB
     COMPRESS["contextCompressor\n长上下文压缩"]
     ERR["errorClassifier\n错误分类"]
     PROVIDER["GeminiProvider\n唯一主 LLM Provider\n(Gemini REST API)"]
-    TOOLS["Tool Registry\n11 个内置工具"]
+    TOOLS["Tool Registry\n12 个内置工具"]
     SKILLS["Skill Loader\n技能加载与索引"]
   end
 
@@ -397,28 +397,30 @@ graph TD
 ```mermaid
 erDiagram
   learner_profile ||--o{ daily_tasks : plans
+  study_sessions ||--o{ samples : contains
   samples ||--o{ errors : has
   errors }o--|| error_patterns : aggregates
   samples ||--o{ subcap_scores : scores
   words ||--o{ word_reviews : reviewed_by
   band_trend }o--|| samples : derived_from
   activity_log }o--|| samples : derived_from
+  progress_snapshots }o--|| activity_log : freezes
 ```
 
 核心表分层：
 
 | 层 | Tables | 作用 |
 | --- | --- | --- |
-| Learner / Planning | `learner_profile`, `daily_tasks` | 用户画像和每日训练 slot |
+| Learner / Planning | `learner_profile`, `study_sessions`, `daily_tasks` | 用户画像、学习 block 和每日训练 slot |
 | Practice Evidence | `samples`, `errors`, `error_patterns`, `subcap_scores` | 练习原始证据、错因、子能力评分 |
 | Vocabulary / SRS | `words`, `word_reviews` | 词汇本和复习证据 |
-| Progress Cache | `band_trend`, `activity_log` | 派生能力趋势和每日活跃 |
+| Progress Cache | `band_trend`, `activity_log`, `progress_snapshots` | 派生能力趋势、每日活跃和周快照 |
 
 写入原则：
 
-- `persist` 是英语学习数据的统一入口：练习证据、词汇/SRS、profile mirror、daily tasks 和学习摘要都走 typed actions。
+- `persist` 是英语学习数据的统一入口：练习证据、词汇/SRS、profile mirror、study sessions、daily tasks、progress snapshots 和学习摘要都走 typed actions。
 - `db` 工具对 `study.db` 写入做硬拦截；skills 不应该依赖 raw SQL 操作学习数据。
-- `feedback`、`prompt`、`raw_content` 是训练复盘和错题诊所的关键证据，完成的练习不能留空。
+- skills 写入时统一传 `prompt`、`response`、`feedback`；这些证据是训练复盘和错题诊所的基础，完成的练习不能留空。
 
 ---
 

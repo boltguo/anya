@@ -28,8 +28,10 @@ should training adapt to?"
 
 Skills access `study.db` through typed `persist` actions, not raw SQL. Practice
 skills write attempts, errors, scores, subcap evidence, and vocabulary evidence
-through `persist`. The `learner-state` skill reads `persist action="study_summary"`
-and rewrites the level/ability parts of `MEMORY.md`.
+through `persist`. The `learner-state` and `coach` skills should prefer
+`persist action="coach_context"` so profile facts, study aggregates, due words,
+planned tasks, and personal-error cards are available in one prompt-ready
+payload. `learner-state` then rewrites the level/ability parts of `MEMORY.md`.
 
 ## Core Tables
 
@@ -38,6 +40,7 @@ The current schema intentionally stays lean:
 | Table | Purpose |
 | --- | --- |
 | `learner_profile` | Structured stable learner facts that may mirror important `USER.md` fields. |
+| `study_sessions` | Deliberate learning blocks: start/end, entrypoint, plan, skills used, and final recap. |
 | `daily_tasks` | Planned study slots and router-visible next actions. |
 | `samples` | One row per practice, placement, or mock-section attempt. |
 | `errors` | Concrete mistakes extracted from a sample. |
@@ -47,23 +50,27 @@ The current schema intentionally stays lean:
 | `word_reviews` | SRS review attempts and outcomes. |
 | `band_trend` | Daily derived band estimate by section/domain. |
 | `activity_log` | Daily aggregate for minutes, sessions, sections, and review volume. |
+| `progress_snapshots` | Weekly frozen aggregate computed by `learner-state` for trend reports, cron summaries, and MEMORY refreshes. |
 
 Do not add a table just because aouo has one. Add a table only when Anya has a
 repeated query/write pattern that is painful or ambiguous in the current schema.
 
 ## Coverage
 
-The 10-table schema is complete enough for the current Anya loop:
+The 12-table schema is complete enough for the current Anya loop:
 
 - Four English practice domains: `samples`, `errors`, `subcap_scores`, and `band_trend`
   preserve raw attempts, concrete mistakes, sub-ability evidence, and section
   trends.
 - Vocabulary: `words` stores words, chunks, patterns, and personal-error cards;
   `word_reviews` preserves SRS review evidence.
-- Learning state: `learner_profile`, `activity_log`, `error_patterns`, and
-  `band_trend` give `learner-state` enough data to refresh `MEMORY.md`.
+- Learning state: `learner_profile`, `activity_log`, `error_patterns`,
+  `band_trend`, and `progress_snapshots` give `learner-state` enough data to
+  refresh `MEMORY.md` and compare against prior weeks.
 - Planning: `daily_tasks` is enough for daily recommendations and router-visible
   next actions.
+- Session lifecycle: `study_sessions` records the learning block wrapper;
+  conversation messages remain in `state.db`.
 
 Do not add mock-session, media, quiz, paraphrase, or item-bank tables yet. Add
 them only when a real workflow needs repeated first-class queries that cannot be
@@ -91,5 +98,6 @@ hidden from slash commands.
 - Practice evidence goes to `study.db` through `persist`, not directly to `MEMORY.md`.
 - Vocabulary and SRS updates go through `persist` actions: `word_upsert`, `due_words`, `word_lookup`, and `word_review`.
 - Plans go through `persist` actions: `task_upsert`, `due_tasks`, and `task_complete`.
+- Coach-style skills should read `coach_context` before giving advice so the response can use profile facts, recent activity, weak subcaps, due vocabulary, and personal-error cards.
 - Level records and weak dimensions go to `MEMORY.md` only through placement or `learner-state`.
 - `SOUL.md` and `RULES.md` are stable operating files, not learning records.

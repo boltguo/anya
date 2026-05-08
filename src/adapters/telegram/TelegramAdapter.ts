@@ -208,19 +208,28 @@ export class TelegramAdapter {
       skillCommandMap.set(cmd, skill.name);
     }
 
+    // ── Command aliases: short Telegram commands → existing skills ──
+    // No separate SKILL.md needed — just a mapping table.
+    const commandAliases: Array<{ cmd: string; description: string; skill: string }> = [
+      { cmd: 'init',     description: '🎯 Initialize study profile', skill: 'profile-manager' },
+    ];
+
     // ── Bot commands ──
 
     this.bot.command('start', async (ctx) => {
       const name = this.config.agent.name;
-      const cmdList = [...skillCommandMap.entries()]
-        .map(([cmd]) => `/${cmd}`)
+      const cmdList = [
+        ...[...skillCommandMap.keys()].map((cmd) => `/${cmd}`),
+        ...commandAliases.map((alias) => `/${alias.cmd}`),
+      ]
+        .filter((cmd, idx, arr) => arr.indexOf(cmd) === idx)
         .join('  ');
 
       await ctx.reply(
         `Hey! I'm ${name} 🌟\n\n` +
         `Just send me a message, or jump right in:\n\n` +
         `${cmdList}\n\n` +
-        `/new start practice  ·  /kill force stop`,
+        `/new open menu  ·  /kill force stop`,
       );
     });
 
@@ -228,21 +237,6 @@ export class TelegramAdapter {
       const sessionKey = `tg:${ctx.chat.id}`;
       this.cancelPending();
       await createSession(sessionKey);
-      try {
-        const userMd = fs.existsSync(USER_MD_PATH) ? fs.readFileSync(USER_MD_PATH, 'utf-8') : '';
-        if (userMd && !userMd.includes('initialized: false')) {
-          const menu = getMainMenu();
-          if (menu) {
-            agentLogger.info({ msg: 'tg_new_session_direct_menu', chatId: ctx.chat.id });
-            await ctx.reply(menu.text, {
-              reply_markup: menu.keyboard,
-              link_preview_options: { is_disabled: true },
-            });
-            return;
-          }
-        }
-      } catch { /* fall through to agent-routed planner */ }
-
       agentLogger.info({ msg: 'tg_new_session_trigger_planner', chatId: ctx.chat.id });
       const input = `[/command: planner] Run the "planner" skill now.`;
       this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
@@ -328,17 +322,11 @@ export class TelegramAdapter {
       }, 500);
     });
 
-    // ── Command aliases: short Telegram commands → existing skills ──
-    // No separate SKILL.md needed — just a mapping table.
-    const commandAliases: Array<{ cmd: string; description: string; skill: string }> = [
-      { cmd: 'init',     description: '🎯 Initialize study profile', skill: 'profile-manager' },
-    ];
-
     for (const alias of commandAliases) {
       // Remove from skillCommandMap if the target skill has command: true
-      // to avoid duplicate registration
+      // and the alias command is the same command, to avoid duplicate registration.
       for (const [existingCmd, existingSkill] of skillCommandMap) {
-        if (existingSkill === alias.skill) {
+        if (existingSkill === alias.skill && existingCmd === alias.cmd) {
           skillCommandMap.delete(existingCmd);
           break;
         }
@@ -539,7 +527,7 @@ export class TelegramAdapter {
           }).catch(() => {});
         }
       }
-      // ── Generic callback (from tg_keyboard tool) ──
+      // ── Generic callback (from tg_msg keyboard) ──
       // Route unmatched button clicks back into the Agent as a new user input.
       else {
         const userId = ctx.from?.id;

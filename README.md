@@ -57,7 +57,7 @@ Anya 的 agent core 是通用运行时，不把英语学习业务写死在核心
 - **Typed learning persistence**：英语学习数据统一走 `persist`，写入 `study.db` 的练习、错因、词汇、SRS、计划和统计摘要。
 - **语音能力**：`tts` 生成练习音频，`pron_assess` 做 Azure 发音评分，Telegram 语音可转写后进入训练流程。
 - **安全边界**：文件和数据库工具默认只服务 Anya 自己的数据目录，学习数据写入不让 skills 直接 raw SQL 操作。
-- **上下文控制**：长会话靠 `contextCompressor` 自动压缩，不再依赖手动 reset context。
+- **上下文控制**：长会话靠 `contextCompressor` 自动压缩，避免训练流程手动清空历史。
 
 主要内置工具：
 
@@ -66,7 +66,7 @@ Anya 的 agent core 是通用运行时，不把英语学习业务写死在核心
 | `tg_msg` | 发送/编辑 Telegram 消息、按钮、语音、文件、quiz、force reply、reaction。 |
 | `memory` | 读写 `USER.md` / `MEMORY.md`。 |
 | `skill_view` | 读取某个 skill 的完整说明和附属文件。 |
-| `persist` | 统一读写 `study.db` 的学习数据。 |
+| `persist` | 统一读写 `study.db` 的学习数据，并提供 `study_summary` / `coach_context` / session / progress snapshot 等 typed actions。 |
 | `db` | 通用 SQLite 诊断工具；对 `study.db` 写入有拦截。 |
 | `tts` | 生成英语/中文语音文件。 |
 | `pron_assess` | 对用户语音做发音评分。 |
@@ -93,11 +93,11 @@ Skills 是 Anya 的教学能力层。每个 skill 用 `SKILL.md` 描述触发条
 数据分工：
 
 - `state.db`：只保存 agent runtime 的会话历史。
-- `study.db`：保存英语学习证据，包括练习样本、错误、子能力分、词汇、复习记录、趋势和每日活动。
+- `study.db`：保存英语学习证据，包括学习 session、练习样本、错误、子能力分、词汇、复习记录、趋势、每日活动和周快照。
 - `SOUL.md` / `RULES.md`：约束 agent 的身份、行为和工具规则。
 - `USER.md` / `MEMORY.md`：给模型提供紧凑的用户画像和学习状态。
 
-训练 skill 完成一次练习后，应通过 `persist` 写入 `samples`、`errors`、`subcap_scores`、`words` 或 `word_reviews`。`learner-state` 再从 `study.db` 汇总长期结论，更新 `MEMORY.md`。
+训练 skill 完成一次练习后，应通过 `persist` 写入 `samples`、`errors`、`subcap_scores`、`words` 或 `word_reviews`。学习 block 的开始/结束走 `session_start` / `session_end`。`learner-state` 通过 `coach_context` 和 `progress_snapshot` 汇总长期结论并更新 `MEMORY.md`；`coach` 只基于这些数据给出下一步建议。
 
 ## 快速上手
 

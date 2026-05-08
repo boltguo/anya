@@ -47,7 +47,7 @@ When the user submits their gist summary:
        "skill_type": "listening.podcast",
        "session_id": "<session>",
        "prompt": "<the podcast script>",
-       "raw_content": "<user's summary>",
+       "response": "<user's summary>",
        "accuracy": 0,
        "raw_score": <1 if gist caught, 0 if missed>,
        "max_score": 1,

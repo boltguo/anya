@@ -43,11 +43,8 @@ export interface Message {
   toolCallId?: string;
   /** Name of the tool that produced this result (present when role='tool'). */
   toolName?: string;
-  /** 
-   * Raw opaque parts received from the model in a previous turn. 
-   * Useful for preserving internal state like `thought_signature` when round-tripping. 
-   */
-  _rawParts?: unknown[];
+  /** Provider-native response parts preserved for replay/debugging. */
+  _rawParts?: unknown;
 }
 
 /**
@@ -63,11 +60,6 @@ export interface ToolCall {
   name: string;
   /** Arguments to pass to the tool's execute function. */
   args: Record<string, unknown>;
-  /** 
-   * Gemini 3+ requirement: The thought_signature must be echoed back exactly 
-   * as received in the functionCall block when creating the model's history message.
-   */
-  thoughtSignature?: string;
 }
 
 
@@ -95,8 +87,6 @@ export interface LLMResponse {
   content?: string;
   /** Tool calls the model wants to execute. */
   toolCalls?: ToolCall[];
-  /** Opaque raw model parts received from the provider, preserved for history round-tripping. */
-  rawModelParts?: unknown[];
 
   /** Token usage statistics for this API call. */
   usage?: {
@@ -108,9 +98,11 @@ export interface LLMResponse {
     totalTokens: number;
     /** Tokens served from implicit context cache (90% cheaper). */
     cachedTokens?: number;
-    /** Thinking/reasoning tokens consumed (Gemini 2.5+). */
+    /** Reasoning/thinking tokens when the provider reports them. */
     thoughtsTokens?: number;
   };
+  /** Provider-native response parts preserved for replay/debugging. */
+  rawModelParts?: unknown;
   /** API call duration in milliseconds (set by the provider). */
   durationMs?: number;
 }

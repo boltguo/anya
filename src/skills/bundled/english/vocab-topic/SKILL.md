@@ -38,7 +38,7 @@ If the bank is thin (< 10), generate + save with `persist action="word_upsert"` 
 
 1. **`samples`** row:
    - `skill_type = 'vocab'`, `prompt` = topic name (e.g. `"education"`)
-   - `raw_content` = recall results (e.g. `"recall:3/5, missed: elaborate, fluctuate"`)
+   - `response` = recall results (e.g. `"recall:3/5, missed: elaborate, fluctuate"`)
    - `accuracy` = recall correct / total (0.0–1.0)
    - `raw_score` = correct count, `max_score` = recall question count
    - `load_score = 1`

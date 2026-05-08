@@ -23,7 +23,7 @@ description: "Use this skill whenever the user wants to practice writing a long-
 1. **`samples`** row:
    - `skill_type = 'writing.essay'`
    - `prompt` = the essay question/task
-   - `raw_content` = the user's full essay text
+   - `response` = the user's full essay text
    - `accuracy = NULL` (essays are band-scored, not accuracy-scored)
    - `band_task`, `band_coherence`, `band_lexical`, `band_grammar`, `band_overall` — all required
    - `load_score = 3`

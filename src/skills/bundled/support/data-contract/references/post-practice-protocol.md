@@ -18,6 +18,10 @@ MEMORY.md is refreshed separately by `learner-state` — do NOT update MEMORY di
 | `response` | string | The user's raw answer. **Never empty for completed sessions.** |
 | `feedback` | string | **Natural language** diagnostic paragraph (NOT JSON). Required for completed sessions. |
 
+`response` is the canonical field from skills to the database. `persist`
+temporarily accepts `raw_content` as a legacy alias, but new skills should not
+send it.
+
 ### Optional Parameters
 
 | Parameter | Type | Default | Notes |

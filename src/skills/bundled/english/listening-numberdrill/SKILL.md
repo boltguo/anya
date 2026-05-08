@@ -51,7 +51,7 @@ When the user submits their dictated text:
        "skill_type": "listening.numberdrill",
        "session_id": "<session>",
        "prompt": "<correct sentence>",
-       "raw_content": "<user's typed text>",
+       "response": "<user's typed text>",
        "accuracy": <correct_words / total_words>,
        "raw_score": <correct count>,
        "max_score": <total words>,

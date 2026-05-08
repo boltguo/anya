@@ -80,18 +80,18 @@ export function buildSystemPrompt(config: AnyaConfig): string {
     }
   }
 
-  // ── 4. Skills index ────────────────────────────────────────────────
+  // ── 5. Skills index ────────────────────────────────────────────────
   const skillIndex = buildSkillIndex();
   if (skillIndex) {
     sections.push('\n' + skillIndex);
   }
 
-  // ── 5. Security constraints ────────────────────────────────────────
+  // ── 6. Security constraints ────────────────────────────────────────
   sections.push('\n## Security');
   sections.push(`- Your default working directory is ~/.anya/. File operations outside ${config.security.allowed_paths.join(', ')} require user approval.`);
   sections.push('- Use the database and file tools only for Anya-owned runtime data unless the user explicitly grants broader access.');
 
-  // ── 6. Platform capabilities ────────────────────────────────────────
+  // ── 7. Platform capabilities ────────────────────────────────────────
   // Note: tg_msg message types and formatting are covered in RULES.md.
   // This section only adds tool-specific capabilities not in RULES.
   const enabled = config.tools?.enabled ?? [];

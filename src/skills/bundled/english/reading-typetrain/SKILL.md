@@ -39,7 +39,7 @@ Single-type specialist. One type per session.
 1. **`samples`** row:
    - `skill_type = 'reading.typetrain'`
    - `prompt` = the passage text
-   - `raw_content` = user's answers (e.g. `"Q1:TRUE, Q2:FALSE, Q3:NG"`)
+   - `response` = user's answers (e.g. `"Q1:TRUE, Q2:FALSE, Q3:NG"`)
    - `accuracy` = correct / total (0.0–1.0)
    - `raw_score` = correct count, `max_score` = question count
    - `load_score = 2`

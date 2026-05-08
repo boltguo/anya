@@ -58,7 +58,7 @@ One trigger fires per pass. Priority order (top wins):
 距离考试还有 {{days}} 天。
 建议接下来轮换改成：精练题型 + 稳住强项。
 ```
-`[看 2 周冲刺计划|plan_refresh]`
+`[看 2 周冲刺计划|coach]`
 
 ### streak_milestone
 
@@ -74,7 +74,7 @@ One trigger fires per pass. Priority order (top wins):
 {{skill}} 平均分从 {{prev}} 升到 {{now}} 🎉。
 要不要做一次 {{skill}} 模考看看是否稳住？
 ```
-`[做 {{skill}} 模考|{{skill}}-exam]`
+`[做一次水平复测|placement-quick]`
 
 ### subcap_trough
 

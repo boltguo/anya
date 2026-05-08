@@ -56,7 +56,7 @@ When the user sends their voice message:
        "skill_type": "listening.shadowing",
        "session_id": "<session>",
        "prompt": "<correct sentence>",
-       "raw_content": "<transcription from pron_assess>",
+       "response": "<transcription from pron_assess>",
        "accuracy": <pron_assess accuracy score / 100>,
        "raw_score": <pron_assess fluency score>,
        "max_score": 100,

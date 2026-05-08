@@ -5,7 +5,7 @@ description: "[SUPPORT] Canonical schema + query recipes for the single unified 
 
 # Study DB — Data Contract
 
-One SQLite file (`study.db`) holds the English learning loop: learner profile, daily plan, practice samples, concrete errors, recurring weakness patterns, subcap scores, vocabulary, SRS reviews, IELTS-style band trends, and daily activity. Conversation history stays in `state.db`. Schema is in `templates/study.sql` — regenerate the `.db` from template when the schema changes (no migrations).
+One SQLite file (`study.db`) holds the English learning loop: learner profile, study sessions, daily plan, practice samples, concrete errors, recurring weakness patterns, subcap scores, vocabulary, SRS reviews, IELTS-style band trends, daily activity, and weekly progress snapshots. Conversation history stays in `state.db`. Schema is in `templates/study.sql` — regenerate the `.db` from template when the schema changes (no migrations).
 
 Markdown files constrain the agent; tables store learner data. `SOUL.md` defines Anya's identity, `RULES.md` defines behavior/tool rules, `USER.md` stores stable user facts plus behavior/preferences, and `MEMORY.md` stores the learner's long-running level and ability state. Durable practice evidence must be persisted in `study.db`, then summarized back into markdown when useful.
 
@@ -29,6 +29,7 @@ Never user-facing. This skill is a reference, not a workflow.
 | Table | Purpose |
 | ----- | ------- |
 | `learner_profile` | single-row source of truth for stable learner facts: level, targets, exam date, daily budget, interests, preferences, strengths, weaknesses |
+| `study_sessions` | one row per deliberate learning session: start/end, platform, entrypoint, plan, skills used, and recap |
 | `daily_tasks` | planned study slots for a day; router/menu reads this to show what to do next |
 | `samples` | one row per actual practice/placement/mock-section attempt; stores prompt, user response, feedback, scores, bands, and retry chain keys |
 | `errors` | concrete per-sample mistakes with canonical `recurrence_key`, severity, original phrase, correction, and rule note |
@@ -38,12 +39,14 @@ Never user-facing. This skill is a reference, not a workflow.
 | `word_reviews` | one row per SRS review attempt; preserves rating/pass/fail/interval evidence |
 | `band_trend` | daily derived band estimate per section/domain |
 | `activity_log` | daily aggregate for sessions, minutes, touched sections, and reviewed words |
+| `progress_snapshots` | weekly frozen learner-state aggregate computed by `learner-state`; `persist` only stores the provided values |
 
 ## Rules
 
 1. **One DB, one schema, one gateway.** English learning data lives in `study.db`, but skills access it through `persist`.
 2. **Use `persist action="practice"` for post-practice writes.** It handles samples, errors, error_patterns, subcap_scores, band_trend, and activity_log in one atomic transaction.
-3. **Use `persist` typed actions for vocabulary, planning, profile, and summaries.** `word_upsert`, `word_review`, `due_words`, `word_lookup`, `study_summary`, `profile_upsert`, `task_upsert`, `due_tasks`, and `task_complete` are the supported paths.
+   - Skills send the user's answer as `response`; `persist` also accepts legacy `raw_content` only for compatibility.
+3. **Use `persist` typed actions for vocabulary, planning, profile, sessions, snapshots, and summaries.** `word_upsert`, `word_review`, `due_words`, `word_lookup`, `study_summary`, `coach_context`, `profile_upsert`, `task_upsert`, `due_tasks`, `task_complete`, `session_start`, `session_end`, `progress_snapshot`, and `progress_trend` are the supported paths.
 4. **Do not use raw `db` for learner writes.** The `db` tool blocks writes to `study.db`; skills should not depend on raw SQL for normal English workflows.
 5. **Subcap + error keys are canonical.** Error keys: `references/error-keys.md`. Subcap keys must use the skill-documented `<domain>.<capability>` format, e.g. `writing.argument_depth`, `listening.connected_speech`.
 6. **Record every session** — even abandoned ones (`completed=0`; `persist` will use safe placeholders if response/feedback is unavailable).

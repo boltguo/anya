@@ -36,7 +36,7 @@ Your goal is to act as an empathetic listener first, and an English coach second
 1. **`samples`** row:
    - `skill_type = 'writing.journal'`
    - `prompt` = the topic or "free journal"
-   - `raw_content` = the user's full journal entry
+   - `response` = the user's full journal entry
    - `accuracy = NULL` (journal is unscored)
    - `load_score = 1`
    - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.

@@ -60,7 +60,7 @@ After the entire batch is complete:
 1. **`samples`** row — one per batch:
    - `skill_type = 'vocab'`
    - `prompt = 'review-batch'`
-   - `raw_content` = comma-separated results (e.g. `"resilient:pass, fluctuate:fail, elaborate:pass"`)
+   - `response` = comma-separated results (e.g. `"resilient:pass, fluctuate:fail, elaborate:pass"`)
    - `accuracy` = easy+hard / total (0.0–1.0). `again` = fail.
    - `raw_score` = pass count, `max_score` = total words tested
    - `load_score = 2`

@@ -53,7 +53,7 @@ When the user sends a voice message:
        "skill_type": "speaking.shadowing",
        "session_id": "<session>",
        "prompt": "<correct sentence>",
-       "raw_content": "<transcription from pron_assess>",
+       "response": "<transcription from pron_assess>",
        "accuracy": <pron_assess accuracy score / 100>,
        "raw_score": <pron_assess pron score>,
        "max_score": 100,

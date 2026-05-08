@@ -50,6 +50,99 @@ For learner-state, coaching, and error-clinic:
 Returns aggregated samples, section bands, recurring errors, weak subcaps,
 activity, and vocabulary mastery counts.
 
+## Coaching Context
+
+For private-coach style replies, prefer this higher-level aggregate:
+
+```json
+{
+  "action": "coach_context",
+  "days": 14,
+  "limit": 8
+}
+```
+
+Returns:
+
+- `profile`: structured learner profile mirror from `learner_profile`
+- `summary`: the same aggregates as `study_summary`
+- `due_words`: SRS cards due now
+- `due_tasks`: planned but unfinished study slots for today
+- `personal_error_cards`: vocabulary-style cards created from the learner's own mistakes
+
+Use this when a skill needs the user's learning state to feel personal rather
+than generic. Do not dump the raw JSON to the learner; translate it into one
+specific diagnosis, one pressure point, and one next action.
+
+## Learning Session Lifecycle
+
+When `/new` starts a deliberate learning block, open a study session:
+
+```json
+{
+  "action": "session_start",
+  "session_key": "tg:12345",
+  "platform": "telegram",
+  "entrypoint": "new",
+  "plan": "{\"slots\":[{\"skill\":\"vocab-review\",\"minutes\":8},{\"skill\":\"listening-dictation\",\"minutes\":10}]}"
+}
+```
+
+When the learner finishes, abandons, or the agent closes the block:
+
+```json
+{
+  "action": "session_end",
+  "session_key": "tg:12345",
+  "status": "closed",
+  "skills_used": "[\"vocab-review\",\"listening-dictation\"]",
+  "summary_text": "Reviewed due words, then completed one i+1 dictation sentence."
+}
+```
+
+`persist` derives `samples_count` and `minutes_total` from `samples.session_id`
+when possible. Conversation history still belongs to `state.db`; `study_sessions`
+only tracks the learning wrapper.
+
+## Progress Snapshots
+
+`learner-state` owns long-arc learning state. After refreshing `MEMORY.md`, it
+can freeze the current week. Compute the fields in `learner-state`; `persist`
+only stores the values:
+
+```json
+{
+  "action": "progress_snapshot",
+  "current_level": "B1",
+  "listening_score": 67,
+  "speaking_score": 61,
+  "reading_score": 72,
+  "writing_score": 58,
+  "vocab_active_count": 42,
+  "vocab_mature_count": 13,
+  "total_minutes": 145,
+  "active_days": 4,
+  "sessions_count": 5,
+  "samples_count": 18,
+  "due_words_count": 9,
+  "weak_subcaps": "[{\"subcap_key\":\"listening.connected_speech\",\"avg_score\":4.8}]",
+  "top_errors": "[{\"recurrence_key\":\"article_missing\",\"seen_count\":6}]",
+  "notes": "Weekly learner-state refresh after 14-day coach_context review."
+}
+```
+
+Read recent frozen snapshots for reports or cron summaries:
+
+```json
+{
+  "action": "progress_trend",
+  "limit": 8
+}
+```
+
+Future cron jobs should call learner-state or these `persist` actions. Other
+practice skills should not write `progress_snapshots` directly.
+
 ## Profile Upsert
 
 After profile-manager collects user facts, update structured profile data:

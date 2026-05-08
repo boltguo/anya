@@ -36,7 +36,7 @@ Pulls items near the edge of knowledge (not `mastered`) and tests in mixed forma
 
 1. **`samples`** row:
    - `skill_type = 'vocab'`, `prompt = 'testme-batch'`
-   - `raw_content` = per-question results (e.g. `"Q1:resilient=pass, Q2:fluctuate=fail"`)
+   - `response` = per-question results (e.g. `"Q1:resilient=pass, Q2:fluctuate=fail"`)
    - `accuracy` = correct / total (0.0–1.0)
    - `raw_score` = correct count, `max_score` = question count
    - `load_score = 2`

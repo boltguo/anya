@@ -18,9 +18,6 @@
       ],
       [
         "📊 能力评估|learner-state",
-        "👨‍🏫 教练复盘|coach"
-      ],
-      [
         "🔍 错题与答疑|error-clinic"
       ]
     ]
@@ -65,8 +62,7 @@
         "📰 话题材料漫谈|material-discussion"
       ],
       [
-        "⚡ 快速略读扫意|reading-skim-drill",
-        "🔖 语境生词捕获|vocab-harvest"
+        "⚡ 快速略读扫意|reading-skim-drill"
       ],
       [
         "← 返回|nav:main"
@@ -97,8 +93,7 @@
         "🎯 话题词汇串联|vocab-topic"
       ],
       [
-        "🧠 边缘记忆抽查|vocab-testme",
-        "🔖 语境生词捕获|vocab-harvest"
+        "🧠 边缘记忆抽查|vocab-testme"
       ],
       [
         "← 返回|nav:main"

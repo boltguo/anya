@@ -46,7 +46,7 @@ After the review, you MUST send an inline keyboard in Chinese:
 1. **`samples`** row:
    - `skill_type = 'reading.deepdive'`
    - `prompt` = the full passage text
-   - `raw_content` = the user's analysis/answer
+   - `response` = the user's analysis/answer
    - `accuracy = NULL` (qualitative assessment)
    - `load_score = 2`
    - `ui_feedback` = clicked buttons (e.g. `"句子太绕,生词太多"`)

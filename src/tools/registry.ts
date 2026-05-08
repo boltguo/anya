@@ -82,7 +82,6 @@ export function getAllTools(): ToolDefinition[] {
  */
 export function getEnabledTools(config: AnyaConfig): ToolDefinition[] {
   return config.tools.enabled
-    .map(name => name === 'tg' ? 'tg_msg' : name)
     .map(name => tools.get(name))
     .filter((t): t is ToolDefinition => t !== undefined);
 }
