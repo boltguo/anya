@@ -356,9 +356,14 @@ export class TelegramSessionAdapter implements Adapter {
   }
 
   /**
-   * Send a voice message (shows as voice bubble in Telegram).
-   * Requires .ogg Opus format for the native voice bubble UI.
-   * Voice is supplementary — does not set hasSentContent so text reply still flows.
+   * Dispatches an asynchronous native Telegram Voice Note (audio bubble).
+   * Note: The input audio file MUST be encoded in the OGG format utilizing the Opus codec
+   * to trigger the native Telegram voice bubble UI. Standard audio files will render as playable files instead.
+   *
+   * @param voicePath - The absolute filesystem path to the compiled `.ogg` Opus audio file.
+   * @param caption - Optional text content to accompany the voice note.
+   * @param opts - Standard configuration options including parsing overrides and threading parameters.
+   * @returns A Promise resolving to the unique integer ID of the dispatched voice message.
    */
   async sendVoice(voicePath: string, caption?: string, opts?: SendMessageOptions): Promise<number> {
     return this.enqueue(async () => {

@@ -140,11 +140,13 @@ export function getToolSchemas(
 }
 
 /**
- * Dispatch a tool call and return a structured result.
+ * Executes a dynamically selected tool process bridging parsed LLM schemas to local operations.
+ * Implements hard timeouts, graceful rejections, and context logging injections.
  *
- * Looks up the tool by name, executes it with the provided args and
- * context, and returns a {@link ToolDispatchResult} with an explicit
- * `isError` flag — no more guessing from string prefixes.
+ * @param {string} toolName - Required identifier target.
+ * @param {Record<string, unknown>} args - Unsafe payload parameter definitions.
+ * @param {ToolContext} context - Application environment injection hooks.
+ * @returns {Promise<ToolDispatchResult>} Formatted structural execution telemetry including state flags.
  */
 export async function dispatch(
   toolName: string,
@@ -190,12 +192,10 @@ export async function dispatch(
 }
 
 /**
- * List all registered tools with their enabled/disabled status.
+ * Evaluates the full registry generating structural enabled-flag telemetry.
  *
- * Useful for debugging.
- *
- * @param config - The current agent config.
- * @returns Array of tool info objects with name, description, and enabled flag.
+ * @param {AnyaConfig} config - Operational configurations controlling state validation.
+ * @returns {Array<{ name: string; description: string; enabled: boolean }>} Diagnostics interface mappings.
  */
 export function listToolsWithStatus(config: AnyaConfig): Array<{
   name: string;

@@ -1,11 +1,13 @@
 /**
  * @module tools/memory
- * @description Markdown-backed memory tool for the agent's profile and state.
+ * @description State management interface targeting localized Markdown memory profiles.
  *
- * USER.md stores stable user facts, preferences, and behavior habits.
- * MEMORY.md stores the learner's long-running level and ability state.
+ * Facilitates reading, appending, and wholesale replacement of identity constructs:
+ * - `USER.md`   : Stable declarative facts, configuration habits, and behavioral context.
+ * - `MEMORY.md` : Evolving temporal attributes mapping learner proficiency and domain state.
  *
- * These files are injected into the system prompt on every conversation.
+ * Content authored via this tool is consistently pre-injected into the system prompt
+ * pipeline ahead of conversational fulfillment cycles.
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
@@ -14,6 +16,12 @@ import { register } from './registry.js';
 import { USER_MD_PATH, MEMORY_MD_PATH } from '../lib/paths.js';
 import type { ToolContext } from '../agent/types.js';
 
+/**
+ * Resolves abstract memory target identifiers to absolute filesystem paths.
+ *
+ * @param {string} target - The abstract target ('user' or 'memory').
+ * @returns {{ filePath: string; fileName: string }} The absolute path and display name.
+ */
 function resolvePath(target: string): { filePath: string; fileName: string } {
   if (target === 'user') {
     return { filePath: USER_MD_PATH, fileName: 'USER.md' };

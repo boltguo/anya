@@ -1,6 +1,10 @@
 /**
  * @module tools/cron
- * @description Model-facing tool for managing Anya scheduled jobs.
+ * @description Exposes the internal temporal scheduler to the LLM agent.
+ *
+ * Empowers the agent to dynamically register, monitor, and manipulate 
+ * unattended scheduled tasks (e.g., daily digests, repetitive practice prompts,
+ * or background API sweeps). Interacts directly with `lib/scheduler`.
  */
 
 import { register } from './registry.js';
@@ -17,6 +21,7 @@ import {
   updateJob,
 } from '../lib/scheduler.js';
 
+/** Static regex heuristics guarding against common prompt injection in automated jobs */
 const THREAT_PATTERNS = [
   /ignore\s+(?:previous|all|above|prior)\s+instructions/i,
   /system\s+prompt\s+override/i,

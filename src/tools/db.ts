@@ -42,8 +42,11 @@ const BLOCKED_SQL_PATTERNS = [
 ];
 
 /**
- * Validate that a SQL statement is in the allowed whitelist.
- * Returns an error message if blocked, or null if allowed.
+ * Validates a raw SQL string against a security heuristics whitelist and blacklist.
+ * Ensures the agent cannot execute fundamentally destructive or out-of-bounds commands.
+ *
+ * @param sql - The raw SQL string intended for execution.
+ * @returns A string containing the error message if the query is blocked, or null if permitted.
  */
 function validateSql(sql: string): string | null {
   const trimmedUpper = sql.trimStart().toUpperCase();

@@ -1,11 +1,15 @@
 /**
  * @module lib/stt
- * @description Speech-to-Text service using Groq Whisper API (free).
+ * @description Speech-to-Text (STT) adapter bridging the free Groq Whisper API.
  *
- * Uses the official `groq-sdk` for type-safe API calls.
+ * Integrates the official `groq-sdk` for rigorous type-safe network interactions.
+ * Incorporates a domain-specific filter to mitigate "hallucinations" (spurious output
+ * generated from audio silence often emitted by the Whisper model).
  *
- * Usage:
- *   const result = await transcribeAudio('/path/to/voice.ogg', config);
+ * @example
+ * ```typescript
+ * const result = await transcribeAudio('/path/to/voice.ogg', config);
+ * ```
  */
 
 import fs from 'node:fs';
@@ -16,23 +20,35 @@ import type { AnyaConfig } from '../config/defaults.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
+/** Default STT model targeting cost-efficiency and speed */
 const DEFAULT_MODEL = 'whisper-large-v3-turbo';
 
+/** Allowlist of file extensions accepted by the Groq API */
 const SUPPORTED_FORMATS = new Set([
   '.mp3', '.mp4', '.mpeg', '.mpga', '.m4a',
   '.wav', '.webm', '.ogg', '.aac', '.flac',
 ]);
 
+/** Strict byte-size constraint imposed by remote STT service (25MB) */
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 // ── Whisper hallucination filter ─────────────────────────────────────────────
 
+/**
+ * Known corpus of spurious strings Whisper generates when interpreting static or noise.
+ */
 const HALLUCINATIONS = new Set([
   'thank you.', 'thank you', 'thanks for watching.',
   'thanks for watching', 'bye.', 'bye', 'you',
   'the end.', 'the end',
 ]);
 
+/**
+ * Validates whether a transcribed string is likely a model hallucination.
+ *
+ * @param {string} text - The raw text output from the model.
+ * @returns {boolean} True if the text maps to known hallucination signatures.
+ */
 function isHallucination(text: string): boolean {
   const cleaned = text.trim().toLowerCase();
   if (!cleaned) return true;
@@ -47,6 +63,9 @@ function isHallucination(text: string): boolean {
 
 // ── Core transcription ───────────────────────────────────────────────────────
 
+/**
+ * Return type encapsulation for transcription execution responses.
+ */
 export interface TranscriptionResult {
   success: boolean;
   transcript: string;
@@ -54,10 +73,12 @@ export interface TranscriptionResult {
 }
 
 /**
- * Transcribe an audio file using Groq Whisper API.
+ * Transcribes the audio payload using the Groq Whisper inference endpoint.
+ * Implements rigorous preconditions covering file existence, sizing, and formats.
  *
- * @param filePath - Absolute path to the audio file (.ogg, .mp3, etc.)
- * @param config - Anya config (reads stt.groq_api_key)
+ * @param {string} filePath - The absolute filesystem path to the target audio blob.
+ * @param {AnyaConfig} config - The active application configuration (provides API auth).
+ * @returns {Promise<TranscriptionResult>} An object containing the parsed text or detailed error strings.
  */
 export async function transcribeAudio(
   filePath: string,

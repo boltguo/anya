@@ -1,9 +1,11 @@
 /**
  * @module tools/skill
- * @description Skill viewing tool — read-only access to installed skills.
+ * @description Inspection interface exposing dynamic skill definitions to the LLM agent.
  *
- * Skills are installed manually via `anya skills install` CLI.
- * The agent uses skill_view to read skill procedures before execution.
+ * Implements a restricted read-only pipeline granting the model awareness of installed
+ * procedural skills (e.g., instructional steps encoded in `SKILL.md` or auxiliary files).
+ * 
+ * Required for contextual awareness prior to executing complex multi-step routines.
  */
 
 import { register } from './registry.js';

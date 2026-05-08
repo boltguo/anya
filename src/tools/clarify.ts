@@ -1,9 +1,10 @@
 /**
- * @module tools/clarifyTools
- * @description Clarification tool for multi-step user interaction.
+ * @module tools/clarify
+ * @description Interactive clarification tool for multi-step structured user input.
  *
- * On Telegram, presents choices as native inline keyboard buttons via
- * {@link requestChoice}. Used when the agent needs the user to pick between options.
+ * Designed specifically for adapters supporting rich native UI elements 
+ * (e.g., Telegram inline keyboards). Pauses generative execution to block
+ * on a discrete, structural choice driven by the end-user.
  */
 
 import { register } from './registry.js';
@@ -18,17 +19,24 @@ register({
     properties: {
       message: {
         type: 'string',
-        description: 'The question or prompt to show above the buttons.',
+        description: 'The primary contextual question to render above the structural choices.',
       },
       options: {
         type: 'array',
         items: { type: 'string' },
-        description: 'The list of choice strings to present as buttons.',
+        description: 'An array of distinct choice strings rendered as selectable buttons.',
       },
     },
     required: ['message', 'options'],
   },
 
+  /**
+   * Orchestrates the interactive prompt and halts execution awaiting a callback.
+   * 
+   * @param {Record<string, unknown>} args - Unsafe parsed JSON arguments.
+   * @param {ToolContext} context - Context containing the active messaging adapter.
+   * @returns {Promise<string>} Resolution payload representing the user's explicit choice.
+   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<string> {
     const message = String(args.message);
     const options = (args.options as unknown[])?.map(String) || [];

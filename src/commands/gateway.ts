@@ -1,11 +1,14 @@
 /**
  * @module commands/gateway
- * @description Telegram bot process manager (start, stop, restart, status, logs).
+ * @description `anya gateway` — Telegram bot process manager.
  *
- * The "gateway" is the long-running process that connects to Telegram via
- * grammy's long-polling. It can run in foreground (for debugging) or be
- * spawned as a detached background child process with stdout/stderr
- * redirected to ~/.anya/logs/gateway.log.
+ * Controls the long-running process that connects to Telegram via Grammy's
+ * long-polling mechanism. It supports running in the foreground (useful for
+ * debugging) or being spawned as a detached background child process. When running
+ * in the background, `stdout` and `stderr` are redirected to `~/.anya/logs/gateway.log`.
+ *
+ * Provides commands to start, stop, restart, check the status of, and tail the logs
+ * of the gateway process.
  */
 
 import { createReadStream, existsSync } from 'node:fs';
@@ -20,7 +23,13 @@ const SERVICE = 'gateway';
 const LOG_PATH = join(LOGS_DIR, 'gateway.log');
 
 /**
- * Start the Telegram gateway in the background (or foreground).
+ * Starts the Telegram gateway.
+ *
+ * By default, it spawns a detached background child process. If `_bgChild` is true,
+ * it runs the adapter directly in the current process (used internally when spawned).
+ *
+ * @param _bgChild - Internal flag indicating this process was spawned as the background worker.
+ * @returns A Promise resolving when the gateway is successfully started or spawned.
  */
 export async function runGatewayStart(_bgChild = false): Promise<void> {
   const { running, pid } = isServiceRunning(SERVICE);
@@ -40,7 +49,7 @@ export async function runGatewayStart(_bgChild = false): Promise<void> {
   ensureDirectories();
 
   if (_bgChild) {
-    // Internal: spawned child process runs the adapter directly
+    // Internal: The spawned child process executes the adapter directly.
     writePid(SERVICE);
 
     process.on('SIGINT', () => {
@@ -56,14 +65,14 @@ export async function runGatewayStart(_bgChild = false): Promise<void> {
     const adapter = new TelegramAdapter(config);
     await adapter.start();
   } else {
-    // Default: spawn a detached background child process
+    // Default: Spawn a detached background child process.
     const { spawn } = await import('node:child_process');
     const { openSync } = await import('node:fs');
 
     const logFd = openSync(LOG_PATH, 'a');
 
-    // Resolve the entry script and runner.
-    // In dev mode (tsx), we need to spawn via npx tsx; in production, use node directly.
+    // Resolves the entry script and runtime execution environment.
+    // In development mode (tsx), we spawn via `npx tsx`. In production, we use Node natively.
     const anyaBin = process.argv[1];
     const isTsx = process.argv[0].includes('tsx') || anyaBin.endsWith('.ts');
     const execPath = isTsx ? 'npx' : process.execPath;
@@ -89,7 +98,10 @@ export async function runGatewayStart(_bgChild = false): Promise<void> {
 }
 
 /**
- * Stop the gateway.
+ * Stops the running background gateway process.
+ * Reads the stored PID file and sends a termination signal to the process.
+ *
+ * @returns A Promise resolving when the gateway is successfully stopped.
  */
 export async function runGatewayStop(): Promise<void> {
   const stopped = await stopService(SERVICE);
@@ -101,7 +113,8 @@ export async function runGatewayStop(): Promise<void> {
 }
 
 /**
- * Show gateway status.
+ * Checks and outputs the current running status of the gateway process.
+ * Verifies the PID file and ensures the corresponding process is still active.
  */
 export function runGatewayStatus(): void {
   const { running, pid } = isServiceRunning(SERVICE);
@@ -113,7 +126,9 @@ export function runGatewayStatus(): void {
 }
 
 /**
- * Restart the gateway.
+ * Restarts the gateway process by stopping it and then starting a new instance.
+ *
+ * @returns A Promise resolving when the gateway has been successfully restarted.
  */
 export async function runGatewayRestart(): Promise<void> {
   await runGatewayStop();
@@ -121,7 +136,9 @@ export async function runGatewayRestart(): Promise<void> {
 }
 
 /**
- * Tail gateway logs.
+ * Tails the gateway log file, displaying the most recent lines.
+ *
+ * @param lines - The maximum number of log lines to display (default: 50).
  */
 export function runGatewayLogs(lines = 50): void {
   if (!existsSync(LOG_PATH)) {
@@ -129,7 +146,7 @@ export function runGatewayLogs(lines = 50): void {
     return;
   }
 
-  // Simple tail implementation
+  // Simplified tail implementation reading from the end of the log file.
   const allLines: string[] = [];
   const rl = createInterface({
     input: createReadStream(LOG_PATH, { encoding: 'utf-8' }),

@@ -1,28 +1,30 @@
 /**
  * @module lib/paths
- * @description Centralized path definitions for all Anya data directories.
+ * @description Centralized directory hierarchy and path resolution for Anya.
  *
- * Directory structure:
+ * Consolidates all application data into a single root directory (`ANYA_HOME`),
+ * ensuring atomic state, trivial portability, and isolated test environments.
+ *
+ * Directory architecture:
  * ```
  * ~/.anya/                         (ANYA_HOME)
- * ├── config.json                  Configuration
- * ├── memories/                    Global rule memory
- * │   ├── SOUL.md                  Anya identity/soul
- * │   ├── RULES.md                 Operational directives
- * │   ├── USER.md                  User profile and behavior habits
- * │   └── MEMORY.md                Learner level and ability state
- * ├── skills/                      Installed skills
- * ├── data/                        All persistent data
+ * ├── config.json                  Runtime configuration
+ * ├── auth.json                    Secure token store
+ * ├── memories/                    Durable identity and knowledge base
+ * │   ├── SOUL.md                  Agent persona and identity
+ * │   ├── RULES.md                 Behavioral directives
+ * │   ├── USER.md                  User profile modeling
+ * │   └── MEMORY.md                Temporal learning state
+ * ├── skills/                      Dynamically loaded expert capabilities
+ * ├── data/                        Application persistent state
  * │   ├── store/                   SQLite databases
- * │   │   └── state.db             Session & message history
- * │   ├── search/                  Web search cache
- * │   └── cache/                   General cache
- * ├── logs/                        Log files
- * └── run/                         Runtime state (PID files)
- * └── cron/                        Scheduled jobs and run output
+ * │   │   └── state.db             Session histories and graphs
+ * │   ├── search/                  Web scraping artifact cache
+ * │   └── cache/                   Generic ephemeral storage
+ * ├── logs/                        Structured telemetry
+ * ├── run/                         Process lifecycle flags (PIDs)
+ * └── cron/                        Scheduled execution state
  * ```
- *
- * Override the root with `ANYA_HOME` env var for testing.
  */
 
 import { homedir } from 'node:os';
@@ -30,8 +32,9 @@ import { join } from 'node:path';
 import { mkdirSync, existsSync } from 'node:fs';
 
 /**
- * ANYA_HOME — the single root folder for all user data.
- * Override with ANYA_HOME env var for testing/isolation.
+ * The single root namespace directory for all agent configurations and data artifacts.
+ * Supports environment variable injection (`ANYA_HOME`) for CI/testing isolation.
+ * @constant {string}
  */
 export const ANYA_HOME = process.env.ANYA_HOME || join(homedir(), '.anya');
 
@@ -50,39 +53,37 @@ export const MEMORY_MD_PATH = join(MEMORY_DIR, 'MEMORY.md');
 // ── Skills ───────────────────────────────────────────────────────────────────
 export const SKILLS_DIR = join(ANYA_HOME, 'skills');
 
-
 // ── Data (persistent storage) ────────────────────────────────────────────────
 
-/** Root data directory for all persistent storage. */
+/** Root data directory for unstructured and structured storage. */
 export const DATA_DIR = join(ANYA_HOME, 'data');
 
-/** SQLite database directory. All .db files live here. */
+/** SQLite database root directory. */
 export const STORE_DIR = join(DATA_DIR, 'store');
 
-/** Agent session & message history database. */
+/** Primary relation database housing sessions and messages. */
 export const DB_PATH = join(STORE_DIR, 'state.db');
 
-/** Web search response cache. */
+/** Caching directory for HTTP web crawler artifacts. */
 export const SEARCH_CACHE_DIR = join(DATA_DIR, 'search');
 
-/** General-purpose cache. */
+/** General-purpose volatile cache directory. */
 export const CACHE_DIR = join(DATA_DIR, 'cache');
 
-/** Audio cache for voice message downloads. */
+/** Root artifact cache for ingested and generated audio. */
 export const AUDIO_CACHE_DIR = join(DATA_DIR, 'audio');
 
-/** Incoming voice messages from users. */
+/** Extracted raw voice messages (e.g., from Telegram). */
 export const VOICE_DIR = join(AUDIO_CACHE_DIR, 'voice');
 
-/** Generated TTS audio files. */
+/** Processed and synthesized TTS audio outputs. */
 export const TTS_DIR = join(AUDIO_CACHE_DIR, 'tts');
 
-/** Image storage root. */
+/** Root artifact cache for image blobs. */
 export const IMAGE_DIR = join(DATA_DIR, 'images');
 
-/** Images received from users (Telegram photos). */
+/** Images sourced from external adapters (e.g., Telegram photos). */
 export const IMAGE_RECEIVED_DIR = join(IMAGE_DIR, 'received');
-
 
 // ── Runtime ──────────────────────────────────────────────────────────────────
 export const LOGS_DIR = join(ANYA_HOME, 'logs');
@@ -96,8 +97,9 @@ export const CRON_OUTPUT_DIR = join(CRON_DIR, 'output');
 // ── Directory Setup ──────────────────────────────────────────────────────────
 
 /**
- * Ensure all required directories exist.
- * Safe to call multiple times (idempotent).
+ * Initializes the entire application filesystem hierarchy.
+ * Bootstraps necessary nested folders required prior to database mounting or logging.
+ * This function is inherently idempotent.
  */
 export function ensureDirectories(): void {
   const dirs = [
@@ -127,7 +129,9 @@ export function ensureDirectories(): void {
 }
 
 /**
- * Check if ANYA_HOME has been initialized (config.json exists).
+ * Evaluates whether the primary workspace configuration environment is fully instantiated.
+ *
+ * @returns {boolean} True if the system configuration file exists.
  */
 export function isInitialized(): boolean {
   return existsSync(CONFIG_PATH);

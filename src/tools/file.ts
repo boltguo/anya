@@ -1,11 +1,11 @@
 /**
- * @module tools/fileTools
- * @description File system tools: read_file, write_file, list_dir.
+ * @module tools/file
+ * @description File system utilities (read, write, list) available to the agent.
  *
- * All file operations are sandboxed by {@link isPathAllowed}. The normal Anya
- * setup keeps file access inside ~/.anya and denies everything else. The older
- * interactive approval path is still supported only when fence_mode is set to
- * "ask" in config.
+ * Implements a restricted filesystem capability. Interactions are rigidly gated
+ * via {@link isPathAllowed}, securing execution within the `~/.anya` workspace
+ * bounds unless an explicit UI-based user override triggers an ephemeral or 
+ * durable exception.
  */
 
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
@@ -16,8 +16,13 @@ import { persistConfig } from '../config/loader.js';
 import type { ToolContext } from '../agent/types.js';
 
 /**
- * Check file path and request approval if outside fence.
- * Returns true if access is allowed.
+ * Evaluates sandbox bounds targeting a specific path, triggering interactive
+ * user-authorization flows when attempting to escape primary isolation contexts.
+ *
+ * @param {string} filePath - Target node (file or directory).
+ * @param {string} operation - Action context (e.g., 'read', 'write').
+ * @param {ToolContext} context - Dependency container carrying config and adapter hooks.
+ * @returns {Promise<boolean>} True if the operation is permitted.
  */
 async function checkFileAccess(
   filePath: string,

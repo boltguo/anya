@@ -1,9 +1,10 @@
 /**
  * @module tools/webSearch
- * @description Web search tool using Tavily SDK.
+ * @description Open-web exploration tool bridging the Tavily inference API.
  *
- * Search results are cached to `~/.anya/data/search/` as JSON files,
- * enabling offline review and deduplication of repeated queries.
+ * Mitigates redundant remote API invocation via a deterministic local JSON caching layer 
+ * stored within `~/.anya/data/search/`. Enforces a standard 24-hour freshness TTL on 
+ * duplicate query strings.
  */
 
 import { register } from './registry.js';
@@ -16,15 +17,18 @@ import { tavily, type TavilyClient } from '@tavily/core';
 import { agentLogger } from '../lib/logger.js';
 import { trackWebSearch } from '../lib/usage.js';
 
-/** Cached Tavily client instance, keyed by API key. */
+/** In-memory cached API client, prevents rapid connection re-initialization overhead. */
 let _tavilyClient: TavilyClient | null = null;
 let _tavilyApiKey: string | null = null;
 
 // ── Cache Helpers ────────────────────────────────────────────────────────────
 
 /**
- * Generate a filesystem-safe cache key from a query string.
- * Uses SHA-256 hash to avoid path length and character issues.
+ * Computes a filesystem-safe deterministic cache lookup key from the raw query parameter.
+ * Integrates SHA-256 digesting to prevent injection constraints and path length violations.
+ *
+ * @param {string} query - The raw textual search request.
+ * @returns {string} The normalized cache filename prefix.
  */
 function cacheKey(query: string): string {
   const hash = createHash('sha256').update(query.toLowerCase().trim()).digest('hex').slice(0, 12);

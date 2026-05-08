@@ -1,15 +1,16 @@
 /**
  * @module providers/openai
- * @description Codex LLM provider using the ChatGPT Codex Responses API (streaming).
+ * @description Primary Large Language Model (LLM) provider bridging the Codex API.
  *
- * Uses the Codex reverse-proxy at chatgpt.com/backend-api/codex with:
- *   - OAuth device-code authentication (tokens in auth.json)
- *   - SSE streaming response consumption
- *   - Auto token refresh on 401
+ * Implements a scalable fetch client connecting to the Codex reverse-proxy at
+ * `chatgpt.com/backend-api/codex`. Manages session lifecycle constraints including:
+ *   - Device-code OAuth token injection via Authorization headers.
+ *   - Transparent Server-Sent Events (SSE) streaming response consumption.
+ *   - Automatic intercept and resolution of HTTP 401 token expirations.
+ *   - Exponential backoff retry logic for transient API faults.
  *
- * Helper modules:
- *   - {@link ./openai/transform} — message ↔ Codex Responses translation
- *   - {@link ./openai/stream}    — SSE stream consumer
+ * @see {@link ./openai/transform.ts} for message payload translation.
+ * @see {@link ./openai/stream.ts} for raw SSE packet parsing.
  */
 
 import type { Message, LLMResponse, ToolParameterSchema, LLMProvider, ChatOptions } from '../agent/types.js';
@@ -22,11 +23,27 @@ import { consumeStream } from './openai/stream.js';
 
 // ── Codex Implementation ────────────────────────────────────────────────────
 
+/** Base endpoint for the underlying generative inference API */
 const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 
+/**
+ * Standardized provider class orchestrating text generation, function calling,
+ * and resilient network transmission against the Codex models.
+ */
 export class CodexProvider implements LLMProvider {
+  /** The globally registered string identifier for this provider */
   readonly name = 'codex';
 
+  /**
+   * Executes a streaming chat completion request, aggregating the final response.
+   *
+   * @param {Message[]} messages - The sequential conversation history buffer.
+   * @param {Array<{ name: string; description: string; parameters: ToolParameterSchema }>} tools - Registered JSON schemas outlining available functions.
+   * @param {AnyaConfig} config - Application configuration (influences selected model).
+   * @param {ChatOptions} [options] - Optional runtime metadata (e.g., semantic caching keys).
+   * @returns {Promise<LLMResponse>} The aggregated structured output including text, tool invocations, and token usage metrics.
+   * @throws {Error} Upon unrecoverable network failure, malformed authentication, or exhausted retry policies.
+   */
   async chat(
     messages: Message[],
     tools: Array<{ name: string; description: string; parameters: ToolParameterSchema }>,

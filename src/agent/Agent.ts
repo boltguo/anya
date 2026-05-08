@@ -4,7 +4,7 @@
  *
  * The Agent orchestrates the conversation between the user, LLM, and tools:
  *
- * ```
+ * ```text
  * User Input → [System Prompt + History + Input] → LLM
  *                                                   ↓
  *                                            Tool Calls? ──yes──→ Execute → Feed Results → Loop
@@ -12,11 +12,12 @@
  *                                            Text Response → reply() → User
  * ```
  *
- * Each iteration is logged as a single `llm_call` entry with model, tokens,
- * cost, and tool call count. History is persisted to SQLite between sessions.
+ * Each iteration is logged as a single `llm_call` entry including model details,
+ * token usage, cost, and tool call counts. Conversation history is persisted to SQLite
+ * between sessions.
  *
  * Supporting concerns live in sibling modules:
- *   - {@link ./history} — truncation and Gemini-order sanitization
+ * - {@link module:agent/history} — Manages truncation and turn-order sanitization.
  */
 
 import type { Message, Adapter, MessageFile, LLMProvider } from './types.js';
@@ -31,59 +32,69 @@ import { truncateHistory, sanitizeHistory } from './history.js';
 import { classifyApiError } from './errorClassifier.js';
 import { ContextCompressor, estimateTokens } from './contextCompressor.js';
 
-/** Per-run tool filtering policy. */
+/**
+ * Defines the per-run tool filtering policy.
+ */
 export interface ToolPolicy {
-  /** Whitelist — only these tools are available (overrides deny). */
+  /** Whitelist array of allowed tool names. If provided, overrides the deny list. */
   allow?: string[];
-  /** Blacklist — these tools are excluded. */
+  /** Blacklist array of tool names to exclude from the run. */
   deny?: string[];
 }
 
-/** Options for {@link Agent.run}. */
+/**
+ * Configuration options for the {@link Agent.run} execution.
+ */
 export interface RunOptions {
-  /** Session key for history persistence (e.g., 'tg:12345'). */
+  /** Unique session key used for history persistence (e.g., 'tg:12345'). */
   sessionKey: string;
-  /** Explicit session ID. If omitted, resolved from sessionKey. */
+  /** Explicit session ID. If omitted, it is resolved internally from the sessionKey. */
   sessionId?: string;
-  /** Force creation of a new session, discarding previous history. */
+  /** When true, forces the creation of a new session and discards previous history. */
   newSession?: boolean;
-  /** Attached files (images) for native multimodal input in this turn. */
+  /** Attached files (e.g., images) for native multimodal input in this specific turn. */
   files?: MessageFile[];
-  /** Per-run tool filtering (deny specific tools without cloning config). */
+  /** Per-run tool filtering policy to allow or deny specific tools dynamically. */
   toolPolicy?: ToolPolicy;
 }
 
-/** Result returned by {@link Agent.run} after the ReAct loop completes. */
+/**
+ * The structured result returned by {@link Agent.run} after completing the ReAct loop.
+ */
 export interface RunResult {
-  /** Final text content to display to the user. */
+  /** The final text content intended for display to the user. */
   content: string;
-  /** The session ID used for this run (for persistence tracking). */
+  /** The active session ID used during this run, useful for persistence tracking. */
   sessionId: string;
-  /** Total number of tool calls executed during this run. */
+  /** The total number of tool calls executed during this run. */
   toolCallCount: number;
-  /** Whether the tg_msg tool already sent a message to the user. */
+  /** Indicates whether the telegram message tool has already sent a response to the user. */
   tgSent: boolean;
 }
 
 /**
- * The Anya Agent — core ReAct (Reason + Act) loop.
+ * The core Anya Agent encapsulating the ReAct (Reason + Act) loop.
  *
- * Platform-agnostic: communicates with the user exclusively through
- * the {@link Adapter} interface. The platform provides
- * its own adapter implementation.
- * Lifecycle per user message:
- * 1. Load/create session and conversation history from SQLite
- * 2. Build system prompt (config personality + rules + profile + skills)
- * 3. Sanitize history for provider compatibility
- * 4. Enter ReAct loop: call LLM → execute tools → repeat
- * 5. Save new messages to session history
- * 6. Return final text response
+ * Platform-agnostic by design, it communicates with users exclusively through
+ * the {@link Adapter} interface. The lifecycle per user message involves:
+ * 1. Loading or creating session and conversation history from SQLite.
+ * 2. Building the system prompt (incorporating personality, rules, profile, and skills).
+ * 3. Sanitizing history for provider compatibility.
+ * 4. Executing the ReAct loop: invoking the LLM, executing tool calls, and repeating.
+ * 5. Saving new messages to the session history.
+ * 6. Returning the final text response.
  */
 export class Agent {
   private config: AnyaConfig;
   private adapter: Adapter;
   private provider: LLMProvider;
 
+  /**
+   * Initializes a new instance of the Agent.
+   *
+   * @param config - The application configuration.
+   * @param adapter - The platform-specific interface adapter.
+   */
   constructor(config: AnyaConfig, adapter: Adapter) {
     this.config = config;
     this.adapter = adapter;
@@ -91,12 +102,15 @@ export class Agent {
   }
 
   /**
-   * Run the agent with a user input message.
+   * Executes the agent loop with the provided user input.
    *
-   * Main entry point. Manages the full ReAct loop: loading history, calling
-   * the LLM, executing tool calls, and returning the final response.
+   * This is the main entry point. It manages the full ReAct loop: fetching history,
+   * querying the LLM, executing tool calls, and returning the definitive response.
    *
-   * @throws Re-throws LLM provider errors after max retries.
+   * @param input - The raw text input from the user.
+   * @param options - Execution options dictating session and tool policies.
+   * @returns A promise resolving to the final {@link RunResult}.
+   * @throws Rethrows unrecoverable LLM provider errors after exhausting max retries.
    */
   async run(input: string, options: RunOptions): Promise<RunResult> {
     const { sessionKey, newSession, files, toolPolicy } = options;
@@ -115,8 +129,8 @@ export class Agent {
 
     const systemPrompt = buildSystemPrompt(this.config);
 
-    // Timestamp is appended to user input (not system prompt) to keep the
-    // system prompt stable across turns, maximising prompt cache hit rate.
+    // Append timestamp to user input rather than the system prompt to maintain
+    // system prompt stability across turns, optimizing cache hit rates.
     const timestampedInput = `[${new Date().toISOString()}] ${input}`;
 
     const messages: Message[] = [
@@ -129,7 +143,7 @@ export class Agent {
       { role: 'user', content: input, files },
     ];
 
-    // Auto-title the session from first user message.
+    // Generate and update an automatic session title from the first user message.
     if (history.length === 0) {
       const title = input.length > 50 ? input.substring(0, 50) + '...' : input;
       await updateSessionTitle(sessionId, title);
@@ -143,24 +157,22 @@ export class Agent {
     let compressionCount = 0;
     const MAX_COMPRESSIONS = 3;
     let lastRealTokenCount = 0;
-    let firstLlmCall = true;  // Track whether images have been seen by LLM
+    let firstLlmCall = true;
 
     // ── ReAct Loop ──
     for (let loop = 0; loop < maxLoops; loop++) {
 
-      // ── Pre-flight: compress context if approaching the limit ──
-      // Use real token count from last LLM response if available, else estimate
+      // Evaluate context length; compress if threshold exceeded.
       const tokenCount = lastRealTokenCount || estimateTokens(messages, this.config.tools.enabled.length);
       if (compressor.shouldCompress(messages, tokenCount, contextLimit) && compressionCount < MAX_COMPRESSIONS) {
         compressionCount++;
         const compressed = await compressor.compress(messages, contextLimit);
         messages.length = 0;
         messages.push(...compressed);
-        lastRealTokenCount = 0; // Reset — re-estimate after compression
+        lastRealTokenCount = 0;
       }
 
       const toolSchemas = getToolSchemas(this.config, this.adapter.platform, toolPolicy);
-
       const model = this.config.provider.model;
       const provider = this.provider;
 
@@ -168,8 +180,8 @@ export class Agent {
       try {
         response = await provider.chat(messages, toolSchemas, this.config, { sessionId });
 
-        // After the first LLM call that saw the images, strip inlineData from
-        // all messages to avoid re-uploading MB of base64 in subsequent loops.
+        // Strip inline file data after the initial LLM call to prevent
+        // repetitive base64 uploads in subsequent loops.
         if (firstLlmCall && files && files.length > 0) {
           firstLlmCall = false;
           for (const m of messages) {
@@ -184,7 +196,7 @@ export class Agent {
       } catch (err) {
         const classified = classifyApiError(err);
 
-        // Context overflow → compress and retry
+        // Handle context overflow by compressing and retrying.
         if (classified.shouldCompress && compressionCount < MAX_COMPRESSIONS) {
           compressionCount++;
           agentLogger.warn({ msg: 'context_overflow_recovery', loop, compressionCount });
@@ -197,7 +209,6 @@ export class Agent {
         throw err;
       }
 
-      // Track real token usage for accurate pre-flight checks
       if (response.usage?.promptTokens) {
         lastRealTokenCount = response.usage.promptTokens;
       }
@@ -227,12 +238,11 @@ export class Agent {
       logEntry.hasContent = !!response.content;
       agentLogger.info(logEntry);
 
-      // Track LLM token usage
       if (u) {
         trackLlm(u.promptTokens || 0, u.completionTokens || 0, u.cachedTokens || 0);
       }
 
-      // ── Case 1: Tool calls ──
+      // Handle LLM dispatching tool calls.
       if (response.toolCalls && response.toolCalls.length > 0) {
         totalToolCalls += response.toolCalls.length;
 
@@ -277,7 +287,7 @@ export class Agent {
         continue;
       }
 
-      // ── Case 2: Text response (final answer) ──
+      // Handle standard text response denoting loop completion.
       const finalContent = response.content || '';
 
       const assistantMsg: Message = {
@@ -287,7 +297,6 @@ export class Agent {
       };
       newMessages.push(assistantMsg);
 
-      // Degrade multimodal messages before persisting — strip files, keep text placeholder
       const degraded = degradeForStorage(newMessages);
       await saveMessages(sessionId, degraded);
 
@@ -299,7 +308,7 @@ export class Agent {
       };
     }
 
-    // ── Max loops reached ──
+    // Resolve max loop limits securely.
     const fallbackMsg = 'Warning: Maximum loop count reached. Please try simplifying your request.';
     newMessages.push({ role: 'assistant', content: fallbackMsg });
     const degraded = degradeForStorage(newMessages);
@@ -317,12 +326,15 @@ export class Agent {
 // ── Multimodal Degradation ──────────────────────────────────────────────────
 
 /**
- * Degrade multimodal messages for SQLite persistence.
+ * Degrades multimodal messages to enable SQLite persistence.
  *
  * Strips the transient `files` field and replaces it with a lightweight
- * text placeholder. This prevents MB-scale base64 blobs from entering
- * the conversation history, while preserving a human-readable note that
- * images were present.
+ * text placeholder. This prevents MB-scale base64 blobs from inflating
+ * the conversation history, while preserving a human-readable record that
+ * images were originally included.
+ *
+ * @param messages - Array of incoming messages that may contain files.
+ * @returns A new array of messages structurally safe for persistent storage.
  */
 function degradeForStorage(messages: Message[]): Message[] {
   return messages.map(msg => {

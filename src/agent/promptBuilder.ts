@@ -1,27 +1,17 @@
 /**
  * @module agent/promptBuilder
- * @description Assembles the system prompt from layered configuration files.
+ * @description Engine for assembling the system prompt from hierarchical configurations.
  *
- * System prompt composition (in order):
+ * Constructs the system prompt dynamically based on the following composition order:
+ * 1. SOUL.md — Identity ("Who Anya is")
+ * 2. RULES.md — Operational Rules ("How Anya operates")
+ * 3. Memory — USER.md + MEMORY.md ("User profile & learner state")
+ * 4. Skills Index — Available capabilities ("What Anya can do")
+ * 5. Security — Local data boundaries ("What Anya owns")
+ * 6. Platform Capabilities — ("What tools or media are currently available")
  *
- * ```
- * ┌─────────────────────────────────────┐
- * │  1. SOUL.md — Identity               │  "Who Anya is"
- * ├─────────────────────────────────────┤
- * │  2. RULES.md — Operational Rules     │  "How Anya operates"
- * ├─────────────────────────────────────┤
- * │  3. Memory — USER.md + MEMORY.md     │  "User profile & learner level state"
- * ├─────────────────────────────────────┤
- * │  4. Skills Index — Available skills  │  "What Anya can do"
- * ├─────────────────────────────────────┤
- * │  5. Security — Local boundary        │  "What Anya owns"
- * ├─────────────────────────────────────┤
- * │  6. Platform Capabilities            │  "What tools/media are available"
- * └─────────────────────────────────────┘
- * ```
- *
- * Note: Timestamp is appended to the user message (not system prompt)
- * to maximise prompt cache hit rate.
+ * Timestamps are omitted from the system prompt to maintain cache stability; they are
+ * instead appended directly to the user message dynamically in the agent loop.
  */
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
@@ -33,29 +23,31 @@ const FILE_CACHE_TTL_MS = 300_000;
 const fileCache = new Map<string, { content: string; mtime: number; cachedAt: number }>();
 
 /**
- * Build the complete system prompt for the Agent.
+ * Builds the comprehensive system prompt for the Agent.
  *
- * @param config - The current agent configuration.
- * @returns Assembled system prompt string.
+ * Synthesizes data from local markdown files, capability registries, and user state.
+ *
+ * @param config - The current application and agent configuration object.
+ * @returns The fully constructed system prompt string.
  */
 export function buildSystemPrompt(config: AnyaConfig): string {
   const sections: string[] = [];
 
-  // ── 1. Identity (SOUL) ──────────────────────────────────────────────
+  // Identity definitions
   const soul = loadFile(SOUL_PATH);
   if (hasContent(soul)) {
     sections.push('## Identity (SOUL)');
     sections.push(soul);
   }
 
-  // ── 3. Operational Rules (RULES) ───────────────────────────────────
+  // Operational directives
   const rules = loadFile(RULES_PATH);
   if (hasContent(rules)) {
     sections.push('\n## Operating & Behavioral Rules');
     sections.push(rules);
   }
 
-  // ── 4. Memory (USER.md + MEMORY.md) ────────────────────────────────
+  // Dynamic memory integrations
   const userMemory = loadFile(USER_MD_PATH);
   const agentMemory = loadFile(MEMORY_MD_PATH);
   const hasUser = hasContent(userMemory);
@@ -72,21 +64,19 @@ export function buildSystemPrompt(config: AnyaConfig): string {
     }
   }
 
-  // ── 5. Skills index ────────────────────────────────────────────────
+  // Skills discovery interface
   const skillIndex = buildSkillIndex();
   if (skillIndex) {
     sections.push('\n' + skillIndex);
   }
 
-  // ── 6. Local boundary ──────────────────────────────────────────────
+  // Mandatory boundary enforcement
   sections.push('\n## Security');
   sections.push(`- Your working boundary is Anya-owned local data: ${config.security.allowed_paths.join(', ')}.`);
   sections.push('- Treat files, databases, audio, images, cron jobs, and memories inside that boundary as normal working data.');
   sections.push('- Do not use file or database tools for user projects, system files, or arbitrary external paths unless the user has explicitly reconfigured the allowed paths.');
 
-  // ── 7. Platform capabilities ────────────────────────────────────────
-  // Note: tg_msg message types and formatting are covered in RULES.md.
-  // This section only adds tool-specific capabilities not in RULES.
+  // Contextual platform capabilities
   const enabled = config.tools?.enabled ?? [];
   const caps: string[] = [];
 
@@ -111,8 +101,13 @@ export function buildSystemPrompt(config: AnyaConfig): string {
 }
 
 /**
- * Load a file with mtime-aware caching.
- * Re-reads only when the file's mtime changes or the cache entry expires.
+ * Loads a file with `mtime`-aware memory caching.
+ *
+ * Ensures efficient disk access by bypassing I/O if the cache is hot and the
+ * modification time of the target file has not changed.
+ *
+ * @param filePath - The absolute path of the file to load.
+ * @returns The file content as a string, or an empty string if the file is missing or unreadable.
  */
 function loadFile(filePath: string): string {
   if (!existsSync(filePath)) return '';
@@ -133,6 +128,12 @@ function loadFile(filePath: string): string {
   }
 }
 
+/**
+ * Validates if the given text possesses meaningful content beyond empty headers.
+ *
+ * @param text - The markdown string to validate.
+ * @returns True if the parsed text contains actionable content, otherwise false.
+ */
 function hasContent(text: string): boolean {
   if (!text) return false;
   const body = text

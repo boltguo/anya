@@ -3,10 +3,10 @@
  * @description Anya — A self-evolving personal AI agent.
  *
  * Public API surface for programmatic usage. Re-exports the core Agent class,
- * type definitions, config loader, tool/provider registries, and error
+ * type definitions, configuration loader, tool/provider registries, and error
  * classification utilities.
  *
- * For CLI usage, see `bin/anya.ts`.
+ * For Command Line Interface (CLI) usage, see `bin/anya.ts`.
  */
 
 export { Agent } from './agent/Agent.js';

@@ -1,15 +1,13 @@
 /**
  * @module tools/tts
- * @description Text-to-Speech tool for the agent.
+ * @description Text-to-Speech synthesis interface exposing Azure TTS capabilities.
  *
- * Supports two modes:
- *   1. Simple: text + voice + rate → single voice audio
- *   2. Segments: array of {voice, text, rate, break} → multi-voice SSML dialogue
+ * Exposes two primary operational paradigms to the model:
+ *   1. Simple Mode: `{ text, voice, rate }` -> Resolves to single continuous audio.
+ *   2. Dialogue Mode: `{ segments: [...] }` -> Constructs complex multi-voice 
+ *      SSML dialog trees supporting precise structural pauses (`<break>`).
  *
- * Usage by the model:
- *   tts({ text: "Hello world" })                          → simple
- *   tts({ text: "slow read", rate: "-30%" })              → slow speech
- *   tts({ segments: '[...]' })                            → multi-voice SSML dialogue
+ * Transcoded artifacts are typically piped subsequently through `tg_msg(type="voice")`.
  */
 
 import { register } from './registry.js';

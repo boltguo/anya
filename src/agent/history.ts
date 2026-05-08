@@ -1,22 +1,27 @@
 /**
  * @module agent/history
- * @description Conversation-history helpers for the ReAct loop.
+ * @description Conversation history utilities for the ReAct loop.
  *
- * Two concerns live here:
- *  - **Truncation**: cap long histories without severing an assistant
- *    (toolCalls) → tool(results) pair.
- *  - **Sanitization**: enforce strict turn ordering so the provider
- *    does not reject the payload. Invalid sequences are dropped with a warn
- *    log rather than crashing.
+ * Provides operations to sanitize and truncate message sequences:
+ * - **Truncation**: Restricts message counts strictly without severing tool
+ *   results from their associated assistant invocation.
+ * - **Sanitization**: Enforces LLM provider turn-ordering rules ensuring
+ *   invalid patterns are safely dropped instead of triggering exceptions.
  */
 
 import type { Message } from './types.js';
 import { agentLogger } from '../lib/logger.js';
 
 /**
- * Cap the history at {@link maxHistory} messages, backing up past leading tool
- * messages so we never keep a tool result without its originating assistant
- * message. Logs the final size.
+ * Truncates the message history to the specified maximum length while preserving
+ * tool message continuity.
+ *
+ * Backtracks over leading tool responses to guarantee that tool results are
+ * never retained without their originating assistant tool-call message.
+ *
+ * @param history - The current array of conversation messages.
+ * @param maxHistory - The maximum allowed number of messages.
+ * @returns A securely truncated array of messages.
  */
 export function truncateHistory(history: Message[], maxHistory: number): Message[] {
   if (history.length <= maxHistory) return history;
@@ -31,22 +36,24 @@ export function truncateHistory(history: Message[], maxHistory: number): Message
 }
 
 /**
- * Sanitize conversation history to comply with strict turn ordering.
+ * Sanitizes conversation history to adhere strictly to expected turn ordering.
  *
- * Requirements:
- *   1. Conversation starts with 'user' (after system)
- *   2. assistant with toolCalls is immediately followed by matching tool results
- *   3. No orphaned tool messages
- *   4. Alternating user/assistant turns (no consecutive same-role)
+ * Enforces the following validations:
+ * 1. The first relevant message must originate from a 'user'.
+ * 2. An assistant message containing `toolCalls` must be immediately followed
+ *    by corresponding 'tool' responses.
+ * 3. Orphaned 'tool' messages without preceding tool calls are discarded.
+ * 4. Invalid sequences are skipped and logged as warnings instead of crashing.
  *
- * This function drops invalid sequences rather than crashing.
+ * @param history - The complete array of raw conversation messages.
+ * @returns A fully sanitized message array suitable for LLM consumption.
  */
 export function sanitizeHistory(history: Message[]): Message[] {
   if (history.length === 0) return history;
 
   const result: Message[] = [];
 
-  // Skip leading non-user messages (history should start with user).
+  // Exclude leading non-user messages to ensure appropriate initialization.
   let startIdx = 0;
   while (startIdx < history.length && history[startIdx].role !== 'user') {
     agentLogger.warn({ msg: 'history_sanitize_skip_leading', role: history[startIdx].role });
@@ -57,7 +64,6 @@ export function sanitizeHistory(history: Message[]): Message[] {
     const msg = history[i];
 
     if (msg.role === 'tool') {
-      // Tool messages are only valid after an assistant with toolCalls (or another tool).
       const prev = result[result.length - 1];
       if (prev && ((prev.role === 'assistant' && prev.toolCalls) || prev.role === 'tool')) {
         result.push(msg);
@@ -65,7 +71,7 @@ export function sanitizeHistory(history: Message[]): Message[] {
         agentLogger.warn({ msg: 'history_sanitize_drop_orphan_tool', toolName: msg.toolName });
       }
     } else if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
-      // Assistant with tool calls — verify that tool results follow.
+      // Aggregate subsequent tool results corresponding to the active tool calls.
       let j = i + 1;
       const toolResults: Message[] = [];
       while (j < history.length && history[j].role === 'tool') {

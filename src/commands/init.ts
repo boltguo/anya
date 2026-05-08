@@ -1,10 +1,13 @@
 /**
  * @module commands/init
- * @description First-run initialization for ~/.anya/ directory.
+ * @description `anya init` — First-run initialization and scaffolding command.
  *
- * Creates the directory structure, writes default config and templates.
- * Safe to re-run — only creates missing files.
- * No interactive prompts — use `anya config` for API keys.
+ * Scaffolds the `~/.anya/` directory structure, writing default configuration
+ * files and operational templates. Safe to run multiple times as it gracefully
+ * skips creating files that already exist.
+ *
+ * Operates non-interactively. API keys and granular settings must be managed
+ * via the `anya config` interactive wizard.
  */
 
 import { writeFileSync, copyFileSync, existsSync, cpSync, rmSync } from 'node:fs';
@@ -25,10 +28,13 @@ import {
 import { DEFAULT_CONFIG } from '../config/defaults.js';
 
 /**
- * Resolve an asset bundled with the CLI. Looks in the two layouts we ship:
- *   - dist/<rel>  (production: postbuild copies assets next to the bin)
- *   - src/<rel>   (dev: running via tsx against source)
- * Returns the first path that exists, or null.
+ * Resolves the absolute path of an asset bundled with the CLI.
+ * It checks multiple potential layout locations to support both production
+ * distributions (`dist/`) and development execution (`src/` via tsx).
+ *
+ * @param __dirname - The current directory path of the executing module.
+ * @param rel - The relative path of the target asset.
+ * @returns The resolved absolute path if found, otherwise null.
  */
 function resolveAsset(__dirname: string, rel: string): string | null {
   const candidates = [
@@ -43,10 +49,12 @@ function resolveAsset(__dirname: string, rel: string): string | null {
 }
 
 /**
- * `anya init` — Non-interactive setup.
+ * Executes the `anya init` command to perform non-interactive system setup.
  *
- * Creates ~/.anya/ directory structure and writes default files.
- * All API keys are configured separately via `anya config`.
+ * Creates the necessary `~/.anya/` directory structure, copies bundled
+ * templates (e.g., config, soul, rules, memory), and migrates default skills.
+ *
+ * @returns A Promise resolving when initialization is complete.
  */
 export async function runInit(): Promise<void> {
   console.log();

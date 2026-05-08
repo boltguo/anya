@@ -1,18 +1,23 @@
 /**
  * @module providers/openai/stream
- * @description SSE stream consumer for Codex Responses API.
+ * @description Server-Sent Events (SSE) consumption logic for Codex streams.
  *
- * Parses Server-Sent Events without external dependencies.
+ * Natively parses the raw byte stream emitted by the Codex chunked API without
+ * relying on bloated third-party SSE parser libraries.
  */
 
 import type { LLMResponse } from '../../agent/types.js';
 
 /**
- * Consume SSE stream from Codex Responses API.
+ * Aggregates a chunked `fetch` Response stream into a unified `LLMResponse`.
  *
- * Key events:
- * - response.output_item.done → completed output item (message / function_call)
- * - response.completed → final response with usage stats
+ * Core event processing:
+ * - `response.output_item.done` -> Accumulates discrete message blocks or isolated function calls.
+ * - `response.completed` -> Finalizes execution, capturing token consumption metrics.
+ *
+ * @param {Response} response - The active HTTP response object with an open readable body.
+ * @param {number} startTime - The exact monotonic timestamp when the request fired (for telemetry).
+ * @returns {Promise<LLMResponse>} The fully constructed result object.
  */
 export async function consumeStream(response: Response, startTime: number): Promise<LLMResponse> {
   if (!response.body) {

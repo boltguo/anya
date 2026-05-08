@@ -1,6 +1,10 @@
 /**
  * @module domain/practice
- * @description Practice evidence logging, daily task management, and band trend tracking.
+ * @description Orchestrates the domain logic for processing and persisting educational practice data.
+ *
+ * This module exports procedures responsible for safely ingesting complex practice assessments
+ * into the database. It handles nested structures like error pattern tracking, sub-capability
+ * scoring, and activity trend aggregations within unified atomic transactions.
  */
 
 import type { DatabaseSync } from 'node:sqlite';
@@ -10,6 +14,15 @@ import {
   inferSection, severityScore, parseJsonList, upsertActivity, upsertBandTrend,
 } from './helpers.js';
 
+/**
+ * Persists a comprehensive record of a completed practice activity.
+ * Records the primary sample details and associated nested attributes including
+ * sub-capability scores, specific errors, aggregated trends, and daily activity.
+ *
+ * @param {DatabaseSync} db - The active SQLite database connection instance.
+ * @param {Record<string, unknown>} args - The untyped payload detailing the practice session.
+ * @returns {unknown} A standardized response object indicating success and row insertion metrics, or an error payload.
+ */
 export function logPractice(db: DatabaseSync, args: Record<string, unknown>): unknown {
   const skillType = String(args.skill_type || '');
   const completed = Number(args.completed ?? 1);
@@ -114,6 +127,13 @@ export function logPractice(db: DatabaseSync, args: Record<string, unknown>): un
   });
 }
 
+/**
+ * Creates or updates a pending scheduled task in the daily study plan.
+ *
+ * @param {DatabaseSync} db - The active SQLite database connection instance.
+ * @param {Record<string, unknown>} args - The raw payload defining the task parameters.
+ * @returns {unknown} A standardized response object reporting the action success and inserted task identifier.
+ */
 export function taskUpsert(db: DatabaseSync, args: Record<string, unknown>): unknown {
   const skill = String(args.skill || args.callback || '').trim();
   if (!skill) return { error: 'Missing skill' };
@@ -138,6 +158,14 @@ export function taskUpsert(db: DatabaseSync, args: Record<string, unknown>): unk
   return { ok: true, action: 'task_upsert', task_id: normalizeRowId(result.lastInsertRowid) };
 }
 
+/**
+ * Retrieves the prioritized list of tasks scheduled for a specified date.
+ * Returns tasks sorted by completion status, urgency type, and historical creation order.
+ *
+ * @param {DatabaseSync} db - The active SQLite database connection instance.
+ * @param {Record<string, unknown>} args - Optional query parameters including target date.
+ * @returns {unknown} A serialized payload containing the fetched rows and total count.
+ */
 export function dueTasks(db: DatabaseSync, args: Record<string, unknown>): unknown {
   const date = String(args.date || 'now');
   const rows = db.prepare(`
@@ -152,6 +180,13 @@ export function dueTasks(db: DatabaseSync, args: Record<string, unknown>): unkno
   return { ok: true, action: 'due_tasks', rows, count: rows.length };
 }
 
+/**
+ * Marks a specific daily task as fulfilled, optionally correlating it with a specific practice sample.
+ *
+ * @param {DatabaseSync} db - The active SQLite database connection instance.
+ * @param {Record<string, unknown>} args - The payload containing the `task_id` and optional `sample_id`.
+ * @returns {unknown} A response object confirming the update and affected rows.
+ */
 export function taskComplete(db: DatabaseSync, args: Record<string, unknown>): unknown {
   const taskId = optionalNumber(args.task_id);
   if (taskId === null) return { error: 'Missing task_id' };

@@ -1,52 +1,56 @@
 /**
  * @module agent/errorClassifier
- * @description Structured API-error classification for provider calls.
+ * @description Structured classification for external API provider errors.
  *
- * Converts raw provider errors into a {@link ClassifiedError} with explicit
- * recovery hints. The hints are consumed by two layers:
+ * Translates raw, ambiguous provider exceptions into actionable {@link ClassifiedError}
+ * structures. These detailed hints manage retry strategies and context responses:
  *
- * **Provider layer** ({@link CodexProvider.chat}): owns retry loops.
- *   Uses: `retryable`, `backoffMs`, `shouldRotate` (for multi-key rotation).
- *   Guarantees: either returns `LLMResponse` or throws an unrecoverable error.
+ * - **Provider Layer:** Consumes `retryable`, `backoffMs`, and `shouldRotate` to
+ *   facilitate internal API retry operations.
+ * - **Agent Layer:** Consumes `shouldCompress` to intercept prompt-overflow issues
+ *   and dynamically minimize tokens prior to an additional attempt.
  *
- * **Agent layer** ({@link Agent.run}): handles context-level recovery.
- *   Uses: `shouldCompress` (triggers context compression on overflow).
- *   Does NOT retry — the Provider has already exhausted retries.
- *
- * Status code extraction priority:
- *   1. SDK error object `.status` property (Gemini `ApiError`, fetch response status)
- *   2. Common `.statusCode` / `.httpStatus` properties
- *   3. Regex fallback from error message text
+ * The classifier assesses state iteratively based on:
+ * 1. Documented SDK properties (e.g. `.status`).
+ * 2. Conventional response properties (e.g. `.statusCode`).
+ * 3. Fallback heuristic matching directly on exception message text.
  */
 
-// ── Failover Reason ─────────────────────────────────────────────────────────
-
+/**
+ * Represents the fundamental categorical reason for a provider failure.
+ */
 export type FailoverReason =
-  | 'auth'              // 401/403 — token refresh, then rotate
-  | 'auth_permanent'    // refresh itself failed — abort
-  | 'billing'           // 402 (real) — credit exhausted, rotate key
-  | 'rate_limit'        // 429 or soft-quota — back off, then rotate
-  | 'overloaded'        // 503/529 — provider overloaded, back off
-  | 'server_error'      // 500/502 — transient, retry
-  | 'timeout'           // network timeout / ECONNRESET
-  | 'context_overflow'  // prompt too large — compress, don't rotate
-  | 'model_not_found'   // 404 — wrong model id, abort
-  | 'format_error'      // 400 — bad request shape, abort
-  | 'unknown';          // catch-all — retry with back-off
+  | 'auth'              // 401/403 — Token requires refresh or rotation.
+  | 'auth_permanent'    // Irrecoverable authentication failure.
+  | 'billing'           // 402 — Account credit depleted.
+  | 'rate_limit'        // 429 — Throttle encountered, retry after backoff.
+  | 'overloaded'        // 503/529 — Remote service degradation.
+  | 'server_error'      // 500/502 — Unhandled remote exception.
+  | 'timeout'           // Network transit breakdown.
+  | 'context_overflow'  // Model sequence limit breached; prompt reduction required.
+  | 'model_not_found'   // 404 — Invalid target model configured.
+  | 'format_error'      // 400 — Structural violation in the outbound payload.
+  | 'unknown';          // Uncategorized failure; standard retry mechanics apply.
 
-// ── Classified Error ────────────────────────────────────────────────────────
-
+/**
+ * Defines the structured outcome of classifying an error.
+ */
 export interface ClassifiedError {
+  /** High-level reason indicating the nature of the failure. */
   reason: FailoverReason;
+  /** True if the operation can be safely reattempted. */
   retryable: boolean;
+  /** True if the system should automatically shrink the prompt context and retry. */
   shouldCompress: boolean;
+  /** True if multi-key deployment systems should switch their active credential. */
   shouldRotate: boolean;
+  /** True if the application should fallback to an alternative provider globally. */
   shouldFallback: boolean;
+  /** Recommended delay in milliseconds before dispatching a subsequent retry. */
   backoffMs: number;
+  /** The originating error instance. */
   original: Error;
 }
-
-// ── Pattern lists (checked in order) ────────────────────────────────────────
 
 const CONTEXT_OVERFLOW_PATTERNS = [
   'context length',
@@ -95,17 +99,14 @@ const TIMEOUT_PATTERNS = [
   'aborted',
 ];
 
-// ── Classifier ──────────────────────────────────────────────────────────────
-
 /**
- * Classify a raw provider error into a structured recovery hint.
+ * Classifies a raw provider exception into a highly actionable control object.
  *
- * Classification priority:
- *   1. HTTP status code (if extractable)
- *   2. Context-overflow patterns
- *   3. Rate-limit / billing patterns
- *   4. Timeout / network patterns
- *   5. Fallback: unknown (still retryable)
+ * Priority follows HTTP status codes first, falling back onto regex matching on
+ * known provider error substrings if the status is obscured.
+ *
+ * @param error - The raw error thrown by the provider integration.
+ * @returns The structured {@link ClassifiedError} dictating next steps.
  */
 export function classifyApiError(error: unknown): ClassifiedError {
   const err = error instanceof Error ? error : new Error(String(error));
@@ -113,13 +114,12 @@ export function classifyApiError(error: unknown): ClassifiedError {
 
   const status = extractStatus(err);
 
-  // ── 1. Status-based classification ────────────────────────────────
+  // Status-driven exact classification
   if (status === 401 || status === 403) {
     return make('auth', err, { retryable: true, shouldRotate: true, backoffMs: 0 });
   }
 
   if (status === 402) {
-    // Disambiguate billing vs temporary quota
     const isTempQuota = RATE_LIMIT_PATTERNS.some(p => msg.includes(p));
     if (isTempQuota) {
       return make('rate_limit', err, { retryable: true, shouldRotate: true, backoffMs: 5_000 });
@@ -136,7 +136,6 @@ export function classifyApiError(error: unknown): ClassifiedError {
   }
 
   if (status === 400) {
-    // 400 could be context overflow disguised as a bad request
     if (CONTEXT_OVERFLOW_PATTERNS.some(p => msg.includes(p))) {
       return make('context_overflow', err, { retryable: true, shouldCompress: true, backoffMs: 0 });
     }
@@ -151,7 +150,7 @@ export function classifyApiError(error: unknown): ClassifiedError {
     return make('overloaded', err, { retryable: true, backoffMs: 5_000 });
   }
 
-  // ── 2. Pattern-based classification (no clear status) ─────────────
+  // Heuristic string pattern classification
   if (CONTEXT_OVERFLOW_PATTERNS.some(p => msg.includes(p))) {
     return make('context_overflow', err, { retryable: true, shouldCompress: true, backoffMs: 0 });
   }
@@ -168,20 +167,22 @@ export function classifyApiError(error: unknown): ClassifiedError {
     return make('timeout', err, { retryable: true, backoffMs: 2_000 });
   }
 
-  // ── 3. Fallback ───────────────────────────────────────────────────
+  // Fallback scenario
   return make('unknown', err, { retryable: true, backoffMs: 3_000 });
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
+/**
+ * Intelligently extracts the HTTP status code from polymorphic error payloads.
+ *
+ * @param err - The Error object to inspect.
+ * @returns The integer status code, or null if no mapping exists.
+ */
 function extractStatus(err: Error): number | null {
-  // 1. SDK error objects (Gemini ApiError, etc.) have a .status property
   const anyErr = err as unknown as Record<string, unknown>;
   if (typeof anyErr.status === 'number') return anyErr.status;
   if (typeof anyErr.statusCode === 'number') return anyErr.statusCode;
   if (typeof anyErr.httpStatus === 'number') return anyErr.httpStatus;
 
-  // 2. Regex fallback: match "(429)", "status 429", "error 429", "HTTP 429"
   const msg = err.message.toLowerCase();
   const m = msg.match(/(?:status|error|http)?\s*\(?(\d{3})\)?/);
   return m ? parseInt(m[1], 10) : null;
@@ -195,6 +196,9 @@ interface MakeOpts {
   backoffMs?: number;
 }
 
+/**
+ * Helper to standardise the construction of the ClassifiedError object.
+ */
 function make(reason: FailoverReason, original: Error, opts: MakeOpts = {}): ClassifiedError {
   return {
     reason,

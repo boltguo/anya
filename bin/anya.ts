@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * @module bin/anya
+ * @description The main Command Line Interface (CLI) entrypoint for the Anya agent.
+ *
+ * Provides a Commander.js based CLI to initialize the workspace, manage configuration,
+ * start/stop the Telegram gateway, manage cron jobs, and view diagnostics/sessions.
+ */
 
 import { Command } from 'commander';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';

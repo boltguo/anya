@@ -1,17 +1,14 @@
 /**
  * @module config/loader
- * @description Configuration loader with three-layer merge priority.
+ * @description Manages configuration loading, migration, and layered merging.
  *
- * Load order (low → high priority):
- * 1. {@link DEFAULT_CONFIG} — built-in sensible defaults
- * 2. `~/.anya/config.json` — user overrides (auto-migrated from v0.1 → v0.2)
- * 3. Environment variables — `ANYA_GEMINI_API_KEY`, `ANYA_MODEL`, etc.
+ * Implements a three-layer priority system:
+ * 1. Default values (lowest priority, safe fallbacks).
+ * 2. User-defined JSON (`~/.anya/config.json`).
+ * 3. Environment variables (highest priority).
  *
- * The config file is validated via Zod ({@link PartialAnyaConfigSchema}) but
- * validation is advisory — invalid fields are logged and replaced with defaults.
- *
- * @see {@link ./defaults} for the full config shape and defaults
- * @see {@link ./schema} for the Zod validation schema
+ * It also automatically migrates outdated configuration formats and provides Zod-based
+ * advisory validation, emitting warnings rather than hard-failing to preserve agent availability.
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -20,8 +17,13 @@ import { DEFAULT_CONFIG, type AnyaConfig } from './defaults.js';
 import { PartialAnyaConfigSchema } from './schema.js';
 
 /**
- * Deep merge two objects. Source values override target values.
- * Arrays are replaced, not merged.
+ * Deeply merges two objects, recursively copying properties.
+ * Source values override target values. Array properties are completely replaced
+ * rather than appended or concatenated.
+ *
+ * @param {Record<string, any>} target - The base object providing default values.
+ * @param {Record<string, any>} source - The incoming object providing overrides.
+ * @returns {Record<string, any>} A new object containing the merged results.
  */
 function deepMerge(target: Record<string, any>, source: Record<string, any>): Record<string, any> {
   const result = { ...target };
@@ -49,8 +51,11 @@ function deepMerge(target: Record<string, any>, source: Record<string, any>): Re
 }
 
 /**
- * Apply environment variable overrides.
- * Convention: ANYA_<SECTION>_<KEY> in uppercase.
+ * Mutates the configuration object by applying specific environment variable overrides.
+ * Expected convention is `ANYA_<SECTION>_<KEY>` in uppercase.
+ *
+ * @param {AnyaConfig} config - The configuration object to mutate.
+ * @returns {AnyaConfig} The mutated configuration object.
  */
 function applyEnvOverrides(config: AnyaConfig): AnyaConfig {
   const envMap: Record<string, (c: AnyaConfig, v: string) => void> = {
@@ -70,7 +75,11 @@ function applyEnvOverrides(config: AnyaConfig): AnyaConfig {
 }
 
 /**
- * Migrate old config formats to v0.4.
+ * Migrates a raw, potentially outdated configuration object to the latest schema version (v0.4.0).
+ * Cleans up deprecated sections and automatically writes the migrated format back to disk.
+ *
+ * @param {Record<string, any>} raw - The raw JSON configuration read from disk.
+ * @returns {Record<string, any>} The migrated configuration object.
  */
 function migrateConfig(raw: Record<string, any>): Record<string, any> {
   const migrated = { ...raw };
@@ -128,17 +137,18 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
   return migrated;
 }
 
-// Singleton config instance
+/**
+ * Singleton configuration instance.
+ * @type {AnyaConfig | null}
+ */
 let _config: AnyaConfig | null = null;
 
 /**
- * Load configuration from ~/.anya/config.json,
- * merge with defaults, and apply env overrides.
+ * Reads, validates, and builds the final configuration object.
+ * Follows the priority order: Built-in Defaults < File Configuration < Environment Variables.
+ * Automatically logs validation warnings for schema mismatches.
  *
- * Priority (low to high):
- * 1. Built-in defaults
- * 2. config.json (auto-migrated from v0.1 if needed)
- * 3. Environment variables
+ * @returns {AnyaConfig} The finalized, active application configuration.
  */
 export function loadConfig(): AnyaConfig {
   let fileConfig: Partial<AnyaConfig> = {};
@@ -174,7 +184,9 @@ export function loadConfig(): AnyaConfig {
 }
 
 /**
- * Get the current config (loads if not yet loaded).
+ * Retrieves the current configuration singleton, lazily loading it if necessary.
+ *
+ * @returns {AnyaConfig} The active application configuration.
  */
 export function getConfig(): AnyaConfig {
   if (!_config) {
@@ -184,7 +196,11 @@ export function getConfig(): AnyaConfig {
 }
 
 /**
- * Save the current config to disk.
+ * Saves the provided configuration, or the current active configuration, to the filesystem.
+ *
+ * @param {AnyaConfig} [config] - Optional configuration object to save. Defaults to active configuration.
+ * @returns {void}
+ * @throws {Error} Throws if attempting to save before a config has been loaded or created.
  */
 export function saveConfig(config?: AnyaConfig): void {
   const toSave = config || _config;
@@ -197,9 +213,11 @@ export function saveConfig(config?: AnyaConfig): void {
 }
 
 /**
- * Persist a mutated config object to disk (best-effort).
- * Used by tools to save 'always' approval decisions across restarts.
- * Non-fatal on failure — the in-memory state still applies this session.
+ * Performs a best-effort persistence of a mutated configuration object.
+ * Designed to silently fail if filesystem access is denied, allowing in-memory state to persist.
+ *
+ * @param {AnyaConfig} config - The configuration object to write to disk.
+ * @returns {void}
  */
 export function persistConfig(config: AnyaConfig): void {
   try {
@@ -210,7 +228,9 @@ export function persistConfig(config: AnyaConfig): void {
 }
 
 /**
- * Reset the config singleton (for testing).
+ * Nullifies the configuration singleton instance, primarily used for test isolation.
+ *
+ * @returns {void}
  */
 export function resetConfig(): void {
   _config = null;

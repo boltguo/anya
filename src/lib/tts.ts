@@ -1,13 +1,16 @@
 /**
  * @module lib/tts
- * @description Text-to-Speech service using Azure Cognitive Services REST API.
+ * @description Text-to-Speech (TTS) synthesizer using Azure Cognitive Services.
  *
- * Features:
- *   - Azure Neural voices (100+ voices, 40+ languages)
- *   - Full SSML: <phoneme>, <emphasis>, <break>, <lang>, prosody
- *   - Direct OGG Opus output for Telegram (no ffmpeg needed)
+ * Key Capabilities:
+ *   - Provisions Azure Neural voices (supports 100+ voices, 40+ language datasets).
+ *   - Exposes comprehensive Speech Synthesis Markup Language (SSML) support:
+ *     `<phoneme>`, `<emphasis>`, `<break>`, `<lang>`, and deep prosody formatting.
+ *   - Yields direct OGG Opus byte blobs optimized precisely for Telegram native
+ *     Voice Note protocols (bypassing local FFmpeg encoding steps).
  *
- * Configuration: config.tts { voice, rate }, config.azure { speech_key, speech_region }
+ * Dependencies: Access requires valid Azure `speech_key` and `speech_region`
+ * in the active application configuration.
  */
 
 import * as fs from 'node:fs';
@@ -19,34 +22,52 @@ import type { AnyaConfig } from '../config/defaults.js';
 
 // ── Defaults ─────────────────────────────────────────────────────────────────
 
+/** Standard fallback voice model */
 const DEFAULT_VOICE = 'en-US-AriaNeural';
+
+/** Standard speaking rate modification (neutral) */
 const DEFAULT_RATE = '+0%';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+/**
+ * Optional override configuration for TTS generation execution.
+ */
 export interface TtsOptions {
-  /** Voice name (e.g. "en-US-AriaNeural", "zh-CN-XiaoxiaoNeural") */
+  /** Target model name string (e.g. "en-US-AriaNeural", "zh-CN-XiaoxiaoNeural"). */
   voice?: string;
-  /** Speaking rate (e.g. "+20%", "-10%") */
+  /** Relative percentage adjustment to default utterance speed (e.g. "+20%", "-10%"). */
   rate?: string;
-  /** Output format: 'opus' for Telegram voice, 'mp3' for general */
+  /** Encoding parameter: 'opus' explicitly constructs a Telegram voice note, 'mp3' for generic. */
   format?: 'opus' | 'mp3';
-  /** Raw SSML body. If provided, text/voice/rate are ignored. */
+  /** Unescaped SSML document string. Overrides default plaintext builder if passed. */
   ssml?: string;
 }
 
+/**
+ * Encapsulated return properties for generation completion or failure.
+ */
 export interface TtsResult {
   success: boolean;
   filePath?: string;
   error?: string;
-  /** Duration in seconds (approximate, from file size) */
+  /** Estimated playback duration rounded to seconds. */
   durationSec?: number;
 }
 
 // ── Main Entry Point ─────────────────────────────────────────────────────────
 
 /**
- * Generate speech audio from text via Azure TTS REST API.
+ * Initiates the synthesis of audible speech from textual inputs by querying
+ * the Azure REST API endpoint.
+ *
+ * Converts plain text into SSML envelopes internally to satisfy Azure Neural constraints.
+ * Audio is serialized to persistent storage and mapped back via a strict file path output.
+ *
+ * @param {string} text - The raw character string for verbal synthesis.
+ * @param {AnyaConfig} config - Operational config (reads `azure` token and `tts` defaults).
+ * @param {TtsOptions} [opts] - Request-specific playback parameters.
+ * @returns {Promise<TtsResult>} The state result including error mapping and file pointers.
  */
 export async function textToSpeech(
   text: string,

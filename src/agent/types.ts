@@ -2,29 +2,31 @@
  * @module agent/types
  * @description Core type definitions for the Anya Agent framework.
  *
- * This module defines the foundational interfaces used throughout the agent:
+ * Defines the foundational interfaces used throughout the agent:
  * - Message format for conversation history
  * - LLM provider response structure
  * - Tool definition and execution context
- * - Platform adapter interface (Telegram) */
+ * - Platform adapter interface (Telegram, CLI, etc.)
+ */
 
 // ── Conversation History ─────────────────────────────────────────────────────
 
 /**
- * An attached file (image) for multimodal input.
+ * Represents an attached file (e.g., an image) for multimodal input.
  *
- * Transient — carried through the ReAct loop but never persisted to SQLite.
- * Before saving messages, the Agent degrades file-bearing messages to plain text.
+ * This is transient data carried through the ReAct loop but never persisted
+ * to SQLite. Before saving messages, the Agent degrades file-bearing messages
+ * to plain text.
  */
 export interface MessageFile {
   /** Absolute path to the file on disk. */
   path: string;
-  /** MIME type (e.g., 'image/jpeg'). */
+  /** MIME type of the file (e.g., 'image/jpeg'). */
   mimeType: string;
 }
 
 /**
- * A single message in the conversation history.
+ * Represents a single message in the conversation history.
  *
  * Messages are persisted to the session database and replayed on each
  * LLM call. The `role` field determines how the message is interpreted
@@ -35,20 +37,20 @@ export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool';
   /** Text content of the message. Optional for tool-call-only assistant turns. */
   content?: string;
-  /** Attached files (images) for native multimodal input. Transient — never persisted. */
+  /** Attached files for native multimodal input. Transient and never persisted. */
   files?: MessageFile[];
-  /** Tool calls requested by the assistant (present when role='assistant'). */
+  /** Tool calls requested by the assistant (present when role is 'assistant'). */
   toolCalls?: ToolCall[];
-  /** ID linking this tool result to the original tool call (present when role='tool'). */
+  /** ID linking this tool result to the original tool call (present when role is 'tool'). */
   toolCallId?: string;
-  /** Name of the tool that produced this result (present when role='tool'). */
+  /** Name of the tool that produced this result (present when role is 'tool'). */
   toolName?: string;
-  /** Provider-native response parts preserved for replay/debugging. */
+  /** Provider-native response parts preserved for replay and debugging. */
   _rawParts?: unknown;
 }
 
 /**
- * A tool call requested by the LLM.
+ * Represents a tool call requested by the LLM.
  *
  * Each tool call has a unique ID (generated at parse time) used to
  * correlate tool results back to the originating call.
@@ -62,22 +64,23 @@ export interface ToolCall {
   args: Record<string, unknown>;
 }
 
-
 /**
- * Structured result from {@link dispatch}.
+ * Represents the structured result from a tool dispatch operation.
  *
- * Replaces the old convention of detecting errors via string prefix
- * (`startsWith('Error')`) with an explicit boolean flag.
+ * Uses an explicit boolean flag to denote errors, replacing older string
+ * prefix conventions.
  */
 export interface ToolDispatchResult {
+  /** The string content returned by the tool execution. */
   content: string;
+  /** True if the tool execution resulted in an error. */
   isError: boolean;
 }
 
 // ── LLM Provider ─────────────────────────────────────────────────────────────
 
 /**
- * Response from an LLM provider's chat completion call.
+ * Represents a response from an LLM provider's chat completion call.
  *
  * A response can contain text content, tool calls, or both.
  * Usage metadata is included for cost tracking and monitoring.
@@ -87,7 +90,6 @@ export interface LLMResponse {
   content?: string;
   /** Tool calls the model wants to execute. */
   toolCalls?: ToolCall[];
-
   /** Token usage statistics for this API call. */
   usage?: {
     /** Total input tokens (includes cached). */
@@ -96,34 +98,40 @@ export interface LLMResponse {
     completionTokens: number;
     /** Sum of all token types. */
     totalTokens: number;
-    /** Tokens served from implicit context cache (90% cheaper). */
+    /** Tokens served from implicit context cache (usually cheaper). */
     cachedTokens?: number;
     /** Reasoning/thinking tokens when the provider reports them. */
     thoughtsTokens?: number;
   };
-  /** Provider-native response parts preserved for replay/debugging. */
+  /** Provider-native response parts preserved for replay or debugging. */
   rawModelParts?: unknown;
-  /** API call duration in milliseconds (set by the provider). */
+  /** API call duration in milliseconds as reported by the provider. */
   durationMs?: number;
 }
 
+/**
+ * Additional runtime options for the LLM chat completion call.
+ */
 export interface ChatOptions {
-  /** Session ID for prompt caching. */
+  /** Session ID used for prompt caching and tracing. */
   sessionId?: string;
 }
 
+/**
+ * Defines the standard interface for all LLM providers (e.g., OpenAI, Gemini).
+ */
 export interface LLMProvider {
-  /** Provider identifier (e.g., 'openai', 'gemini'). */
+  /** The unique identifier for the provider (e.g., 'openai', 'gemini'). */
   readonly name: string;
 
   /**
-   * Execute a chat completion request.
+   * Executes a chat completion request against the LLM provider.
    *
    * @param messages - Full conversation history.
-   * @param tools - Available tools the model can call.
-   * @param config - Global agent configuration.
-   * @param options - Additional runtime options (e.g., caching).
-   * @returns Model response with tokens usage.
+   * @param tools - Available tools the model is allowed to call.
+   * @param config - Global agent configuration settings.
+   * @param options - Additional runtime options for the request.
+   * @returns A promise resolving to the model's response including token usage.
    */
   chat(
     messages: Message[],
@@ -136,48 +144,59 @@ export interface LLMProvider {
 // ── Platform Adapter ─────────────────────────────────────────────────────────
 
 /**
- * Platform adapter interface.
+ * Defines the platform adapter interface for user interaction.
  *
- * The Agent is platform-agnostic — it communicates with the user exclusively
- * through this interface. Each platform provides
- * provides its own implementation.
- *
- * @example
- * ```typescript
- * class MyAdapter implements Adapter {
- *   async reply(content: string) { console.log(content); }
- *   async requestApproval(desc: string) { return 'allow'; }
- * }
- * ```
+ * The Agent remains platform-agnostic by communicating exclusively through
+ * this interface. Each target platform (e.g., Telegram, CLI) must implement
+ * its own adapter.
  */
 export interface Adapter {
-  /** Platform identifier for runtime branching (e.g. 'telegram', 'cron', 'cli'). */
+  /** Platform identifier used for runtime branching (e.g., 'telegram', 'cli'). */
   readonly platform: string;
 
-  /** Send a text response to the user. */
+  /**
+   * Sends a text response to the user.
+   *
+   * @param content - The text message to send.
+   * @returns A promise that resolves when the message is sent.
+   */
   reply(content: string): Promise<void>;
 
   /**
-   * Display a tool call notification to the user (optional).
-   * Used by UIs that show real-time tool execution feedback.
+   * Displays a tool call notification to the user.
+   *
+   * Optional method used by UIs that provide real-time tool execution feedback.
+   *
+   * @param toolName - The name of the tool being called.
+   * @param args - The arguments passed to the tool.
    */
   showToolCall?(toolName: string, args: Record<string, unknown>): void;
 
   /**
-   * Display a tool result to the user (optional).
-   * Used by UIs that show tool execution feedback.
+   * Displays the result of a tool execution to the user.
+   *
+   * Optional method used by UIs that show tool execution outcomes.
+   *
+   * @param toolName - The name of the executed tool.
+   * @param result - The string output or error message from the tool.
+   * @param isError - Boolean indicating if the execution failed.
    */
   showToolResult?(toolName: string, result: string, isError: boolean): void;
 
   /**
-   * Request user approval for a sensitive operation.
-   * @returns 'allow' for one-time approval, 'deny' to refuse, 'always' to whitelist.
+   * Requests user approval for a sensitive operation.
+   *
+   * @param description - Detailed description of the operation needing approval.
+   * @returns A promise resolving to 'allow', 'deny', or 'always'.
    */
   requestApproval(description: string): Promise<'allow' | 'deny' | 'always'>;
 
   /**
-   * Ask the user to pick from a set of choices via native UI.
-   * On Telegram this renders as inline keyboard buttons.
+   * Prompts the user to pick from a set of choices via the native UI.
+   *
+   * @param description - The prompt describing what the user is choosing.
+   * @param choices - An array of string options to present to the user.
+   * @returns A promise resolving to the string choice selected by the user.
    */
   requestChoice?(description: string, choices: string[]): Promise<string>;
 }
@@ -187,8 +206,8 @@ export interface Adapter {
 /**
  * JSON Schema definition for a tool's input parameters.
  *
- * Follows the OpenAPI/JSON Schema specification subset supported by
- * the LLM provider's function calling API.
+ * Adheres to the OpenAPI/JSON Schema subset supported by standard LLM
+ * function calling APIs.
  */
 export interface ToolParameterSchema {
   type: 'object';
@@ -203,35 +222,41 @@ export interface ToolParameterSchema {
 }
 
 /**
- * Definition of a tool that the agent can use.
+ * Defines a tool that the agent can execute.
  *
- * Tools are registered at import time via {@link register} and discovered
- * by the agent through {@link getToolSchemas}.
+ * Tools are registered at import time and discovered dynamically by the
+ * agent during the ReAct loop.
  */
 export interface ToolDefinition {
-  /** Unique tool name (used in LLM function declarations). */
+  /** Unique name of the tool, used in LLM function declarations. */
   name: string;
-  /** Human-readable description (sent to LLM for tool selection). */
+  /** Human-readable description guiding the LLM on when to use this tool. */
   description: string;
-  /** JSON Schema for the tool's input parameters. */
+  /** JSON Schema defining the input parameters for the tool. */
   parameters: ToolParameterSchema;
-  /** Per-tool timeout in milliseconds. Defaults to 30_000. */
+  /** Maximum execution time in milliseconds before the tool is aborted. Defaults to 30,000. */
   timeoutMs?: number;
-  /** Execute the tool and return serialized result. */
+  /**
+   * Executes the tool's primary logic.
+   *
+   * @param args - The structured arguments provided by the LLM.
+   * @param context - The execution context, providing access to the adapter and config.
+   * @returns A promise resolving to a serialized string result.
+   */
   execute: (args: Record<string, unknown>, context: ToolContext) => Promise<string>;
 }
 
 /**
- * Context passed to tool execution functions.
+ * Provides context passed to tool execution functions.
  *
- * Provides access to the platform adapter and agent configuration,
- * allowing tools to interact with the user and access settings.
+ * Grants tools access to the platform adapter, agent configuration, and
+ * session details required for their operation.
  */
 export interface ToolContext {
-  /** The active platform adapter for user interaction. */
+  /** The active platform adapter for interacting with the user. */
   adapter: Adapter;
-  /** The current agent configuration. */
+  /** The current agent configuration payload. */
   config: import('../config/defaults.js').AnyaConfig;
-  /** Session ID for log tracing. */
+  /** The active session ID, useful for log tracing and persistence. */
   sessionId?: string;
 }

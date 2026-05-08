@@ -1,17 +1,15 @@
 /**
  * @module tools/pronAssess
- * @description Pronunciation assessment tool using Azure Speech Service.
+ * @description Speech evaluation adapter leveraging Azure Cognitive Services.
  *
- * Sends a voice recording to Azure's Pronunciation Assessment API and
- * returns detailed scoring: overall accuracy, fluency, completeness,
- * prosody, and per-word breakdown with error types.
+ * Submits raw inbound OGG/Opus or WAV voice binaries directly to the Azure
+ * Pronunciation Assessment API. Resolves detailed telemetry including overall
+ * heuristic accuracy, fluency constraints, prosodic alignment, and mapped per-word
+ * error typing (omissions, insertions, mispronunciations).
  *
- * Supports two modes:
- * - **Scripted**: User reads a given reference text — evaluates accuracy.
- * - **Unscripted**: Free speech — evaluates general pronunciation quality.
- *
- * Voice files are typically OGG/Opus from Telegram. Azure Speech REST API
- * accepts OGG Opus natively.
+ * Architecture explicitly supports dual-mode context:
+ * - Scripted   : Validates discrete phoneme precision against a rigid reference string.
+ * - Unscripted : Analyzes broad intelligibility and fluent cadence of freestyle inputs.
  */
 
 import { readFileSync } from 'node:fs';

@@ -1,9 +1,13 @@
 /**
  * @module lib/scheduler
- * @description JSON-backed cron scheduler for unattended Anya jobs.
+ * @description JSON-backed cron execution engine for unattended background jobs.
  *
- * Jobs live in ~/.anya/cron/jobs.json. The scheduler can be driven by the
- * Telegram gateway background loop or manually via `anya cron tick`.
+ * Persists job definitions statefully within `~/.anya/cron/jobs.json`.
+ * The execution ticker can be driven by a continuous daemon background loop 
+ * (e.g., via the Telegram gateway) or invoked on-demand via the CLI (`anya cron tick`).
+ *
+ * Implements filesystem-based mutual exclusion locking (`.tick.lock`) to prevent
+ * concurrent ticks and race conditions across disparate runtime processes.
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, statSync } from 'node:fs';
@@ -17,11 +21,17 @@ import { ensureDirectories, CRON_DIR, CRON_JOBS_PATH, CRON_OUTPUT_DIR } from './
 import { agentLogger } from './logger.js';
 import { registerAllTools } from '../tools/registry.js';
 
+/**
+ * Union type representing supported scheduling variants.
+ */
 export type CronSchedule =
   | { kind: 'once'; run_at: string; display: string }
   | { kind: 'interval'; minutes: number; display: string }
   | { kind: 'cron'; expr: string; display: string };
 
+/**
+ * Persisted state representation for a single automated job.
+ */
 export interface CronJob {
   id: string;
   name: string;

@@ -1,19 +1,19 @@
 /**
  * @module lib/usage
- * @description Usage tracking for all metered services.
+ * @description Centralized analytics and cost-tracking engine for third-party API dependencies.
  *
- * Tracks usage in SQLite (state.db → usage_events table):
- * - LLM: calls, input/output/cached tokens
- * - TTS (Azure): calls, billable characters, audio duration
- * - STT (Groq): calls, audio duration
- * - Pronunciation Assessment (Azure): calls, audio duration
- * - Web Search (Tavily): calls
- * - Vision (Gemini): calls
+ * Persists high-resolution usage metrics directly to SQLite (`state.db → usage_events`),
+ * capturing granular invocation and throughput data:
+ * - LLM: Network calls, discrete input/output, and cache token distributions.
+ * - TTS (Azure): Synthesis requests, billable SSML character volume, output duration.
+ * - STT (Groq): Transcription requests, inbound audio duration.
+ * - Pronunciation Assessment (Azure): Evaluation requests, processed duration.
+ * - Web Search (Tavily) & Vision (Gemini): Discrete API invocations.
  *
- * All writes are single atomic INSERTs — no read-modify-write, no file
- * contention. Reads aggregate with SQL SUM/GROUP BY on demand.
- *
- * Azure TTS SSML billing: only text content is counted, XML tags are excluded.
+ * Implements strict append-only telemetry via single atomic `INSERT` operations,
+ * guaranteeing zero concurrency collisions across disparate application services
+ * (e.g., UI vs Gateway daemons). Metrics are deterministically rolled up via 
+ * `SUM/GROUP BY` read projections.
  */
 
 import { getDb } from '../storage/db.js';

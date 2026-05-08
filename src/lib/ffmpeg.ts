@@ -1,11 +1,12 @@
 /**
  * @module lib/ffmpeg
- * @description Shared FFmpeg audio conversion utilities.
+ * @description Centralized FFmpeg process execution and audio formatting utilities.
  *
- * Currently used for:
- * - Pronunciation Assessment: ogg → wav (Azure Speech works best with WAV)
+ * Facilitates audio conversions, primarily:
+ * - OGG/Opus → WAV (Azure Speech Pronunciation Assessment performs best with uncompressed WAV)
  *
- * Automatically resolves ffmpeg from multiple PATH locations.
+ * Implements fallback strategies to automatically resolve the FFmpeg binary
+ * across different operating systems and system PATH configurations.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -14,20 +15,26 @@ import { agentLogger } from './logger.js';
 
 // ── FFmpeg Path Resolution ───────────────────────────────────────────────────
 
-/** Cached ffmpeg path (null = not found, undefined = not yet checked) */
+/** 
+ * Internal cache for the resolved FFmpeg binary path.
+ * - `null`: Checked, but not found.
+ * - `undefined`: Unchecked.
+ */
 let _ffmpegPath: string | null | undefined;
 
 /**
- * Find the ffmpeg binary, searching common macOS/Linux paths.
+ * Locates the FFmpeg binary by probing common filesystem locations and inspecting the system PATH.
+ *
+ * @returns {string | null} The absolute path to the FFmpeg executable, or null if not discovered.
  */
 export function getFFmpegPath(): string | null {
   if (_ffmpegPath !== undefined) return _ffmpegPath;
 
-  // Check common locations
+  // Primary inspection locations across diverse environments
   const candidates = [
     '/opt/homebrew/bin/ffmpeg',   // macOS Apple Silicon (Homebrew)
-    '/usr/local/bin/ffmpeg',      // macOS Intel (Homebrew) / Linux
-    '/usr/bin/ffmpeg',            // Linux system install
+    '/usr/local/bin/ffmpeg',      // macOS Intel (Homebrew) / standard Linux
+    '/usr/bin/ffmpeg',            // Native Linux package manager installs
   ];
 
   for (const p of candidates) {
@@ -38,11 +45,12 @@ export function getFFmpegPath(): string | null {
     }
   }
 
-  // Fallback: try PATH via `which` command
+  // Secondary fallback: probe utilizing the system 'which' utility
   try {
     const result = execFileSync('which', ['ffmpeg'], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
+      // Synthesize an enriched PATH accommodating environments where PATH isn't globally exposed
       env: { ...process.env, PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH}` },
     }).trim();
     if (result) {
@@ -50,7 +58,9 @@ export function getFFmpegPath(): string | null {
       agentLogger.info({ msg: 'ffmpeg_found', path: result });
       return result;
     }
-  } catch { /* not found */ }
+  } catch {
+    // Binary resolution via 'which' failed
+  }
 
   _ffmpegPath = null;
   agentLogger.warn({ msg: 'ffmpeg_not_found' });
@@ -60,12 +70,12 @@ export function getFFmpegPath(): string | null {
 // ── Conversion Functions ─────────────────────────────────────────────────────
 
 /**
- * Convert OGG/Opus to WAV (for Azure Speech pronunciation assessment).
+ * Transcodes an OGG/Opus audio file into a WAV format.
+ * Target format is specifically strictly constrained to 16kHz mono 16-bit PCM WAV,
+ * satisfying requirements for downstream processing via Azure Speech assessment tools.
  *
- * Output: 16kHz mono 16-bit PCM WAV.
- *
- * @param inputPath - Path to input .ogg file
- * @returns Path to .wav file, or null if conversion failed
+ * @param {string} inputPath - The absolute filesystem path to the source audio file.
+ * @returns {string | null} The absolute path to the resulting WAV file, or null upon failure.
  */
 export function convertToWav(inputPath: string): string | null {
   const ffmpeg = getFFmpegPath();
@@ -75,6 +85,7 @@ export function convertToWav(inputPath: string): string | null {
   if (inputPath === wavPath) return inputPath;
 
   try {
+    // Block thread execution synchronously as files are small and conversion is fast
     execFileSync(ffmpeg, [
       '-y',
       '-i', inputPath,

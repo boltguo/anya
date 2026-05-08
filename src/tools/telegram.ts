@@ -1,13 +1,14 @@
 /**
- * @module tools/telegramTools
- * @description Unified Telegram interaction tool for the Anya Agent.
+ * @module tools/telegram
+ * @description Unified Telegram messaging interaction controller.
  *
- * Consolidates all Telegram API interactions into a single `tg_msg` tool with
- * a `type` parameter, reducing LLM function declaration overhead from
- * many separate tool schemas to just 1 (~1300 prompt tokens saved per call).
+ * Consolidates all Telegram Bot API outbound endpoints into a single polymorphic `tg_msg` tool.
+ * This architectural choice significantly reduces LLM function declaration overhead, 
+ * saving ~1300 prompt tokens per inference call relative to discrete tool schemas.
  *
- * Available types: text, audio, voice, document, keyboard, quiz,
- * force_reply, edit, delete, react, action.
+ * Supported multimodal payloads:
+ * - `text`, `audio`, `voice`, `document`, `keyboard`, `quiz`
+ * - `force_reply`, `edit`, `delete`, `react`, `action`
  */
 
 import { register } from './registry.js';
@@ -17,8 +18,11 @@ import { TelegramSessionAdapter } from '../adapters/telegram.js';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Extract the TelegramSessionAdapter from the tool context.
- * @throws {Error} If the current session is not running via Telegram.
+ * Extracts and validates the TelegramSessionAdapter from the generic tool context.
+ *
+ * @param {ToolContext} context - The active dependency container.
+ * @returns {TelegramSessionAdapter} The typed adapter instance.
+ * @throws {Error} If invoked outside a Telegram-backed session.
  */
 function getTgAdapter(context: ToolContext): TelegramSessionAdapter {
   if (!(context.adapter instanceof TelegramSessionAdapter)) {

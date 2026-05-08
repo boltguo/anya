@@ -1,10 +1,12 @@
 /**
  * @module tools/persist
- * @description Typed English study-data gateway (thin dispatcher).
+ * @description Thin routing gateway orchestrating type-safe SQL persistence operations.
  *
- * All English learning data goes through this tool instead of raw SQL from
- * skills. Domain logic lives in `src/domain/` modules; this file only handles
- * tool registration and action routing.
+ * Decouples raw SQLite data mutation boundaries (`tools/db`) from structured 
+ * English learning domain logic contexts. Prevents arbitrary skills from executing
+ * malformed or unauthorized DML schemas against the critical `study.db` state.
+ *
+ * Invokes deeply isolated logic functions mapped from `src/domain/*`.
  */
 
 import { register } from './registry.js';

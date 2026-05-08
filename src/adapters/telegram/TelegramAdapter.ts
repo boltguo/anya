@@ -1,15 +1,16 @@
 /**
  * @module adapters/telegram/TelegramAdapter
- * @description Top-level Telegram bot manager.
+ * @description Top-level Telegram bot manager and lifecycle controller.
  *
- * Owns the grammy {@link Bot} instance and long-polling lifecycle, registers
- * commands and message/callback handlers, and spawns one
- * {@link TelegramSessionAdapter} per incoming turn.
+ * Owns the Grammy {@link Bot} instance and orchestrates long-polling. It registers
+ * global commands and event handlers, routing incoming messages, voice notes, photos,
+ * and callbacks. For each incoming turn, it spawns a transient {@link TelegramSessionAdapter}.
  *
- * Routing for callback queries is 3-tier:
- *   1. `approval_*` → resolves a pending requestApproval() promise
- *   2. `choice_*`   → resolves a pending requestChoice() promise
- *   3. Other        → feeds `[callback] <data>` into Agent.run() as a new turn
+ * ## Callback Routing Architecture
+ * Callback queries are routed across three tiers:
+ *   1. `approval_*`: Resolves a pending `requestApproval()` promise.
+ *   2. `choice_*`: Resolves a pending `requestChoice()` promise.
+ *   3. Other: Fed into `Agent.run()` as a new turn via the `[callback] <data>` format.
  */
 
 import { Bot, type Context } from 'grammy';
@@ -33,7 +34,16 @@ import { isNavCallback, getNavPage, getMainMenu } from './skillMenu.js';
 import { startScheduler, stopScheduler } from '../../lib/scheduler.js';
 import { markdownToTelegramHtml } from '../../lib/tgFormat.js';
 
-/** Fetch with retry + timeout for Telegram file downloads. */
+/**
+ * Fetches a URL with exponential backoff retry and a timeout.
+ * Used primarily for downloading user-sent files (audio, images) from Telegram.
+ *
+ * @param url - The target URL to fetch.
+ * @param maxAttempts - Maximum number of fetch attempts.
+ * @param timeoutMs - Timeout per attempt in milliseconds.
+ * @returns A Promise resolving to the successful Response object.
+ * @throws If all attempts fail.
+ */
 async function fetchWithRetry(url: string, maxAttempts = 3, timeoutMs = 15_000): Promise<Response> {
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -51,11 +61,11 @@ async function fetchWithRetry(url: string, maxAttempts = 3, timeoutMs = 15_000):
 }
 
 /**
- * TelegramAdapter — the top-level bot manager.
+ * `TelegramAdapter` is the top-level singleton manager for the Telegram bot.
  *
- * Creates the grammy Bot, registers command and message handlers, and
- * manages the long-polling lifecycle. Spawns a fresh {@link TelegramSessionAdapter}
- * for each incoming turn.
+ * It encapsulates the Grammy Bot instance, registers command and event handlers,
+ * manages the serial processing queue per chat, and coordinates the long-polling lifecycle.
+ * It spawns a fresh `TelegramSessionAdapter` for each conversation turn.
  */
 export class TelegramAdapter {
   private bot: Bot;
@@ -65,15 +75,14 @@ export class TelegramAdapter {
   /** Pending choice dialogs, keyed by choice ID. Resolved by callback_query handler. */
   private pendingChoices = new Map<string, PendingChoice>();
   /**
-   * Per-chat serial queue. Two messages in the same chat cannot run
-   * Agent.run concurrently — that would race on the shared tg:<chatId>
-   * history and let status messages collide.
+   * Per-chat serial execution queue.
+   * Guarantees that multiple concurrent messages in the same chat are processed sequentially
+   * to avoid race conditions on the shared chat history (`tg:<chatId>`) and status messages.
    */
   private chatQueue = new Map<number, Promise<void>>();
   /**
-   * Tracks active quiz/polls so we can correlate poll_answer events.
-   * Key = poll_id, Value = { chatId, options, correctIndex }.
-   * Entries auto-expire after 24h to prevent memory leaks.
+   * Tracks active Telegram quizzes/polls to correlate delayed `poll_answer` events.
+   * Keys are `poll_id`, Values map to chat context and correct answer data.
    */
   activePolls = new Map<string, { chatId: number; options: string[]; correctIndex: number }>();
 
@@ -87,9 +96,10 @@ export class TelegramAdapter {
   }
 
   /**
-   * Cancel all pending approvals and choices.
-   * Resolves approvals as 'deny', choices as empty string.
-   * @returns number of cancelled items.
+   * Cancels all pending user dialogs (approvals and choices).
+   * Approvals are forcibly resolved to 'deny', and choices to an empty string.
+   *
+   * @returns The number of cancelled dialogs.
    */
   private cancelPending(): number {
     let count = 0;
@@ -108,9 +118,11 @@ export class TelegramAdapter {
 
 
   /**
-   * Chain `task` onto the serial queue for this chat. Returns immediately;
-   * the task runs after any earlier turn for the same chat finishes.
-   * Errors are logged — they never propagate out, so the queue stays live.
+   * Appends an async task onto the serial execution queue for a specific chat.
+   * Execution happens sequentially; errors are caught and logged without breaking the queue.
+   *
+   * @param chatId - The Telegram chat ID.
+   * @param task - The async function to execute.
    */
   private enqueuePerChat(chatId: number, task: () => Promise<void>): void {
     const prev = this.chatQueue.get(chatId) ?? Promise.resolve();
@@ -125,7 +137,13 @@ export class TelegramAdapter {
     });
   }
 
-  /** Send a proactive message outside a user-triggered Telegram Context. */
+  /**
+   * Dispatches a proactive message to a chat outside of the normal user-triggered request/reply flow.
+   * Commonly used for Cron jobs or delayed system alerts.
+   *
+   * @param chatId - The destination chat ID.
+   * @param text - The Markdown formatted text to send.
+   */
   async sendProactiveMessage(chatId: number, text: string): Promise<void> {
     await this.bot.api.sendMessage(chatId, markdownToTelegramHtml(text), {
       parse_mode: 'HTML',
@@ -136,8 +154,14 @@ export class TelegramAdapter {
   }
 
   /**
-   * Common message-handling pipeline shared by text, voice, and photo handlers.
-   * Extracts: auth → typing → adapter + agent → run → reply → error handling.
+   * Core message-handling pipeline utilized by text, voice, and photo events.
+   * Orchestrates authorization, typing indicators, adapter instantiation, agent invocation,
+   * error handling, and cleanup.
+   *
+   * @param ctx - The Grammy context for the incoming event.
+   * @param input - The extracted text or augmented prompt derived from the event.
+   * @param cleanup - An optional callback fired after processing (e.g., deleting temporary files).
+   * @param files - Optional array of file attachments passed to the Agent.
    */
   private async handleIncoming(
     ctx: Context,
@@ -192,14 +216,14 @@ export class TelegramAdapter {
   }
 
   /**
-   * Initialize bot handlers and start long-polling.
+   * Initializes bot handlers and initiates the long-polling loop.
    *
-   * Handler registration order matters:
-   * 1. Commands (/start, /new, /kill, dynamic skill commands such as /init) — registered first for priority
-   * 2. Text messages
-   * 3. Voice messages (download → STT → agent)
-   * 4. Photo messages (download → agent natively)
-   * 5. Callback queries (approval, choice, or generic keyboard callbacks)
+   * Command registration order is strict:
+   * 1. Global system commands (`/start`, `/kill`) and dynamic skill aliases.
+   * 2. Text message handler.
+   * 3. Voice note handler (incorporating STT).
+   * 4. Photo handler (incorporating Vision API).
+   * 5. Callback query dispatcher.
    */
   async start(): Promise<void> {
     await registerAllTools();
@@ -662,7 +686,9 @@ export class TelegramAdapter {
     });
   }
 
-  /** Gracefully stop the bot's long-polling loop. */
+  /**
+   * Gracefully terminates the Telegram bot's long-polling loop and halts scheduled jobs.
+   */
   stop(): void {
     stopScheduler();
     this.bot.stop();

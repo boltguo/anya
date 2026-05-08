@@ -53,6 +53,13 @@ export function toResponsesInput(messages: Message[]): {
   return { instructions, input };
 }
 
+/**
+ * Transforms internal tool definitions into the schema format required by the Codex Responses API.
+ * Maps the internal tool representations to the structured JSON schema expected for function calling.
+ *
+ * @param tools - An array of internal tool definitions including name, description, and JSON schema parameters.
+ * @returns An array of transformed tool specification objects configured for the Codex endpoint.
+ */
 export function toResponsesTools(
   tools: Array<{ name: string; description: string; parameters: ToolParameterSchema }>,
 ): Array<Record<string, unknown>> {
