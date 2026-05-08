@@ -16,7 +16,7 @@
  * ├─────────────────────────────────────┤
  * │  5. Skills Index — Available skills  │  "What Anya can do"
  * ├─────────────────────────────────────┤
- * │  6. Security — Path rules            │  "What Anya must not do"
+ * │  6. Security — Local boundary        │  "What Anya owns"
  * ├─────────────────────────────────────┤
  * │  7. Platform Capabilities            │  "What tools/media are available"
  * └─────────────────────────────────────┘
@@ -86,10 +86,11 @@ export function buildSystemPrompt(config: AnyaConfig): string {
     sections.push('\n' + skillIndex);
   }
 
-  // ── 6. Security constraints ────────────────────────────────────────
+  // ── 6. Local boundary ──────────────────────────────────────────────
   sections.push('\n## Security');
-  sections.push(`- Your default working directory is ~/.anya/. File operations outside ${config.security.allowed_paths.join(', ')} require user approval.`);
-  sections.push('- Use the database and file tools only for Anya-owned runtime data unless the user explicitly grants broader access.');
+  sections.push(`- Your working boundary is Anya-owned local data: ${config.security.allowed_paths.join(', ')}.`);
+  sections.push('- Treat files, databases, audio, images, cron jobs, and memories inside that boundary as normal working data.');
+  sections.push('- Do not use file or database tools for user projects, system files, or arbitrary external paths unless the user has explicitly reconfigured the allowed paths.');
 
   // ── 7. Platform capabilities ────────────────────────────────────────
   // Note: tg_msg message types and formatting are covered in RULES.md.

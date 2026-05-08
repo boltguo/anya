@@ -19,6 +19,7 @@
  * │   └── cache/                   General cache
  * ├── logs/                        Log files
  * └── run/                         Runtime state (PID files)
+ * └── cron/                        Scheduled jobs and run output
  * ```
  *
  * Override the root with `ANYA_HOME` env var for testing.
@@ -87,6 +88,11 @@ export const IMAGE_RECEIVED_DIR = join(IMAGE_DIR, 'received');
 export const LOGS_DIR = join(ANYA_HOME, 'logs');
 export const RUN_DIR = join(ANYA_HOME, 'run');
 
+// ── Cron ────────────────────────────────────────────────────────────────────
+export const CRON_DIR = join(ANYA_HOME, 'cron');
+export const CRON_JOBS_PATH = join(CRON_DIR, 'jobs.json');
+export const CRON_OUTPUT_DIR = join(CRON_DIR, 'output');
+
 // ── Directory Setup ──────────────────────────────────────────────────────────
 
 /**
@@ -107,6 +113,8 @@ export function ensureDirectories(): void {
     IMAGE_RECEIVED_DIR,
     LOGS_DIR,
     RUN_DIR,
+    CRON_DIR,
+    CRON_OUTPUT_DIR,
   ];
 
   for (const dir of dirs) {

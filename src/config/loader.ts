@@ -112,6 +112,9 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
       migrated.tools.enabled = migrated.tools.enabled
         .filter((t: string) => t !== 'shell' && t !== 'reset_context')
         .map((t: string) => t === 'tg' ? 'tg_msg' : t);
+      if (!migrated.tools.enabled.includes('cron')) {
+        migrated.tools.enabled.push('cron');
+      }
       migrated.tools.enabled = [...new Set(migrated.tools.enabled)];
     }
   }

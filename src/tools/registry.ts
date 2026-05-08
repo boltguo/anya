@@ -35,6 +35,7 @@ export async function registerAllTools(): Promise<void> {
     import('../tools/pronAssess.js'),
     import('../tools/db.js'),
     import('../tools/persist.js'),
+    import('../tools/cron.js'),
   ]);
 }
 

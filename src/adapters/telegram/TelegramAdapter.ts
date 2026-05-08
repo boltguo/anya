@@ -30,6 +30,8 @@ import { TelegramSessionAdapter } from './SessionAdapter.js';
 import type { PendingApproval, PendingChoice } from './types.js';
 import { formatTgError, startTypingIndicator } from './errors.js';
 import { isNavCallback, getNavPage, getMainMenu } from './skillMenu.js';
+import { startScheduler, stopScheduler } from '../../lib/scheduler.js';
+import { markdownToTelegramHtml } from '../../lib/tgFormat.js';
 
 /** Fetch with retry + timeout for Telegram file downloads. */
 async function fetchWithRetry(url: string, maxAttempts = 3, timeoutMs = 15_000): Promise<Response> {
@@ -121,6 +123,16 @@ export class TelegramAdapter {
         this.chatQueue.delete(chatId);
       }
     });
+  }
+
+  /** Send a proactive message outside a user-triggered Telegram Context. */
+  async sendProactiveMessage(chatId: number, text: string): Promise<void> {
+    await this.bot.api.sendMessage(chatId, markdownToTelegramHtml(text), {
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+    }).catch(() => this.bot.api.sendMessage(chatId, text, {
+      link_preview_options: { is_disabled: true },
+    }));
   }
 
   /**
@@ -636,6 +648,12 @@ export class TelegramAdapter {
     agentLogger.info({ msg: 'tg_bot_starting' });
     console.log('[gateway] Telegram bot starting...');
 
+    if (this.config.cron?.enabled) {
+      startScheduler(this.config, {
+        sendProactiveMessage: (chatId, text) => this.sendProactiveMessage(chatId, text),
+      });
+    }
+
     await this.bot.start({
       onStart: (info) => {
         console.log(`[gateway] Bot @${info.username} is running`);
@@ -646,6 +664,7 @@ export class TelegramAdapter {
 
   /** Gracefully stop the bot's long-polling loop. */
   stop(): void {
+    stopScheduler();
     this.bot.stop();
   }
 }

@@ -8,6 +8,7 @@
 
 - [项目定位](#项目定位)
 - [核心架构与设计](#核心架构与设计)
+- [个人助手边界与权限模型](#个人助手边界与权限模型)
 - [Agent 能力](#agent-能力)
 - [Skills 能力](#skills-能力)
 - [快速上手](#快速上手)
@@ -43,6 +44,56 @@ Anya 采用了一个经典的 **ReAct (Reason + Act)** 循环架构，并针对�
 4. **上下文压缩引擎**：借鉴了 Hermes 模型的策略，保护对话头尾，对中间历史进行 LLM 总结压缩，以应对超长会话。
 5. **极致的 Token 优化**：将复杂的 Telegram 交互（文本、音频、键盘等）合并为单一的 `tg_msg` 工具，大幅减少函数声明的 Token 消耗。
 
+## 个人助手边界与权限模型
+
+Anya 的合理安全模型不是“每一步都审批”的企业 Agent，而是一个**单用户、固定能力、固定数据目录的私人英语学习助手**。它默认只能处理自己的数据，能力边界清晰，因此日常使用不需要频繁打断用户确认。
+
+### 设计原则
+
+1. **数据边界固定在 `~/.anya/`**
+   - `state.db`：Agent 会话、消息、工具调用、压缩上下文。
+   - `study.db`：学习证据、练习记录、错因、能力分、词汇、SRS、统计快照。
+   - `memories/*.md`：`SOUL.md`、`RULES.md`、`USER.md`、`MEMORY.md`。
+   - `cron/jobs.json`：定时任务定义。
+   - `data/audio`、`data/images`、`cron/output`：生成的音频、图片和定时任务输出。
+
+2. **工具能力是白名单，不是开放执行环境**
+   - 没有 shell 工具。
+   - 没有任意代码执行工具。
+   - 文件工具受 `security.allowed_paths` 限制。
+   - 学习数据统一走 `persist`，skills 不直接写 `study.db`。
+   - `db` 主要用于诊断；对 `study.db` 的写入被拦截。
+   - Telegram 只服务 `telegram.allowed_user_ids` 中的用户；如果列表为空，表示开发期允许所有人，需要上线前收紧。
+
+3. **审批不是主路径**
+   - 默认配置是 `security.fence_mode = "deny"`，越出 `~/.anya/` 的文件访问直接拒绝。
+   - 旧的 `ask` 模式仍保留，适合开发期临时调试，但不建议作为日常交互方式。
+   - 对私人学习助手来说，更好的体验是“边界内自动执行，边界外直接不做”，而不是反复弹 Allow/Deny。
+
+4. **定时任务也遵守同一边界**
+   - Cron job 存在 `~/.anya/cron/jobs.json`。
+   - Cron 触发时使用独立 session，不复用用户当前聊天上下文。
+   - Cron 运行时会禁用 `cron`、`tg_msg`、`clarify` 这类不适合无人值守循环调用的工具，生成结果后由外层调度器统一推送。
+   - Cron 输出写入 `~/.anya/cron/output/`，方便追踪和排错。
+
+### 推荐配置
+
+生产或长期自用时，建议保持：
+
+```json
+{
+  "security": {
+    "allowed_paths": ["~/.anya/"],
+    "fence_mode": "deny"
+  },
+  "telegram": {
+    "allowed_user_ids": [123456789]
+  }
+}
+```
+
+只有在你明确希望 Anya 读写其他目录时，才扩展 `security.allowed_paths`。不建议把项目目录、Home 目录或系统目录整体加入白名单。
+
 ## Agent 能力
 
 Anya 的 agent core 是通用运行时，不把英语学习业务写死在核心代码里。它负责稳定地接收输入、组织上下文、调用模型、执行工具、记录会话，并把具体学习流程交给 skills。
@@ -72,6 +123,7 @@ Anya 的 agent core 是通用运行时，不把英语学习业务写死在核心
 | `pron_assess` | 对用户语音做发音评分。 |
 | `web_search` | 搜索文章、新闻和真实输入材料。 |
 | `clarify` | 在需要选择时向用户发起澄清。 |
+| `cron` | 管理定时任务，支持创建、暂停、恢复、删除、立即运行和列表查询。 |
 
 ## Skills 能力
 
@@ -146,15 +198,17 @@ anya init
 
 编辑 `~/.anya/config.json`，最关键的几项：
 
-- `gemini.api_key` / `openai.api_key` —— 主 LLM 驱动
+- Codex OAuth —— 主 LLM 驱动
+- `gemini.api_key` —— 图片/视觉能力
 - `azure.speech_key` + `azure.speech_region` —— TTS 与发音评分
 - `stt.groq_api_key` —— 语音识别 (可选)
 - `telegram.bot_token` + `telegram.allowed_user_ids` —— Telegram Bot 接入
+- `cron.enabled` + `cron.default_chat_id` —— 定时任务
 
 可以使用 CLI 直接修改：
 
 ```bash
-anya config set telegram.bot_token 12345:ABC...
+anya config
 anya doctor              # 体检：检查环境和 API key 状态
 ```
 
@@ -164,6 +218,32 @@ anya doctor              # 体检：检查环境和 API key 状态
 # 启动 Telegram Bot
 anya gateway start
 ```
+
+### 定时任务
+
+Cron 是给私人助手用的轻量定时系统，不依赖系统 crontab。它通过 `anya gateway start` 启动后台 tick，默认每 60 秒检查一次 `~/.anya/cron/jobs.json`。
+
+常用命令：
+
+```bash
+anya cron status
+anya cron enable
+anya cron set-chat 123456789
+anya cron create --name "morning vocab" --schedule "0 8 * * *" --prompt "提醒我复习今天到期的单词"
+anya cron list
+anya cron pause <job_id>
+anya cron resume <job_id>
+anya cron run <job_id>
+```
+
+支持的 schedule：
+
+- `30m`、`2h`、`1d`：一次性延迟任务。
+- `every 30m`、`every 2h`：固定间隔任务。
+- `0 8 * * *`：标准 cron 表达式。
+- ISO 时间戳：例如 `2026-05-09T08:00:00+08:00`。
+
+Cron 适合做每日复习、周复盘、学习提醒、材料准备等固定学习动作。它不适合执行需要用户当场澄清的问题；这种场景应该让任务发出简短提醒，再回到正常 Telegram 对话里完成。
 
 ## 外部服务与 API Key
 

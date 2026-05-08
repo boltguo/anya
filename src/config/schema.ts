@@ -34,6 +34,13 @@ export const PartialAnyaConfigSchema = z.object({
     bot_token: z.string().optional(),
     allowed_user_ids: z.array(z.number()).optional(),
   }).optional(),
+  cron: z.object({
+    enabled: z.boolean().optional(),
+    tick_seconds: z.number().optional(),
+    timezone: z.string().optional(),
+    default_platform: z.literal('telegram').optional(),
+    default_chat_id: z.string().optional(),
+  }).optional(),
   stt: z.object({
     groq_api_key: z.string().optional(),
     model: z.string().optional(),

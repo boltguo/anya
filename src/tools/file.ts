@@ -2,9 +2,10 @@
  * @module tools/fileTools
  * @description File system tools: read_file, write_file, list_dir.
  *
- * All file operations are sandboxed by {@link isPathAllowed} — access outside
- * configured allowed_paths requires user approval via the adapter. The "always"
- * approval option persists the path to the config for future sessions.
+ * All file operations are sandboxed by {@link isPathAllowed}. The normal Anya
+ * setup keeps file access inside ~/.anya and denies everything else. The older
+ * interactive approval path is still supported only when fence_mode is set to
+ * "ask" in config.
  */
 
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';

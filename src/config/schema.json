@@ -144,6 +144,39 @@
         }
       }
     },
+    "cron": {
+      "type": "object",
+      "description": "Scheduled task system. Jobs are stored in ~/.anya/cron/jobs.json and can be managed via CLI or the cron tool.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Start the background scheduler with the Telegram gateway.",
+          "default": false
+        },
+        "tick_seconds": {
+          "type": "integer",
+          "description": "Scheduler polling interval in seconds.",
+          "default": 60,
+          "minimum": 10
+        },
+        "timezone": {
+          "type": "string",
+          "description": "IANA timezone used to compute cron expressions.",
+          "default": "UTC"
+        },
+        "default_platform": {
+          "type": "string",
+          "enum": ["telegram"],
+          "description": "Default proactive delivery platform.",
+          "default": "telegram"
+        },
+        "default_chat_id": {
+          "type": "string",
+          "description": "Default Telegram chat ID for cron jobs created outside a chat context.",
+          "default": ""
+        }
+      }
+    },
     "ui": {
       "type": "object",
       "description": "UI display settings.",
