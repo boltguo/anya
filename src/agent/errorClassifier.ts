@@ -3,9 +3,15 @@
  * @description Structured API-error classification for provider calls.
  *
  * Converts raw provider errors into a {@link ClassifiedError} with explicit
- * recovery hints (retry, compress context, rotate credential, fall back to
- * another provider). The Agent loop uses these hints instead of ad-hoc
- * string matching to decide what to do after a failed LLM call.
+ * recovery hints. The hints are consumed by two layers:
+ *
+ * **Provider layer** ({@link CodexProvider.chat}): owns retry loops.
+ *   Uses: `retryable`, `backoffMs`, `shouldRotate` (for multi-key rotation).
+ *   Guarantees: either returns `LLMResponse` or throws an unrecoverable error.
+ *
+ * **Agent layer** ({@link Agent.run}): handles context-level recovery.
+ *   Uses: `shouldCompress` (triggers context compression on overflow).
+ *   Does NOT retry — the Provider has already exhausted retries.
  *
  * Status code extraction priority:
  *   1. SDK error object `.status` property (Gemini `ApiError`, fetch response status)

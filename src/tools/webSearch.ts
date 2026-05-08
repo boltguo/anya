@@ -74,6 +74,7 @@ function writeCache(query: string, result: string, rawData: unknown): void {
 
 register({
   name: 'web_search',
+  timeoutMs: 45_000,
   description: 'Search the internet for up-to-date information using Tavily API. Results are cached for 24 hours.',
   parameters: {
     type: 'object',

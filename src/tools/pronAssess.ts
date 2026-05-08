@@ -24,6 +24,7 @@ import type { ToolContext } from '../agent/types.js';
 
 register({
   name: 'pron_assess',
+  timeoutMs: 60_000,
   description: 'Assess pronunciation quality of a voice recording using Azure Speech. Returns accuracy, fluency, completeness, prosody scores and per-word breakdown. Use this when the user wants pronunciation feedback on their spoken English. The audio_path is provided in the voice message metadata.',
   parameters: {
     type: 'object',

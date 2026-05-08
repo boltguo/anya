@@ -2,7 +2,7 @@
  * @module lib/usage
  * @description Usage tracking for all metered services.
  *
- * Tracks monthly usage in ~/.anya/data/usage/YYYY-MM.json:
+ * Tracks usage in SQLite (state.db → usage_events table):
  * - LLM: calls, input/output/cached tokens
  * - TTS (Azure): calls, billable characters, audio duration
  * - STT (Groq): calls, audio duration
@@ -10,12 +10,39 @@
  * - Web Search (Tavily): calls
  * - Vision (Gemini): calls
  *
+ * All writes are single atomic INSERTs — no read-modify-write, no file
+ * contention. Reads aggregate with SQL SUM/GROUP BY on demand.
+ *
  * Azure TTS SSML billing: only text content is counted, XML tags are excluded.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { ANYA_HOME } from './paths.js';
+import { getDb } from '../storage/db.js';
+
+// ── Schema Initialization ────────────────────────────────────────────────────
+
+let _schemaReady = false;
+
+function ensureSchema(): void {
+  if (_schemaReady) return;
+  const db = getDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS usage_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      month TEXT NOT NULL,
+      day TEXT NOT NULL,
+      service TEXT NOT NULL,
+      calls INTEGER NOT NULL DEFAULT 1,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      cached_tokens INTEGER NOT NULL DEFAULT 0,
+      chars INTEGER NOT NULL DEFAULT 0,
+      duration_sec REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_usage_month ON usage_events(month, service);
+  `);
+  _schemaReady = true;
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,13 +89,7 @@ export interface MonthlyUsage {
   stt_daily: Record<string, DailySttUsage>;
 }
 
-// ── Paths ────────────────────────────────────────────────────────────────────
-
-const USAGE_DIR = join(ANYA_HOME, 'data', 'usage');
-
-function usagePath(month: string): string {
-  return join(USAGE_DIR, `${month}.json`);
-}
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function currentMonth(): string {
   const now = new Date();
@@ -77,55 +98,6 @@ function currentMonth(): string {
 
 function currentDay(): string {
   return String(new Date().getDate()).padStart(2, '0');
-}
-
-function emptyDailyStt(): DailySttUsage {
-  return { calls: 0, duration_sec: 0 };
-}
-
-// ── Load / Save ──────────────────────────────────────────────────────────────
-
-function emptyUsage(month: string): MonthlyUsage {
-  return {
-    month,
-    llm: { calls: 0, input_tokens: 0, output_tokens: 0, cached_tokens: 0 },
-    tts: { calls: 0, chars: 0, duration_sec: 0 },
-    stt: { calls: 0, duration_sec: 0 },
-    pron_assess: { calls: 0, duration_sec: 0 },
-    web_search: { calls: 0 },
-    vision: { calls: 0 },
-    stt_daily: {},
-  };
-}
-
-export function loadUsage(month?: string): MonthlyUsage {
-  const m = month || currentMonth();
-  const p = usagePath(m);
-  if (!existsSync(p)) return emptyUsage(m);
-
-  try {
-    const raw = readFileSync(p, 'utf-8');
-    const data = JSON.parse(raw) as Partial<MonthlyUsage>;
-    const empty = emptyUsage(m);
-    return {
-      ...empty,
-      ...data,
-      llm: { ...empty.llm, ...(data.llm || {}) },
-      tts: { ...empty.tts, ...(data.tts || {}) },
-      stt: { ...empty.stt, ...(data.stt || {}) },
-      pron_assess: { ...empty.pron_assess, ...(data.pron_assess || {}) },
-      web_search: { ...empty.web_search, ...(data.web_search || {}) },
-      vision: { ...empty.vision, ...(data.vision || {}) },
-      stt_daily: data.stt_daily || {},
-    };
-  } catch {
-    return emptyUsage(m);
-  }
-}
-
-function saveUsage(usage: MonthlyUsage): void {
-  mkdirSync(USAGE_DIR, { recursive: true });
-  writeFileSync(usagePath(usage.month), JSON.stringify(usage, null, 2) + '\n', 'utf-8');
 }
 
 // ── SSML Character Counting ──────────────────────────────────────────────────
@@ -170,18 +142,117 @@ export function countBillableChars(text: string, ssml?: string): number {
   return count;
 }
 
-// ── Track Functions ──────────────────────────────────────────────────────────
+// ── Load (Aggregated Read) ───────────────────────────────────────────────────
+
+function emptyUsage(month: string): MonthlyUsage {
+  return {
+    month,
+    llm: { calls: 0, input_tokens: 0, output_tokens: 0, cached_tokens: 0 },
+    tts: { calls: 0, chars: 0, duration_sec: 0 },
+    stt: { calls: 0, duration_sec: 0 },
+    pron_assess: { calls: 0, duration_sec: 0 },
+    web_search: { calls: 0 },
+    vision: { calls: 0 },
+    stt_daily: {},
+  };
+}
+
+export function loadUsage(month?: string): MonthlyUsage {
+  ensureSchema();
+  const m = month || currentMonth();
+  const db = getDb();
+
+  const usage = emptyUsage(m);
+
+  // Aggregate all events for the month in one query
+  const rows = db.prepare(`
+    SELECT service,
+           SUM(calls) AS total_calls,
+           SUM(input_tokens) AS total_input_tokens,
+           SUM(output_tokens) AS total_output_tokens,
+           SUM(cached_tokens) AS total_cached_tokens,
+           SUM(chars) AS total_chars,
+           SUM(duration_sec) AS total_duration_sec
+    FROM usage_events
+    WHERE month = ?
+    GROUP BY service
+  `).all(m) as Array<{
+    service: string;
+    total_calls: number;
+    total_input_tokens: number;
+    total_output_tokens: number;
+    total_cached_tokens: number;
+    total_chars: number;
+    total_duration_sec: number;
+  }>;
+
+  for (const row of rows) {
+    switch (row.service) {
+      case 'llm':
+        usage.llm = {
+          calls: Number(row.total_calls),
+          input_tokens: Number(row.total_input_tokens),
+          output_tokens: Number(row.total_output_tokens),
+          cached_tokens: Number(row.total_cached_tokens),
+        };
+        break;
+      case 'tts':
+        usage.tts = {
+          calls: Number(row.total_calls),
+          chars: Number(row.total_chars),
+          duration_sec: Number(row.total_duration_sec),
+        };
+        break;
+      case 'stt':
+        usage.stt = {
+          calls: Number(row.total_calls),
+          duration_sec: Number(row.total_duration_sec),
+        };
+        break;
+      case 'pron_assess':
+        usage.pron_assess = {
+          calls: Number(row.total_calls),
+          duration_sec: Number(row.total_duration_sec),
+        };
+        break;
+      case 'web_search':
+        usage.web_search = { calls: Number(row.total_calls) };
+        break;
+      case 'vision':
+        usage.vision = { calls: Number(row.total_calls) };
+        break;
+    }
+  }
+
+  // STT daily breakdown
+  const dailyRows = db.prepare(`
+    SELECT day, SUM(calls) AS total_calls, SUM(duration_sec) AS total_duration
+    FROM usage_events
+    WHERE month = ? AND service = 'stt'
+    GROUP BY day
+  `).all(m) as Array<{ day: string; total_calls: number; total_duration: number }>;
+
+  for (const row of dailyRows) {
+    usage.stt_daily[row.day] = {
+      calls: Number(row.total_calls),
+      duration_sec: Number(row.total_duration),
+    };
+  }
+
+  return usage;
+}
+
+// ── Track Functions (Atomic INSERT) ──────────────────────────────────────────
 
 /**
  * Track LLM API call with token counts.
  */
 export function trackLlm(inputTokens: number, outputTokens: number, cachedTokens = 0): void {
-  const usage = loadUsage();
-  usage.llm.calls++;
-  usage.llm.input_tokens += inputTokens;
-  usage.llm.output_tokens += outputTokens;
-  usage.llm.cached_tokens += cachedTokens;
-  saveUsage(usage);
+  ensureSchema();
+  getDb().prepare(`
+    INSERT INTO usage_events (month, day, service, calls, input_tokens, output_tokens, cached_tokens)
+    VALUES (?, ?, 'llm', 1, ?, ?, ?)
+  `).run(currentMonth(), currentDay(), inputTokens, outputTokens, cachedTokens);
 }
 
 /**
@@ -190,11 +261,11 @@ export function trackLlm(inputTokens: number, outputTokens: number, cachedTokens
  * @param durationSec - Audio duration in seconds
  */
 export function trackTts(chars: number, durationSec: number): void {
-  const usage = loadUsage();
-  usage.tts.calls++;
-  usage.tts.chars += chars;
-  usage.tts.duration_sec += durationSec;
-  saveUsage(usage);
+  ensureSchema();
+  getDb().prepare(`
+    INSERT INTO usage_events (month, day, service, calls, chars, duration_sec)
+    VALUES (?, ?, 'tts', 1, ?, ?)
+  `).run(currentMonth(), currentDay(), chars, durationSec);
 }
 
 /**
@@ -202,10 +273,11 @@ export function trackTts(chars: number, durationSec: number): void {
  * @param durationSec - Audio duration assessed in seconds
  */
 export function trackPronAssess(durationSec: number): void {
-  const usage = loadUsage();
-  usage.pron_assess.calls++;
-  usage.pron_assess.duration_sec += durationSec;
-  saveUsage(usage);
+  ensureSchema();
+  getDb().prepare(`
+    INSERT INTO usage_events (month, day, service, calls, duration_sec)
+    VALUES (?, ?, 'pron_assess', 1, ?)
+  `).run(currentMonth(), currentDay(), durationSec);
 }
 
 /**
@@ -213,32 +285,31 @@ export function trackPronAssess(durationSec: number): void {
  * @param durationSec - Audio duration transcribed in seconds
  */
 export function trackStt(durationSec: number): void {
-  const usage = loadUsage();
-  usage.stt.calls++;
-  usage.stt.duration_sec += durationSec;
-  // daily accumulator
-  const day = currentDay();
-  if (!usage.stt_daily[day]) usage.stt_daily[day] = emptyDailyStt();
-  usage.stt_daily[day].calls++;
-  usage.stt_daily[day].duration_sec += durationSec;
-  saveUsage(usage);
+  ensureSchema();
+  getDb().prepare(`
+    INSERT INTO usage_events (month, day, service, calls, duration_sec)
+    VALUES (?, ?, 'stt', 1, ?)
+  `).run(currentMonth(), currentDay(), durationSec);
 }
 
 /**
  * Track a web search call.
  */
 export function trackWebSearch(): void {
-  const usage = loadUsage();
-  usage.web_search.calls++;
-  saveUsage(usage);
+  ensureSchema();
+  getDb().prepare(`
+    INSERT INTO usage_events (month, day, service, calls)
+    VALUES (?, ?, 'web_search', 1)
+  `).run(currentMonth(), currentDay());
 }
 
 /**
  * Track a Vision (Gemini) call.
  */
 export function trackVision(): void {
-  const usage = loadUsage();
-  usage.vision.calls++;
-  saveUsage(usage);
+  ensureSchema();
+  getDb().prepare(`
+    INSERT INTO usage_events (month, day, service, calls)
+    VALUES (?, ?, 'vision', 1)
+  `).run(currentMonth(), currentDay());
 }
-

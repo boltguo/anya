@@ -229,7 +229,7 @@ export class TelegramAdapter {
     // ── Bot commands ──
 
     this.bot.command('start', async (ctx) => {
-      const name = this.config.agent.name;
+      const name = 'Anya';
       const cmdList = [
         ...[...skillCommandMap.keys()].map((cmd) => `/${cmd}`),
         ...commandAliases.map((alias) => `/${alias.cmd}`),

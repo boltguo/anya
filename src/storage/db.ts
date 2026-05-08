@@ -53,8 +53,9 @@ function initializeSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, seq);
   `);
 
-  // Note: raw_parts column is retained in schema for backward compatibility
-  // but is always written as NULL (see sessionStore.ts). No migration needed.
+  // Note: raw_parts column stores serialized rawModelParts from the LLM
+  // response. Used to preserve provider-specific output for replay fidelity.
+  // Written by sessionStore.saveMessages() when msg._rawParts is present.
 }
 
 /**

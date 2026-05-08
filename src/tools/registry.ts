@@ -93,26 +93,50 @@ export function getEnabledTools(config: AnyaConfig): ToolDefinition[] {
  * Returns the enabled tools' name, description, and parameter schema —
  * the format expected by the LLM provider's function calling API.
  *
- * Platform-specific tools are filtered based on the `isTelegram` flag
- * to avoid wasting prompt tokens on inapplicable tools.
+ * Filtering layers (applied in order):
+ *   1. `config.tools.enabled` — global enabled list
+ *   2. Platform — `tg_msg` only included when platform is 'telegram'
+ *   3. `toolPolicy.deny` — per-run blacklist
+ *   4. `toolPolicy.allow` — per-run whitelist (if set, overrides everything)
  *
- * @param config - The current agent config.
- * @param isTelegram - Whether the current session is via Telegram.
- *                     When false, the `tg_msg` tool is excluded.
+ * @param config   - The current agent config.
+ * @param platform - Adapter platform string (e.g. 'telegram', 'cron', 'cli').
+ * @param toolPolicy - Optional per-run tool filtering policy.
  * @returns Array of tool schemas for the LLM.
  */
-export function getToolSchemas(config: AnyaConfig, isTelegram: boolean = false): Array<{
+export function getToolSchemas(
+  config: AnyaConfig,
+  platform: string = 'telegram',
+  toolPolicy?: { allow?: string[]; deny?: string[] },
+): Array<{
   name: string;
   description: string;
   parameters: ToolParameterSchema;
 }> {
-  return getEnabledTools(config)
-    .filter(t => isTelegram || t.name !== 'tg_msg')
-    .map(t => ({
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters,
-    }));
+  let enabled = getEnabledTools(config);
+
+  // Platform filter: tg_msg only for telegram
+  if (platform !== 'telegram') {
+    enabled = enabled.filter(t => t.name !== 'tg_msg');
+  }
+
+  // ToolPolicy: deny list
+  if (toolPolicy?.deny?.length) {
+    const denySet = new Set(toolPolicy.deny);
+    enabled = enabled.filter(t => !denySet.has(t.name));
+  }
+
+  // ToolPolicy: allow list (overrides everything above if set)
+  if (toolPolicy?.allow?.length) {
+    const allowSet = new Set(toolPolicy.allow);
+    enabled = enabled.filter(t => allowSet.has(t.name));
+  }
+
+  return enabled.map(t => ({
+    name: t.name,
+    description: t.description,
+    parameters: t.parameters,
+  }));
 }
 
 /**
@@ -138,7 +162,8 @@ export async function dispatch(
 
   const startTime = Date.now();
   const sid = context.sessionId;
-  const TOOL_TIMEOUT_MS = 120_000;
+  const DEFAULT_TIMEOUT_MS = 30_000;
+  const timeoutMs = tool.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   try {
     agentLogger.info({ msg: 'tool_call', tool: toolName, sessionId: sid, args });
@@ -146,7 +171,7 @@ export async function dispatch(
     const content = await Promise.race([
       tool.execute(args, context),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Tool "${toolName}" timed out after ${TOOL_TIMEOUT_MS / 1000}s`)), TOOL_TIMEOUT_MS)
+        setTimeout(() => reject(new Error(`Tool "${toolName}" timed out after ${timeoutMs / 1000}s`)), timeoutMs)
       ),
     ]);
 

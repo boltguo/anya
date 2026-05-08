@@ -6,24 +6,22 @@
  *
  * ```
  * ┌─────────────────────────────────────┐
- * │  1. Config Personality               │  "Who the agent is"
+ * │  1. SOUL.md — Identity               │  "Who Anya is"
  * ├─────────────────────────────────────┤
- * │  2. SOUL.md — Identity               │  "Who Anya is"
+ * │  2. RULES.md — Operational Rules     │  "How Anya operates"
  * ├─────────────────────────────────────┤
- * │  3. RULES.md — Operational Rules     │  "How Anya operates"
+ * │  3. Memory — USER.md + MEMORY.md     │  "User profile & learner level state"
  * ├─────────────────────────────────────┤
- * │  4. Memory — USER.md + MEMORY.md     │  "User profile & learner level state"
+ * │  4. Skills Index — Available skills  │  "What Anya can do"
  * ├─────────────────────────────────────┤
- * │  5. Skills Index — Available skills  │  "What Anya can do"
+ * │  5. Security — Local boundary        │  "What Anya owns"
  * ├─────────────────────────────────────┤
- * │  6. Security — Local boundary        │  "What Anya owns"
- * ├─────────────────────────────────────┤
- * │  7. Platform Capabilities            │  "What tools/media are available"
+ * │  6. Platform Capabilities            │  "What tools/media are available"
  * └─────────────────────────────────────┘
  * ```
  *
  * Note: Timestamp is appended to the user message (not system prompt)
- * to maximise Gemini's prompt cache hit rate.
+ * to maximise prompt cache hit rate.
  */
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
@@ -43,16 +41,10 @@ const fileCache = new Map<string, { content: string; mtime: number; cachedAt: nu
 export function buildSystemPrompt(config: AnyaConfig): string {
   const sections: string[] = [];
 
-  // ── 1. Identity & Personality (config) ─────────────────────────────
-  sections.push(config.agent.personality);
-  if (config.user.native_language.trim()) {
-    sections.push(`Configured user context: native language = ${config.user.native_language.trim()}`);
-  }
-
-  // ── 2. Identity (SOUL) ──────────────────────────────────────────────
+  // ── 1. Identity (SOUL) ──────────────────────────────────────────────
   const soul = loadFile(SOUL_PATH);
   if (hasContent(soul)) {
-    sections.push('\n## Identity (SOUL)');
+    sections.push('## Identity (SOUL)');
     sections.push(soul);
   }
 

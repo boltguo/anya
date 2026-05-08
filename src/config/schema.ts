@@ -7,10 +7,6 @@ import { z } from 'zod';
 export const PartialAnyaConfigSchema = z.object({
   $schema: z.string().optional(),
   version: z.string().optional(),
-  agent: z.object({
-    name: z.string().optional(),
-    personality: z.string().optional(),
-  }).optional(),
   provider: z.object({
     model: z.string().optional(),
     max_tokens: z.number().optional(),
@@ -38,7 +34,7 @@ export const PartialAnyaConfigSchema = z.object({
     enabled: z.boolean().optional(),
     tick_seconds: z.number().optional(),
     timezone: z.string().optional(),
-    default_platform: z.literal('telegram').optional(),
+    default_platform: z.string().optional(),
     default_chat_id: z.string().optional(),
   }).optional(),
   stt: z.object({

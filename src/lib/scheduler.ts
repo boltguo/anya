@@ -30,7 +30,7 @@ export interface CronJob {
   enabled: boolean;
   state: 'scheduled' | 'paused' | 'running' | 'completed' | 'error';
   deliver: {
-    platform: 'telegram';
+    platform: string;
     chat_id: string;
   };
   repeat: {
@@ -64,7 +64,7 @@ const SILENT_MARKER = '[SILENT]';
 const LOCK_DIR = join(CRON_DIR, '.tick.lock');
 
 class CronAdapter implements Adapter {
-  readonly platform = 'telegram' as const;
+  readonly platform = 'cron';
   private chunks: string[] = [];
 
   async reply(content: string): Promise<void> {
@@ -255,18 +255,7 @@ async function runAgentForJob(config: AnyaConfig, job: CronJob): Promise<string>
   await registerAllTools();
 
   const adapter = new CronAdapter();
-  const cronConfig: AnyaConfig = {
-    ...config,
-    tools: {
-      ...config.tools,
-      enabled: config.tools.enabled.filter(name => name !== 'cron' && name !== 'tg_msg' && name !== 'clarify'),
-    },
-    ui: {
-      ...config.ui,
-      show_tool_calls: false,
-    },
-  };
-  const agent = new Agent(cronConfig, adapter);
+  const agent = new Agent(config, adapter);
   const prompt = [
     '[SYSTEM: Cron job execution. This is unattended. Do not ask clarifying questions. If there is nothing useful to send, respond exactly with [SILENT].]',
     `[Cron job: ${job.name}]`,
@@ -276,6 +265,9 @@ async function runAgentForJob(config: AnyaConfig, job: CronJob): Promise<string>
   const result = await agent.run(prompt, {
     sessionKey: `cron:${job.id}:${Date.now()}`,
     newSession: true,
+    toolPolicy: {
+      deny: ['cron', 'tg_msg', 'clarify'],
+    },
   });
 
   return (adapter.content || result.content || '').trim();

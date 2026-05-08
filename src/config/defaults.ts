@@ -2,7 +2,8 @@
  * @module config/defaults
  * @description Anya configuration type definition and default values.
  *
- * LLM: Google Gemini (gemini-3-flash-preview, API key via gemini.api_key).
+ * Agent identity is defined in SOUL.md, not here.
+ * LLM: Codex reverse-proxy (chatgpt.com/backend-api/codex).
  * Azure: Speech key for TTS + pronunciation assessment.
  */
 
@@ -10,21 +11,7 @@ export interface AnyaConfig {
   $schema?: string;
   version: string;
 
-  agent: {
-    name: string;
-    /** Injected directly into the system prompt as the agent identity/style layer. */
-    personality: string;
-  };
-
-  /**
-   * Global single-user context.
-   * Useful as a fallback before a domain profile is initialized.
-   */
-  user: {
-    native_language: string;
-  };
-
-  /** LLM provider settings. Uses Gemini API key from gemini.api_key. */
+  /** LLM provider settings. */
   provider: {
     model: string;
     max_tokens: number;
@@ -62,7 +49,7 @@ export interface AnyaConfig {
     enabled: boolean;
     tick_seconds: number;
     timezone: string;
-    default_platform: 'telegram';
+    default_platform: string;
     default_chat_id: string;
   };
 
@@ -100,15 +87,6 @@ export interface AnyaConfig {
 export const DEFAULT_CONFIG: AnyaConfig = {
   $schema: './config.schema.json',
   version: '0.4.0',
-
-  agent: {
-    name: 'anya',
-    personality: 'You are Anya, a concise and direct personal AI assistant.',
-  },
-
-  user: {
-    native_language: '',
-  },
 
   provider: {
     model: 'gpt-5.4',

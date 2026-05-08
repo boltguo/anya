@@ -134,8 +134,9 @@ register({
         const url = String(args.url || '');
         if (!url) return JSON.stringify({ ok: false, error: 'url is required for voice type' });
         const replyTo = resolveReplyTo(args.reply_to, tg);
-        const msgId = await tg.sendVoice(url, {
+        const msgId = await tg.sendVoice(url, String(args.text || ''), {
           replyTo, tag: args.tag as string,
+          parseMode: (args.parse_mode as any) || 'HTML',
         });
         return JSON.stringify({ ok: true, message_id: msgId });
       }

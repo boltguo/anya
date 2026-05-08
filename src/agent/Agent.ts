@@ -19,10 +19,10 @@
  *   - {@link ./history} — truncation and Gemini-order sanitization
  */
 
-import type { Message, Adapter, MessageFile } from './types.js';
+import type { Message, Adapter, MessageFile, LLMProvider } from './types.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { buildSystemPrompt } from './promptBuilder.js';
-import { OpenAIProvider } from '../providers/openai.js';
+import { CodexProvider } from '../providers/openai.js';
 import { getToolSchemas, dispatch } from '../tools/registry.js';
 import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle } from '../storage/sessionStore.js';
 import { agentLogger } from '../lib/logger.js';
@@ -30,6 +30,14 @@ import { trackLlm } from '../lib/usage.js';
 import { truncateHistory, sanitizeHistory } from './history.js';
 import { classifyApiError } from './errorClassifier.js';
 import { ContextCompressor, estimateTokens } from './contextCompressor.js';
+
+/** Per-run tool filtering policy. */
+export interface ToolPolicy {
+  /** Whitelist — only these tools are available (overrides deny). */
+  allow?: string[];
+  /** Blacklist — these tools are excluded. */
+  deny?: string[];
+}
 
 /** Options for {@link Agent.run}. */
 export interface RunOptions {
@@ -41,6 +49,8 @@ export interface RunOptions {
   newSession?: boolean;
   /** Attached files (images) for native multimodal input in this turn. */
   files?: MessageFile[];
+  /** Per-run tool filtering (deny specific tools without cloning config). */
+  toolPolicy?: ToolPolicy;
 }
 
 /** Result returned by {@link Agent.run} after the ReAct loop completes. */
@@ -72,10 +82,12 @@ export interface RunResult {
 export class Agent {
   private config: AnyaConfig;
   private adapter: Adapter;
+  private provider: LLMProvider;
 
   constructor(config: AnyaConfig, adapter: Adapter) {
     this.config = config;
     this.adapter = adapter;
+    this.provider = new CodexProvider();
   }
 
   /**
@@ -87,7 +99,7 @@ export class Agent {
    * @throws Re-throws LLM provider errors after max retries.
    */
   async run(input: string, options: RunOptions): Promise<RunResult> {
-    const { sessionKey, newSession, files } = options;
+    const { sessionKey, newSession, files, toolPolicy } = options;
     let { sessionId } = options;
 
     if (!sessionId) {
@@ -125,7 +137,7 @@ export class Agent {
 
     const maxLoops = this.config.advanced.max_react_loops;
     const contextLimit = this.config.advanced.context_window;
-    const compressor = new ContextCompressor(this.config);
+    const compressor = new ContextCompressor(this.config, this.provider);
     let totalToolCalls = 0;
     let tgSent = false;
     let compressionCount = 0;
@@ -147,11 +159,10 @@ export class Agent {
         lastRealTokenCount = 0; // Reset — re-estimate after compression
       }
 
-      const isTelegram = this.adapter.platform === 'telegram';
-      const toolSchemas = getToolSchemas(this.config, isTelegram);
+      const toolSchemas = getToolSchemas(this.config, this.adapter.platform, toolPolicy);
 
       const model = this.config.provider.model;
-      const provider = new OpenAIProvider();
+      const provider = this.provider;
 
       let response;
       try {

@@ -18,7 +18,7 @@
  * and only pays the LLM call cost when compression is actually needed.
  */
 
-import type { Message } from './types.js';
+import type { Message, LLMProvider } from './types.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { agentLogger } from '../lib/logger.js';
 
@@ -46,10 +46,12 @@ Be concise. Preserve technical details (exact paths, commands, error messages) t
 
 export class ContextCompressor implements ContextEngine {
   private config: AnyaConfig;
+  private provider: LLMProvider;
   private thresholdRatio: number;
 
-  constructor(config: AnyaConfig) {
+  constructor(config: AnyaConfig, provider: LLMProvider) {
     this.config = config;
+    this.provider = provider;
     this.thresholdRatio = config.advanced.compress_threshold || 0.75;
   }
 
@@ -106,10 +108,7 @@ export class ContextCompressor implements ContextEngine {
       .join('\n\n');
 
     try {
-      const { OpenAIProvider } = await import('../providers/openai.js');
-      const provider = new OpenAIProvider();
-
-      const response = await provider.chat(
+      const response = await this.provider.chat(
         [
           { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
           { role: 'user', content: `Summarise this conversation segment:\n\n${conversationText}` },

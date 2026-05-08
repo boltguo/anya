@@ -109,6 +109,8 @@ export function ensureDirectories(): void {
     SEARCH_CACHE_DIR,
     CACHE_DIR,
     AUDIO_CACHE_DIR,
+    VOICE_DIR,
+    TTS_DIR,
     IMAGE_DIR,
     IMAGE_RECEIVED_DIR,
     LOGS_DIR,

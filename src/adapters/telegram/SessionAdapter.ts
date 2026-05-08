@@ -360,16 +360,22 @@ export class TelegramSessionAdapter implements Adapter {
    * Requires .ogg Opus format for the native voice bubble UI.
    * Voice is supplementary — does not set hasSentContent so text reply still flows.
    */
-  async sendVoice(voicePath: string, opts?: SendMessageOptions): Promise<number> {
+  async sendVoice(voicePath: string, caption?: string, opts?: SendMessageOptions): Promise<number> {
     return this.enqueue(async () => {
       const replyTo = this.autoReplyTo(opts?.replyTo);
+      const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'HTML');
       const source = new InputFile(voicePath);
 
       const msg = await this.bot.api.sendVoice(this.chatId, source, {
+        caption: caption || undefined,
+        parse_mode: parseMode as any,
         reply_parameters: replyTo ? { message_id: replyTo } : undefined,
       });
 
       this.trackMessage(msg.message_id, opts?.tag);
+      if (caption) {
+        this.hasSentContent = true;
+      }
       agentLogger.info({ msg: 'tg_voice_sent', path: voicePath });
       return msg.message_id;
     });

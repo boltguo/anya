@@ -1,8 +1,8 @@
 /**
  * @module providers/openai
- * @description OpenAI LLM provider using the Codex Responses API (streaming).
+ * @description Codex LLM provider using the ChatGPT Codex Responses API (streaming).
  *
- * Uses the Codex API at chatgpt.com/backend-api/codex with:
+ * Uses the Codex reverse-proxy at chatgpt.com/backend-api/codex with:
  *   - OAuth device-code authentication (tokens in auth.json)
  *   - SSE streaming response consumption
  *   - Auto token refresh on 401
@@ -20,12 +20,12 @@ import { agentLogger } from '../lib/logger.js';
 import { toResponsesInput, toResponsesTools } from './openai/transform.js';
 import { consumeStream } from './openai/stream.js';
 
-// ── OpenAI Codex Implementation ─────────────────────────────────────────────
+// ── Codex Implementation ────────────────────────────────────────────────────
 
 const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 
-export class OpenAIProvider implements LLMProvider {
-  readonly name = 'openai';
+export class CodexProvider implements LLMProvider {
+  readonly name = 'codex';
 
   async chat(
     messages: Message[],
@@ -78,7 +78,7 @@ export class OpenAIProvider implements LLMProvider {
           ? 'Codex API request timed out after 60s'
           : `Codex API fetch failed: ${(fetchErr as Error).message}`;
         agentLogger.error({
-          msg: 'api_fetch_error', provider: 'openai',
+          msg: 'api_fetch_error', provider: 'codex',
           error: errMsg, aborted: isAbort, attempt,
           elapsed_ms: Date.now() - startTime,
         });
@@ -98,7 +98,7 @@ export class OpenAIProvider implements LLMProvider {
         const classified = classifyApiError(apiErr);
 
         agentLogger.error({
-          msg: 'api_error', provider: 'openai',
+          msg: 'api_error', provider: 'codex',
           status: response.status, reason: classified.reason,
           retryable: classified.retryable,
           body: errText.substring(0, 200),
@@ -133,8 +133,14 @@ export class OpenAIProvider implements LLMProvider {
   }
 }
 
+/**
+ * @deprecated Use {@link CodexProvider} instead. Kept for backward compatibility.
+ */
+export const OpenAIProvider = CodexProvider;
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+

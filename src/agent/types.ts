@@ -151,8 +151,8 @@ export interface LLMProvider {
  * ```
  */
 export interface Adapter {
-  /** Platform identifier for runtime branching (replaces constructor.name checks). */
-  readonly platform: 'telegram';
+  /** Platform identifier for runtime branching (e.g. 'telegram', 'cron', 'cli'). */
+  readonly platform: string;
 
   /** Send a text response to the user. */
   reply(content: string): Promise<void>;
@@ -215,6 +215,8 @@ export interface ToolDefinition {
   description: string;
   /** JSON Schema for the tool's input parameters. */
   parameters: ToolParameterSchema;
+  /** Per-tool timeout in milliseconds. Defaults to 30_000. */
+  timeoutMs?: number;
   /** Execute the tool and return serialized result. */
   execute: (args: Record<string, unknown>, context: ToolContext) => Promise<string>;
 }
