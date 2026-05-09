@@ -6,9 +6,13 @@
 
 ## About the User
 
-Not set yet. Summarize the user's name or preferred name, life/study/work
-context, interests, and any personal details that help Anya make examples feel
-relevant.
+Not set yet. When filled in, write **two clearly separated paragraphs** so
+hobbies don't get tail-of-paragraph compressed by profession:
+
+- **Professional context.** Name/preferred name, life/study/work background,
+  what English is used for at work.
+- **Personal interests.** Films, shows, games, sports, music, etc. — the
+  topics that should appear in practice material alongside work themes.
 
 ## Learning Goals
 
@@ -32,3 +36,7 @@ them, and any repeated behavior patterns Anya should respect.
 
 Not set yet. Keep short durable notes that make future conversations more
 personal. Do not store practice logs, scores, or temporary emotions here.
+
+When the user has both a clear profession and clear hobbies, include a topic
+rotation rule (e.g. "Practice content should rotate across work themes and
+hobby themes — do not default every example to the user's profession").

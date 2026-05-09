@@ -5,57 +5,58 @@ description: "MUST trigger when the user asks for dictation, intensive listening
 
 # Listening Dictation
 
-Intensive listening drill. One sentence at a time: play audio, let the learner type what they heard, compare token-by-token, persist the evidence, then adapt the next sentence by i+1.
+Intensive listening drill. One sentence at a time: play audio, let the learner type what they heard, compare token-by-token, persist, then adapt the next sentence by i+1.
 
 ## 1. Inputs
 
-Use this skill when:
+Trigger when:
 
 - User says: `听写`, `精听`, `dictation`, `intensive listening`, `听不清连读`, `听不懂快语速`.
-- Callback/System trigger: `listening-dictation`.
-- Planner/coach routes here because recent data shows weak `listening.connected_speech`, `listening.detail_accuracy`, `function_word_miss`, plural endings, weak forms, numbers, or word-boundary errors.
+- Callback `listening-dictation`.
+- Planner/coach routes here for weak `listening.connected_speech`, `listening.detail_accuracy`, `function_word_miss`, plurals, weak forms, numbers, boundaries.
 
-Required context before generating audio:
+Required context before generating:
 
-1. Call `persist` with `{"action":"recent_practice","session_id":"<session>","skill_type":"listening.dictation","limit":"DEDUP_WINDOW"}`. Returns recent samples (incl. abandoned) + flat `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup; do not duplicate hashes in `metadata`.
-2. Call `persist` with `{"action":"coach_context","days":14,"limit":8}` for the longer-window aggregate (subcaps, errors, due words). Slower-moving signal — only re-call when tier changes.
-3. Use `MEMORY.md` / `USER.md` only as fallback prompt context if both calls are unavailable.
-4. Do not query `study.db` directly.
+1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.dictation","limit":20}` (`limit` int, not `"DEDUP_WINDOW"` string — `Number()` would NaN it). Returns rows + `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup; do not duplicate hashes in `metadata`.
+2. `persist {"action":"coach_context","days":14,"limit":8}` for subcaps / errors / due words. Slow signal — only re-call when tier changes.
+3. `MEMORY.md` / `USER.md` only as fallback. No raw `study.db` access.
 
 ## 2. Difficulty Policy
 
-The target is **i+1**: one small stretch above the learner's current successful level. Adapt sentence length and syntax to the learner's tier; never generate random hard sentences, and never keep repeating the same length/pattern after they pass.
+Target **i+1**: one stretch above the learner's current successful level. Adapt length and syntax to tier; never combine multiple stretches in one round.
 
-### 2.1 Constants & Tier
+### 2.0 Constants & Tier
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `PASS_THRESHOLD` | `0.80` | A round with `accuracy ≥ PASS_THRESHOLD` counts as a pass. |
-| `FAIL_THRESHOLD` | `0.60` | Below this is a fail; `[FAIL, PASS)` is a "hold". |
-| `STREAK` | `2` | Consecutive passes (or fails) needed to move length / tier. |
-| `ACC_WINDOW` | `3` | Sample window for §2.2 recent-accuracy mean. |
-| `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window fetched via `recent_practice` (§1). |
+| `PASS_THRESHOLD` | `0.80` | A round with `accuracy ≥ PASS` is a pass. |
+| `FAIL_THRESHOLD` | `0.60` | Below = fail; `[FAIL, PASS)` = "hold". |
+| `STREAK` | `2` | Passes/fails to move length / tier. |
+| `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
+| `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
 
 Standard 100% speed only. Slow-down is the `dict_slow` button (State B), not a tier property.
 
-| Tier (Listening band) | Sentence length | Syntax | Accent |
+| Tier (IELTS band ≈ CEFR) | Sentence length | Syntax | Accent |
 | --- | --- | --- | --- |
-| Beginner (< 5.0) | 4–7 words, 1 chunk | Simple SVO, no subordinate clauses | Standard US/UK only |
-| Intermediate (5.0–6.0) | 8–12 words, 2 chunks | Max 1 relative/subordinate clause | Standard US/UK only |
-| Advanced (≥ 6.5) | 13–20 words, 3+ chunks | Complex syntax, connected-speech feature | Standard US/UK; non-standard accent only after stable inside Advanced |
+| Beginner (< 5.0 ≈ A1–A2) | 4–7 words, 1 chunk | Simple SVO | Standard US/UK |
+| Intermediate (5.0–6.0 ≈ B1) | 8–12 words, 2 chunks | Max 1 subordinate clause | Standard US/UK |
+| Advanced (≥ 6.5 ≈ B2+) | 13–20 words, 3+ chunks | Complex syntax, connected-speech | US/UK; non-standard only after stable in Advanced |
 
-### 2.2 Recent-accuracy window
+**Reading the learner's level from `MEMORY.md`** (do NOT confuse capability score 0–100 with IELTS band 0–9):
 
-Recent accuracy means:
+1. Prefer `Band Snapshot.Listening` (CEFR string like `A2+`, `B1`, `B2`). Map: `A1`/`A2` → Beginner, `B1` → Intermediate, `B2`/`C1`/`C2` → Advanced.
+2. Boundary suffix (`A2+`, `B1-`, `A2+ → B1 boundary`): **降一级起步** (start one tier below the higher side). E.g. `A2+` → Beginner, `B1-` → Beginner, `A2+ → B1 boundary` → Beginner.
+3. If CEFR missing, fall back to `Weak Spots.Listening` sub-cap scores (these ARE IELTS-band-shaped, 0–10): take the **lowest** of `function_word_perception` / `detail_accuracy` / `connected_speech` and use the tier table above.
+4. **Never** read `Core Capabilities.Listening: <n>/100` as the IELTS band — that's a 0–100 capability score, unrelated to tier mapping.
 
-1. **Primary** — mean `accuracy` over the last `ACC_WINDOW` `completed=1` rows in `recent_practice.rows` (filtered by `skill_type='listening.dictation'` and current `session_id`). Abandoned (`completed=0`) excluded from mean but count as fail for `demotion_credit` (see §2.3).
-2. **Fallback** — if fewer than `ACC_WINDOW` completed rows, use the 14-day mean from `coach_context.summary`.
-3. **Cold start (profile present)** — if neither sample source is available but `MEMORY.md` has a declared listening band, treat learner as one tier below that band and start at the **minimum** length of that tier.
-4. **Cold start (no profile)** — if even the listening band is missing, start at **Beginner tier, minimum length** (4 words). Never guess upward.
+### 2.2 Recent-accuracy
 
-### 2.3 Credit gating — `promotion_credit` / `demotion_credit`
+Mean `accuracy` over last `ACC_WINDOW` `completed=1` rows of current `session_id` + `skill_type`. Abandoned (`completed=0`) excluded from mean but count as fail for `demotion_credit`.
 
-Track two running counters across the session, computed from `recent_practice.rows` (§1):
+Fallback chain when fewer than `ACC_WINDOW` rows: 14-day mean from `coach_context.summary` → `MEMORY.md` band − 1 tier at min length → Beginner min (4 words). Never guess upward.
+
+### 2.3 Credit gating
 
 ```
 promotion_credit = walk recent_practice.rows newest→oldest (skip redo_count>0):
@@ -66,39 +67,35 @@ abandoned (completed=0) = 1 fail.
 
 | Credit | Action |
 | --- | --- |
-| `promotion_credit ≥ STREAK` at the **current tier ceiling** (length = tier max) | Promote to the next tier; reset both credits; start at next tier's minimum length. |
-| `promotion_credit ≥ STREAK` **inside** the tier (length < tier max) | Stay in tier; bump sentence length by **+1 word** (clamped to tier max); reset `promotion_credit`. |
-| `demotion_credit ≥ STREAK` at the **current tier floor** (length = tier min) | Demote to previous tier; reset both credits; start at previous tier's max length. |
-| `demotion_credit ≥ STREAK` **inside** the tier (length > tier min) | Stay in tier; drop sentence length by **−1 word** (clamped to tier min); reset `demotion_credit`. |
-| Hard-button tap (`dict_easier`) | Persists an abandoned row (State B), surfaced as a fail next `recent_practice` call — no separate counter bookkeeping. |
+| `promotion_credit ≥ STREAK` at tier ceiling (length = max) | Promote tier; reset both credits; start at next tier's min length. |
+| `promotion_credit ≥ STREAK` inside tier (length < max) | Length **+1**; reset `promotion_credit`. |
+| `demotion_credit ≥ STREAK` at tier floor (length = min) | Demote tier; reset both credits; start at prev tier's max. |
+| `demotion_credit ≥ STREAK` inside tier (length > min) | Length **−1**; reset `demotion_credit`. |
+| `dict_easier` tap | Persists abandoned row (State B); surfaces as fail next call. |
 
 Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
 
-Hold rounds: keep the same length, optionally swap **one** dimension among syntax/accent/connected-speech if the learner is mid-tier and you want to probe a specific weakness from `coach_context.summary.errors`.
+Hold: keep length, optionally swap **one** dimension (syntax/accent/connected-speech) to probe a weakness from `coach_context.summary.errors`.
 
-### 2.4 Generation rules
+### 2.4 Generation
 
-- Pick **one target weakness** from `coach_context.summary.errors` or `coach_context.summary.subcaps` (e.g. `function_word_miss`, `listening.connected_speech`).
-- Each new sentence may stretch **at most one** dimension beyond the previous: length, syntax, accent, or connected-speech density. Never combine two stretches in one round.
-- Do **not** repeat a sentence whose `prompt_hash` already appears in `recent_practice.recent_prompt_hashes`.
-- Do not repeat the same syntactic pattern (e.g. cleft sentences, embedded `that`-clauses) for more than 2 consecutive rounds.
+- Pick **one** target weakness from `coach_context.summary.errors|subcaps`.
+- Stretch **at most one** dimension per round: length, syntax, accent, connected-speech.
+- Reject any sentence whose `prompt_hash` ∈ `recent_practice.recent_prompt_hashes`.
+- Don't repeat the same syntactic pattern for 2+ consecutive rounds.
 
 ## 3. Flow
 
 ### State A: Prepare And Deliver
 
-1. Analyze `coach_context` plus the `promotion_credit` / `demotion_credit` derived from `recent_practice.rows` (§2.3); decide:
-   - current tier and current sentence length within that tier (from §2.3 credit rules)
-   - target weakness
-   - one i+1 dimension to stretch (or "hold" if mid-band)
-   - expected subcap key(s)
-2. Generate one natural English sentence at the chosen length / syntax / accent. Compute `prompt_hash` (see State D) and reject if it already appears in `recent_practice.recent_prompt_hashes`; regenerate until fresh.
-3. Use `tts` only for the target sentence at standard 100% speed. Do not synthesize conversational filler. Do not slow the audio at this step.
-4. Send the audio with `tg_msg(type="voice")`.
-5. Send the instruction with `tg_msg(type="keyboard")`.
-6. Initialize empty `ui_feedback` accumulator; every button tap appends its exact label.
+1. From `coach_context` + §2.3 credits, decide: tier, length, target weakness, i+1 stretch dimension (or hold), expected subcaps.
+2. Generate the sentence at chosen length/syntax/accent. Compute `prompt_hash` (§State D); regenerate if dedup hits.
+3. `tts` only for the target sentence at 100% speed. No filler audio.
+4. Send voice FIRST: a separate `tg_msg type="voice"` call with the audio `url`. Wait for delivery.
+5. THEN send instruction: a separate `tg_msg type="keyboard"` call (text + buttons only — **never include `url` here**, the keyboard endpoint has no media slot). Never parallel — see Hard Rule 5.
+6. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
 
-Text pattern:
+Text:
 
 ```text
 来，听听这一句。把你听到的英文打出来。
@@ -112,74 +109,67 @@ Buttons:
 [["🐢 慢速播放|dict_slow", "😵 太难了，换简单点|dict_easier"]]
 ```
 
-Stop immediately and wait for the user's typed answer or button tap.
+Wait for the typed answer or button tap.
 
 ### State B: Button Handling
 
 `dict_slow`:
 
-- Append `🐢 慢速播放` to the round's `ui_feedback` accumulator.
-- Acknowledge with `tg_msg(type="text")`.
-- Reuse the same sentence.
-- Generate slower audio with `tts` around `rate="-10%"`.
-- Send the voice and the same instruction keyboard again.
-- Wait.
+- Append `🐢 慢速播放` to `ui_feedback`.
+- Brief ack via `tg_msg type="text"`.
+- Same sentence; `tts rate="-10%"`.
+- Send slower voice FIRST, THEN re-send instruction keyboard. Never parallel.
 
 `dict_easier`:
 
-- **STEP 1 — Persist abandoned record first** (before the replacement). Same envelope as State D's `persist` call, with these differences:
+1. **Persist abandoned record FIRST** (before generating the replacement). Same envelope as State D, with these differences:
 
-  ```
-  completed=0, accuracy=0, response="",
-  feedback="Learner tapped '太难了' before answering. Treat as negative evidence at this difficulty/dimension.",
-  ui_feedback="😵 太难了", load_score=0, minutes=0,
-  metadata={"abandoned_reason":"too_hard","sentence_words":<n>,"i_plus_one_dimension":"<dim>"}
-  ```
+   ```
+   completed=0, accuracy=0, response="",
+   feedback="Learner tapped '😵 太难了，换简单点' before answering. Treat as negative evidence at this difficulty/dimension.",
+   ui_feedback="😵 太难了，换简单点", load_score=0, minutes=0,
+   metadata={"abandoned_reason":"too_hard","sentence_words":<n>,"i_plus_one_dimension":"<dim>"}
+   ```
 
-  After persist returns, reset `ui_feedback` for the next round.
+   After `persist` returns, reset `ui_feedback`.
 
-- **STEP 2 — Replacement.** Apply the demotion / length-down rule from §2.3. Show the previous sentence only inside `<tg-spoiler>...</tg-spoiler>`. Add one short note explaining why it was hard (weak form, linking, number trap, long chunk). Generate a new simpler sentence at the new length. Return to State A.
+2. **Replacement.** Apply demotion/length-down (§2.3). Show the previous sentence inside `<tg-spoiler>`. One short note explaining why it was hard. Generate a new simpler sentence → State A.
 
 ### State C: Evaluate
 
 When the learner types an answer:
 
-1. Normalize both target and response:
-   - lowercase
-   - strip punctuation
-   - preserve contractions as one token, e.g. `don't`
-   - compare in **order** (this is dictation, not bag-of-words)
-2. Run a token-level edit-distance diff and count three operations:
-   - `D` (deletions / omissions — target had it, response missed it)
-   - `S` (substitutions — wrong word in the right slot)
-   - `I` (insertions / extras — response added a word not in target)
-3. Compute (WER-style, clamped to 0):
+1. Normalize both: lowercase, strip punctuation, contractions stay one token (`don't`), compare in **order**.
+2. Token-level edit distance:
+   - `D` = deletions (target had it, response missed it)
+   - `S` = substitutions (wrong word, right slot)
+   - `I` = insertions (extra word in response)
+3. Compute (clamped to 0):
    - `accuracy = max(0, 1 - (D + S + I) / target_tokens)`
-   - `raw_score = target_tokens - D - S` (correct tokens, ignoring extras)
+   - `raw_score = target_tokens - D - S`
    - `max_score = target_tokens`
-4. Send feedback and persist in the same evaluation turn.
+4. **Persist FIRST, THEN feedback**. Sequential — the row must be in DB before feedback reaches the learner.
 
-Feedback message must include:
+Write the feedback as a natural short Chinese message — no fixed header, no ✅/❌/💡 template. Every reply MUST cover, in some natural form:
 
-- Correct full sentence.
-- Concise Chinese translation.
-- Specific missed words or sounds.
-- One short diagnosis of the root cause.
+- the correct English sentence
+- a 1-line Chinese translation (skip only if the English is trivial like a greeting)
+- the **specific** word(s) missed/mistaken — name them ("missed `of`", "wrote `lastest` for `latest`")
+- one-phrase root cause when there were errors (weak form / linking / vowel / boundary / number trap)
 
-Buttons (layout depends on accuracy):
+Two to four sentences usually enough.
 
-- If `accuracy < PASS_THRESHOLD` (hold or fail):
-  ```json
-  [["🔁 再听这句|dict_retry", "🔄 下一句|dict_next"], ["🧭 练习其他|nav:main"]]
-  ```
-- If `accuracy ≥ PASS_THRESHOLD` (clean pass):
-  ```json
-  [["🔄 再来一句|dict_next", "🧭 练习其他|nav:main"]]
-  ```
+Buttons (always, regardless of accuracy):
+
+```json
+[["🔄 再来一句|dict_next", "🧭 练习其他|nav:main"]]
+```
+
+**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` — see Hard Rule 7. Voice is replayable from chat history, so no dedicated retry button.
 
 ### State D: Persist Evidence
 
-Call `persist` with `action="practice"` or omit `action`.
+Call `persist` with `action="practice"` (or omit `action`).
 
 Minimum payload:
 
@@ -193,13 +183,14 @@ Minimum payload:
   "accuracy": 0.75,
   "raw_score": 6,
   "max_score": 8,
-  "feedback": "The learner missed the weak form 'to' and substituted 'software' with 'soft wear'. This suggests weak word-boundary parsing under connected speech, while the main sentence frame was understood.",
+  "feedback": "<IN ENGLISH for DB / learner-state — the user-facing UI uses the Chinese feedback in §3 State C> The learner missed the weak form 'to' and substituted 'software' with 'soft wear'. This suggests weak word-boundary parsing under connected speech, while the main sentence frame was understood.",
   "audio_path": "<tts file path>",
   "section": "listening",
   "domain": "listening",
   "load_score": 1,
   "minutes": 1,
-  "ui_feedback": "<comma-joined exact labels of every button tapped this round, e.g. '🐢 慢速播放' — leave empty string if no button was tapped>",
+  "mode": "study",
+  "ui_feedback": "<comma-joined exact button labels tapped this round, e.g. '🐢 慢速播放' — empty if none>",
   "metadata": "{\"target_weakness\":\"function_word_miss\",\"i_plus_one_dimension\":\"connected_speech\",\"sentence_words\":8,\"tier\":\"intermediate\",\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
   "errors": "[{\"key\":\"function_word_miss\",\"category\":\"listening\",\"severity\":\"medium\",\"original\":\"\",\"correction\":\"to\",\"note\":\"Missed weak function word in connected speech.\"}]",
   "subcap_scores": "[{\"key\":\"listening.detail_accuracy\",\"score\":6.75,\"evidence\":\"6 of 8 tokens correct.\"},{\"key\":\"listening.connected_speech\",\"score\":5.0,\"evidence\":\"Missed weak form and boundary.\"}]"
@@ -208,56 +199,39 @@ Minimum payload:
 
 `prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
 
-**`ui_feedback` mandatory if any button was tapped**, even on `accuracy=1.0` — otherwise "passed only after slow-down" gets over-promoted.
+`ui_feedback` mandatory if any button was tapped, even on `accuracy=1.0`.
 
-Abandoned records are written in State B; State D only persists attempted sentences.
-
-Use `response`, never `raw_content`.
+State D persists attempted sentences only. Abandoned rows are written in State B. Use `response`, never `raw_content`.
 
 ### State E: Continue (`dict_next`)
 
-- Re-call `persist action="recent_practice"` (§1) — source of truth for credits + dedup. Do not reconstruct from chat memory.
-- Apply §2.3 (skip `redo_count > 0` rows) to decide tier+length before generating.
+- Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
+- Apply §2.3 (skip `redo_count > 0`) before generating.
 - Skip `coach_context` re-call unless tier changed.
-- Generate next sentence (State A step 2 — incl. dedup check).
-
-### State F: Retry the same sentence (`dict_retry`)
-
-Triggered when the retry button is shown (previous round was hold/fail). Consolidation, not a new probe — bypass tier/length recompute.
-
-1. **Recover the parent sample.** Call `persist action="recent_practice"` with `limit=1, skill_type="listening.dictation"` and grab `id`, `prompt`, `prompt_hash`, `audio_path`. Don't trust chat memory.
-2. **Replay the same audio.** Re-send the existing `audio_path` via `tg_msg(type="voice")`. Do not re-call `tts`. (If `audio_path` is missing, fall back to a fresh `tts` on the same `prompt` at standard 100% speed.)
-3. **Resend the instruction keyboard.** Same text + same `dict_slow` / `dict_easier` buttons as State A.
-4. **Initialize a fresh `ui_feedback` accumulator** for this retry round.
-5. **Wait** for the user's typed answer.
-6. **On answer:** run State C scoring, then persist via State D **with these overrides**:
-   - `parent_sample_id` = parent row's `id`
-   - `redo_count` = parent's `redo_count + 1`
-   - `prompt_hash` = parent's `prompt_hash` (intentional collision — same item)
-   - `prompt` = parent's `prompt`
-   - `audio_path` = parent's `audio_path` (or fresh fallback)
-   - `metadata` includes `"is_redo": true` and `"parent_accuracy": <parent's accuracy>`
-7. After persisting, present the same conditional button layout from State C.
+- Generate next sentence (State A step 2 — incl. dedup).
 
 ## 4. Collaborates With
 
-- `planner`: routes the learner here when listening/detail/connected-speech is the highest-value next drill.
-- `learner-state`: reads persisted evidence later, computes long-running listening state, updates `MEMORY.md`, and writes progress snapshots.
-- `coach`: uses this skill's errors and subcap scores to explain what the learner should do next.
-- `vocab-harvest` / `vocab-review`: can later turn repeated missed chunks into review items.
-- `support/data-contract`: defines the `persist` write protocol, legal fields, and error/subcap conventions.
+- `planner`: routes here when listening/detail/connected-speech is the highest-value drill.
+- `learner-state`: reads persisted evidence, computes long-running listening state, updates `MEMORY.md`.
+- `coach`: uses errors/subcap scores to explain next steps.
+- `vocab-harvest` / `vocab-review`: turn repeated missed chunks into review items.
+- `support/data-contract`: defines the `persist` write protocol.
 
 ## 5. Failure And Fallbacks
 
-- If `tts` fails: send a text error, do not invent an audio path. Offer to try again or return to menu.
-- If `persist` fails: still send feedback, then clearly say the practice result was not saved.
-- If the learner answers in Chinese or says they cannot type: do not score harshly; either replay slower or step down.
-- `<tg-spoiler>` is client-side only — no callback. Do not invent a `spoiler_used` flag, do not condition scoring on whether they peeked.
-- If the answer is empty: ask once whether to replay, make easier, or skip. If skipped, write `completed=0`.
+- `tts` fails → text error, no fake `audio_path`. Offer retry / menu.
+- `persist` fails → still send feedback, but say it was not saved.
+- Learner answers in Chinese / can't type → don't score harshly; replay slower or step down.
+- `<tg-spoiler>` is client-side; no callback. Don't invent `spoiler_used`.
+- Empty answer → ask once: replay / easier / skip. If skipped, write `completed=0`.
 
 ## 6. Hard Rules
 
-1. `tts` is only for the practice sentence, not for assistant chatter.
-2. Diff every word. Do not hide missed articles, plural endings, function words, or word-boundary errors.
-3. Use `persist` for learner reads/writes. No raw DB access.
-4. Do not update `MEMORY.md`; `learner-state` owns durable ability state.
+1. `tts` only for the practice sentence — no assistant chatter.
+2. Diff every word. Don't hide missed articles, plurals, function words, boundaries.
+3. Use `persist` for reads/writes; no raw DB.
+4. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
+5. **Voice before keyboard, sequential.** Never `tg_msg type="voice"` and `type="keyboard"` in parallel.
+6. **Feedback content (not format) required.** State C must always cover: correct sentence, brief translation, specific missed/mistaken words, one-phrase root cause. Format is the LLM's call — no fixed template.
+7. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` to attach buttons. Same for State A's instruction message.

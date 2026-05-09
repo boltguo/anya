@@ -178,6 +178,12 @@ register({
         const buttons = parseArray(args.buttons);
         const replyTo = resolveReplyTo(args.reply_to, tg);
         const parseMode = (args.parse_mode as string) || 'HTML';
+        // Defense: LLM sometimes bundles a voice/audio URL into a keyboard call.
+        // The keyboard endpoint has no media slot, so the audio would be silently dropped.
+        // Dispatch the voice first, then send the keyboard message.
+        if (args.url) {
+          await tg.sendVoice(String(args.url), undefined, {});
+        }
         const msgId = await tg.sendKeyboard(renderText(args.text as string, parseMode), buttons, {
           replyTo, tag: args.tag as string,
         });

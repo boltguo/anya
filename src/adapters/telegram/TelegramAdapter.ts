@@ -609,16 +609,38 @@ export class TelegramAdapter {
         }
       }
       // ── Practice menu navigation (client-side, no agent) ──
-      // Send as a NEW message to preserve the original content (e.g. evaluation scores).
+      // If the source message is itself a menu page (every button is nav:* / menu / a known
+      // skill slug), edit it in-place so navigation feels like a single drill-down screen.
+      // Otherwise (source is a practice report with practice-action buttons like dict_next),
+      // send as a NEW message so the original report stays in chat history.
       else if (isNavCallback(data)) {
         const page = getNavPage(data);
         if (page) {
           const chatId = ctx.callbackQuery.message?.chat?.id;
           if (chatId) {
-            await this.bot.api.sendMessage(chatId, page.text, {
-              reply_markup: page.keyboard,
-            }).catch(() => {});
+            const sourceKeyboard = ctx.callbackQuery.message?.reply_markup?.inline_keyboard;
+            const sourceIsMenu = !!sourceKeyboard && sourceKeyboard.every((row) =>
+              row.every((btn) => {
+                if (!('callback_data' in btn) || !btn.callback_data) return false;
+                const cd = btn.callback_data;
+                if (cd === 'menu' || cd.startsWith('nav:')) return true;
+                if (!/[_:]/.test(cd) && getSkill(cd)) return true; // skill slug like "listening-dictation"
+                return false;
+              }),
+            );
+            agentLogger.info({ msg: 'tg_nav', chatId, data, mode: sourceIsMenu ? 'edit' : 'new' });
+            try {
+              if (sourceIsMenu) {
+                await ctx.editMessageText(page.text, { reply_markup: page.keyboard });
+              } else {
+                await this.bot.api.sendMessage(chatId, page.text, { reply_markup: page.keyboard });
+              }
+            } catch (err) {
+              agentLogger.error({ msg: 'tg_nav_render_failed', chatId, data, error: (err as Error).message });
+            }
           }
+        } else {
+          agentLogger.warn({ msg: 'tg_nav_unknown_page', data });
         }
       }
       // ── Show main menu (from menu callback) ──

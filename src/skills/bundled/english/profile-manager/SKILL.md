@@ -127,7 +127,10 @@ Do NOT invent new markdown headers. You MUST map the collected intelligence into
 - initialized: true
 
 ## About the User
-[Merge Bundle 1 (Professional Context) & Bundle 3 (Passions & Hobbies) here. e.g., Frontend Developer at a SaaS startup. Hardcore gamer (Black Myth, Elden Ring). Reads English sci-fi.]
+
+**Professional context.** [Bundle 1 here. e.g., Frontend developer at a SaaS startup, occasional cross-stack and AI-tooling work. Uses English mainly for technical docs.]
+
+**Personal interests.** [Bundle 3 here — keep this as a separate paragraph so hobbies don't get steamrolled by the professional line. e.g., Sci-fi novels and films, Black Myth / Elden Ring, MOBA mobile games, weekend bouldering.]
 
 ## Learning Goals
 [Put Bundle 2 here, including the timeframe and any concrete metric the user mentioned. e.g., 3 months → pass a fully English technical interview at a foreign-funded company; secondary goal: read React/Node docs without translation.]
@@ -140,6 +143,8 @@ Do NOT invent new markdown headers. You MUST map the collected intelligence into
 
 ## Personalization Notes
 [Any extra personality quirks gathered during the chat — e.g., self-described "lazy but competitive", responds well to game-like challenges.]
+
+**Topic rotation rule (always include this paragraph verbatim, adapted to the user's actual hobbies):** Practice content should rotate across both sides of the learner's world — roughly half work/professional-themed and half hobby-themed (films, games, anime, sports, music — whatever Bundle 3 captured). Do not default every example to the user's profession just because that's their day job; hobby topics are equally valid practice material.
 ```
 
 After updating `USER.md`, sync to DB via `persist action="profile_upsert"`.
