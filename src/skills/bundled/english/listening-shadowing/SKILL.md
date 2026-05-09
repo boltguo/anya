@@ -75,7 +75,7 @@ Track two running counters across the session, computed from `recent_practice.ro
 | `demotion_credit ≥ STREAK` **inside** the tier | Stay in tier; drop clip length by **−2 words** (clamped to tier min); reset `demotion_credit`. |
 | Hard-button tap (`shadow_hard`) | Persists an abandoned row (State B), which `recent_practice` will surface as a fail next call — no separate counter bookkeeping. |
 
-**Retry rows are skipped from credit counting.** Any row with `redo_count > 0` (written by `shadow_retry`, see State F) is consolidation evidence, not native-tempo competence. Ignore those rows when walking `recent_practice.rows` for credits; they still count for dedup.
+**Retry rows are skipped from credit counting.** Any row with `redo_count > 0` (written by the implicit re-practice loop in State F) is consolidation evidence, not native-tempo competence. Ignore those rows when walking `recent_practice.rows` for credits; they still count for dedup.
 
 Hold rounds: keep the same length, optionally swap **one** dimension (syntax / connected-speech density / accent) to probe a different weakness from `coach_context.summary.errors`.
 
@@ -91,12 +91,13 @@ Hold rounds: keep the same length, optionally swap **one** dimension (syntax / c
 ### State A: Prepare And Deliver
 
 1. Decide tier and clip length from §2.3. Generate one natural English passage at the chosen length / syntax / accent. Compute its `prompt_hash` and reject if it appears in `recent_practice.recent_prompt_hashes`; regenerate.
-2. Use `tts` only for the target passage at standard 100% speed. Do not synthesize conversational filler. Send via `tg_msg(type="voice")`.
-3. Send the instruction with `tg_msg(type="keyboard")`:
+2. Use `tts` only for the target passage at standard 100% speed. Do not synthesize conversational filler.
+3. **Send audio FIRST**: `tg_msg(type="voice")` — the voice message MUST be sent and confirmed **before** the instruction message. Do NOT send them in parallel.
+4. **Then send instruction**: `tg_msg(type="keyboard")`:
    - **Text**: `🎧 先盲听一遍，然后直接按住录音，**一边听一边跟我读（影子跟读）**。\n\n如果实在跟不上，可以点开看原文：<tg-spoiler>{correct English passage}</tg-spoiler>`
    - **Buttons**: `[["🐢 慢速播放|shadow_slow", "😵 太难了，降级|shadow_hard"]]`
-4. **Initialize a per-round `ui_feedback` accumulator** (empty string). Every button tap below MUST append the exact button label.
-5. **Stop** and wait for the user's voice message or button tap.
+5. **Initialize a per-round `ui_feedback` accumulator** (empty string). Every button tap below MUST append the exact button label.
+6. **Stop** and wait for the user's voice message or button tap.
 
 ### State B: Button Handling (Before recording)
 
@@ -140,7 +141,7 @@ Hold rounds: keep the same length, optionally swap **one** dimension (syntax / c
 
 When the user sends their voice message:
 
-1. **Run `pron_assess`** with the user's `audio_path` and the `reference_text` of the passage. This returns `fluency` (0–100) and pronunciation `accuracy` (0–100), among other fields.
+1. **Run `pron_assess`** with the user's `audio_path` and the `reference_text` of the passage. This returns 4 scores (all 0–100): `accuracy`, `fluency`, `completeness`, `prosody`.
 2. Map for the database:
    - `accuracy = fluency / 100` (this is what credit gating reads)
    - `raw_score = fluency`
@@ -149,19 +150,32 @@ When the user sends their voice message:
 3. Identify 1–2 specific places where native speakers link words (连读/吞音) that the user missed or stumbled on — this drives the `errors` / `subcap_scores` arrays.
 4. Send feedback and persist in the same evaluation turn.
 
-Feedback message must include:
+**Feedback template (MANDATORY format, all labels in Chinese):**
 
-- The original English text + Chinese translation (now safe to reveal post-attempt).
-- Fluency score (0–100) and a one-line rhythm verdict (kept up / slipped at the second chunk / etc.).
-- 1–2 specific connected-speech moments to point at.
+```
+📊 跟读报告：
+🎯 准确度 <accuracy> | 流利度 <fluency> | 完整度 <completeness> | 韵律 <prosody>
 
-Buttons (layout depends on accuracy):
+原文：<correct English passage>
+翻译：<Chinese translation>
 
-- If `accuracy < PASS_THRESHOLD` (fluency < 80):
+<1-2 sentence Chinese diagnosis focusing on rhythm/connected-speech>
+```
+
+**Button logic (tiered by fluency score):**
+
+- If `fluency < 60` (too low — forced re-practice, NO buttons):
+  - Append to the feedback: "这句还没跟上节奏哦，再听几遍原音找找感觉，然后直接录音发给我！💪"
+  - Do NOT show any buttons. Wait for the user to send another voice message.
+  - On the next voice message, re-evaluate as State C (implicit retry loop until fluency ≥ 60).
+
+- If `fluency ≥ 60 AND fluency < 80` (hold zone — show buttons with encouragement):
   ```json
-  [["🔁 同段再试一次|shadow_retry", "🔄 下一句|shadow_next"], ["🧭 练习其他|nav:main"]]
+  [["🔄 再来一句|shadow_next", "🧭 练习其他|nav:main"]]
   ```
-- If `accuracy ≥ PASS_THRESHOLD` (fluency ≥ 80):
+  Append: "不急，可以再听一遍找找感觉，或者继续下一句。"
+
+- If `fluency ≥ 80` (pass):
   ```json
   [["🔄 再来一句|shadow_next", "🧭 练习其他|nav:main"]]
   ```
@@ -208,29 +222,28 @@ Abandoned-on-too-hard records are written by State B (`shadow_hard`) — do not 
 - Skip the `coach_context` re-call unless the just-applied rule changed tier.
 - Generate the next clip (State A step 1, including the `recent_prompt_hashes` dedup check).
 
-### State F: Retry the same clip (`shadow_retry`)
+### State F: Implicit re-practice (fluency < 60 loop)
 
-Triggered by the conditional retry button (only shown when fluency was below `PASS_THRESHOLD`). Intent: **consolidation at the same difficulty**, not a new probe — bypass tier/length recomputation.
+When a user sends another voice message after a `fluency < 60` evaluation (no buttons were shown), treat it as a consolidation retry on the **same passage**:
 
-1. **Recover the parent sample.** Call `persist action="recent_practice"` with `limit=1, skill_type="listening.shadowing"` and grab the most recent row's `id`, `prompt`, `prompt_hash`, `audio_path`, `raw_score` (parent fluency).
-2. **Replay the same audio.** Re-send the existing `audio_path` via `tg_msg(type="voice")`. **Do not re-call `tts`**. (Fall back to a fresh `tts` on the same `prompt` at standard 100% speed if `audio_path` is missing.)
-3. **Resend the instruction keyboard** (same text + same `shadow_slow` / `shadow_hard` buttons).
-4. **Initialize a fresh `ui_feedback` accumulator**.
-5. **Wait** for the user's new voice message.
-6. **On voice received:** run State C evaluation (`pron_assess` + diagnostic), then persist via State D **with these overrides**:
-   - `parent_sample_id` = parent row's `id`
-   - `redo_count` = parent's `redo_count + 1`
-   - `prompt_hash` = parent's `prompt_hash` (intentional collision — same item)
-   - `prompt` = parent's `prompt`
-   - `audio_path` = parent's `audio_path` (or fresh fallback)
-   - `metadata` includes `"is_redo": true` and `"parent_fluency": <parent's raw_score>`
-7. After persisting, present the same conditional button layout from State C.
+1. **Reuse the same `prompt`, `prompt_hash`, and `audio_path`** from the previous round. Do not generate a new passage.
+2. Run `pron_assess` with the same `reference_text`.
+3. Persist via State D **with these overrides**:
+   - `parent_sample_id` = previous round's sample `id`
+   - `redo_count` = previous round's `redo_count + 1`
+   - `prompt_hash` = same as previous (intentional collision — same item)
+   - `metadata` includes `"is_redo": true` and `"parent_fluency": <previous raw_score>`
+4. Apply the same tiered button logic from State C:
+   - If still `fluency < 60` → no buttons, prompt to re-practice again.
+   - If `fluency ≥ 60` → show `shadow_next` + `nav:main` buttons.
 
 ## 4. Hard Rules
 
 1. **No Early Reveals**: never show the English transcript before they attempt the shadowing, except inside `<tg-spoiler>...</tg-spoiler>`.
 2. **Score rhythm, not just phonemes**: fluency drives credits; pronunciation accuracy is logged separately in `band_pronunciation` for downstream coaching only.
-3. **Audio Mandatory**: you MUST generate TTS audio for every clip.
+3. **Audio Mandatory**: you MUST generate TTS audio for every clip. Send voice BEFORE instruction (sequential, not parallel).
 4. **Use `persist` for learner reads/writes**. No raw DB access.
 5. **Do not update `MEMORY.md`** — `learner-state` owns durable ability state.
-6. After every evaluated clip, give next-step buttons.
+6. **Tiered buttons**: fluency < 60 → no buttons (forced re-practice); fluency ≥ 60 → show `shadow_next` + `nav:main` only. Never show a dedicated retry button.
+7. **Feedback format**: always use the fixed 4-dimension template (准确度/流利度/完整度/韵律). All labels in Chinese. Do not mix English labels.
+

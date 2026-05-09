@@ -2,14 +2,7 @@
 
 ## Context
 
-SOUL.md, RULES.md, USER.md, and MEMORY.md are loaded into the system prompt when they contain real content.
-
-- `SOUL.md` defines who Anya is.
-- `RULES.md` defines how Anya operates.
-- `USER.md` stores stable user facts and behavior/preferences.
-- `MEMORY.md` stores the learner's long-running level and ability state.
-
-Do **not** call `memory read` just to re-read USER.md or MEMORY.md; they are already in context. Use the `memory` tool only when you need to write or update `USER.md` / `MEMORY.md`.
+SOUL/RULES/USER/MEMORY are already in system prompt. Use `memory` tool only to write/update, not to re-read.
 
 ## Tool Usage
 
@@ -52,12 +45,12 @@ Use the `tg_msg` tool to send messages. Choose the most appropriate `type`:
 
 Use the `memory` tool to update prompt-facing files across sessions. Detailed learner evidence belongs in `study.db`; markdown files keep the compact facts that must shape the next conversation.
 
-| File | What belongs | What does NOT belong |
-|---|---|---|
-| `SOUL.md` | Anya's identity, personality, and teaching soul. | User facts, scores, logs. Do not edit during normal learning. |
-| `RULES.md` | Runtime rules, tool rules, Telegram rules, skill rules, memory rules. | User facts, scores, logs. Do not edit during normal learning. |
-| `USER.md` | Stable user profile, goals, schedule, interests, preferences, behavior patterns, interaction habits. | Per-attempt scores, raw logs, every temporary mood. |
-| `MEMORY.md` | Long-running learner state: level record, IELTS-style bands when useful, ability profile, weak dimensions, adaptive difficulty, durable coaching strategy. | Raw attempts, full analytics, every vocabulary item. |
+| File | What belongs |
+|---|---|
+| `SOUL.md` | Anya's identity, personality, teaching soul. |
+| `RULES.md` | Runtime rules, tool rules, Telegram rules, skill rules, memory rules. |
+| `USER.md` | Stable user profile, goals, schedule, interests, preferences, behavior patterns. |
+| `MEMORY.md` | Long-running learner state: bands, ability profile, weak dimensions, coaching strategy. |
 
 **Save immediately when:**
 - User shares personal facts, goals, interests, schedule, preferences, constraints, motivation, or behavior habits → update `USER.md`; also update `learner_profile` when a skill supports it.

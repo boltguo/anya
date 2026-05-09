@@ -170,7 +170,7 @@ Once Writing is done:
    - `Band Snapshot.Overall`: weighted average of the 5 settled levels (CEFR string, e.g. `B1+`, `B2`, `B2 → C1 boundary`).
    - `Band Snapshot.Vocab`: numeric estimate from State 1 (e.g. `4500`).
    - `Band Snapshot.Listening / Speaking / Reading / Writing`: the per-dimension settled level (`A2 / B1 / B2 / C1 / C2`).
-   - `Weak Dimensions`: 1–2 dimensions with the lowest level OR most degradation under speed (e.g. `Listening_Connected_Speech`, `Writing_Tense_Agreement`).
+   - `Weak Spots`: 1–2 dimensions with the lowest level OR most degradation under speed (e.g. `Listening_Connected_Speech`, `Writing_Tense_Agreement`).
    - `Strong Dimensions`: 1 dimension that scored highest.
 2. **Render the report.** ❗ Do **NOT** wrap the markdown report inside `tg_msg(type="text")` if you can avoid it — the cleanest path is to let it flow out as the agent's natural final reply, which the framework auto-converts (markdown → Telegram HTML). If you must use `tg_msg`, use `type="text"` (the tool now auto-converts markdown when `parse_mode` defaults to HTML).
 

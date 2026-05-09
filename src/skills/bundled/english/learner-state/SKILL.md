@@ -29,10 +29,10 @@ Execute the following actions:
 2. **Write to MEMORY.md**: Use the `memory` tool (`action=replace`) to update:
    - `Calibration`: confidence (low/med/high based on `n`), update date.
    - `Core Capabilities`: The newly computed scores for Listening, Speaking, Reading, Writing.
-   - `Weak Dimensions`: weakest subcaps from `coach_context.summary.subcaps`.
-   - `Top Errors`: recurring errors from `coach_context.summary.errors`.
-   - `Vocabulary Profile`: due-word count, weak recall signals, and personal-error cards from `coach_context.due_words` / `coach_context.personal_error_cards`.
+   - `Weak Spots`: merge weakest subcaps + recurring errors into a single section (replaces the old separate "Weak Dimensions", "Top Errors", and "Error Tendencies" sections).
+   - `Coaching & Adaptive Controls`: merge coaching strategy + adaptive training parameters into one section.
    - `Study Consistency`: recent minutes, active days, reviewed words, and planned tasks from `coach_context.summary.activity` / `coach_context.due_tasks`.
+   - **Compact-write rules**: omit fields with value "n/a", "not tested", 0, or "none". Per-skill profiles: max 4 lines each. Do not duplicate info across sections.
 3. **Weekly Snapshot**: If this is a manual progress report, weekly cron run, or meaningful state refresh, compute the snapshot fields from `coach_context`, `progress_trend`, and MEMORY, then call `persist action="progress_snapshot"` with the computed values:
    - `current_level`, four skill scores, vocabulary counts, total minutes, active days, sample/session counts, due-word count, weakest subcaps JSON, top errors JSON, and notes.
    - This writes `progress_snapshots`. `persist` only upserts the provided values; it does not decide scores or learner state.

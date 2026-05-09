@@ -609,12 +609,16 @@ export class TelegramAdapter {
         }
       }
       // ── Practice menu navigation (client-side, no agent) ──
+      // Send as a NEW message to preserve the original content (e.g. evaluation scores).
       else if (isNavCallback(data)) {
         const page = getNavPage(data);
         if (page) {
-          await ctx.editMessageText(page.text, {
-            reply_markup: page.keyboard,
-          }).catch(() => {});
+          const chatId = ctx.callbackQuery.message?.chat?.id;
+          if (chatId) {
+            await this.bot.api.sendMessage(chatId, page.text, {
+              reply_markup: page.keyboard,
+            }).catch(() => {});
+          }
         }
       }
       // ── Show main menu (from menu callback) ──
@@ -671,17 +675,21 @@ export class TelegramAdapter {
           }
         }
 
-        await ctx.editMessageText(
-          ctx.callbackQuery.message?.text + `\n\n→ ${selectedLabel}`
-        ).catch(() => {});
+        // Detect skill slug callbacks early so we can skip editing the original message
+        const matchedSkill = getSkill(data);
+        const isSkillSwitch = !!matchedSkill;
+
+        // For skill-switch callbacks, don't edit the original message — it may contain
+        // menu content or evaluation results that should be preserved.
+        if (!isSkillSwitch) {
+          await ctx.editMessageText(
+            ctx.callbackQuery.message?.text + `\n\n→ ${selectedLabel}`
+          ).catch(() => {});
+        }
 
         const chatId = ctx.callbackQuery.message?.chat?.id;
         if (chatId) {
           const sessionKey = `tg:${chatId}`;
-
-          // Detect skill slug callbacks for soft reset
-          const matchedSkill = getSkill(data);
-          const isSkillSwitch = !!matchedSkill;
           const agentInput = `[callback] ${data}`;
 
           agentLogger.info({ msg: 'tg_callback', chatId, userId, data, label: selectedLabel, skillSwitch: isSkillSwitch });
