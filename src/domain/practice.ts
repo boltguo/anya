@@ -12,6 +12,7 @@ import {
   type ErrorEntry, type SubcapEntry,
   withTransaction, optionalNumber, normalizeRowId, normalizeJsonString,
   inferSection, severityScore, parseJsonList, upsertActivity, upsertBandTrend,
+  clampInt,
 } from './helpers.js';
 
 /**
@@ -178,6 +179,68 @@ export function dueTasks(db: DatabaseSync, args: Record<string, unknown>): unkno
       id ASC
   `).all(date, date);
   return { ok: true, action: 'due_tasks', rows, count: rows.length };
+}
+
+/**
+ * Returns the most recent practice samples for a given session (and optionally skill_type),
+ * ordered newest-first. Designed for skills that need short-term self-state (i+1 streak gating,
+ * prompt_hash dedup) without polluting the agent's chat context.
+ *
+ * Decodes `metadata` JSON for caller convenience and surfaces a flat
+ * `recent_prompt_hashes` array for trivial dedup checks.
+ *
+ * @param {DatabaseSync} db - The active SQLite database connection instance.
+ * @param {Record<string, unknown>} args - { session_id (required), skill_type, limit, include_abandoned }.
+ * @returns {unknown} { ok, action, rows, count, recent_prompt_hashes }.
+ */
+export function recentPractice(db: DatabaseSync, args: Record<string, unknown>): unknown {
+  const sessionId = String(args.session_id || '');
+  if (!sessionId) return { error: 'Missing session_id' };
+
+  const skillType = String(args.skill_type || '');
+  const limit = clampInt(Number(args.limit ?? 5), 1, 50);
+  const includeAbandoned = args.include_abandoned === undefined
+    ? true
+    : Number(args.include_abandoned) === 1 || args.include_abandoned === true;
+
+  const where: string[] = ['session_id = ?'];
+  const params: (string | number)[] = [sessionId];
+  if (skillType) {
+    where.push('skill_type = ?');
+    params.push(skillType);
+  }
+  if (!includeAbandoned) where.push('completed = 1');
+  params.push(limit);
+
+  const rows = db.prepare(`
+    SELECT id, created_at, skill_type, completed, accuracy, raw_score, max_score,
+           prompt, prompt_hash, ui_feedback, parent_sample_id, redo_count, metadata
+    FROM samples
+    WHERE ${where.join(' AND ')}
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  `).all(...params) as Array<Record<string, unknown>>;
+
+  const decoded: Array<Record<string, unknown>> = rows.map((r) => {
+    const raw = String(r.metadata ?? '');
+    let meta: unknown = null;
+    if (raw.length > 0) {
+      try { meta = JSON.parse(raw); } catch { meta = raw; }
+    }
+    return { ...r, metadata: meta };
+  });
+
+  const recent_prompt_hashes = decoded
+    .map((r) => String(r.prompt_hash ?? ''))
+    .filter((h) => h.length > 0);
+
+  return {
+    ok: true,
+    action: 'recent_practice',
+    rows: decoded,
+    count: decoded.length,
+    recent_prompt_hashes,
+  };
 }
 
 /**

@@ -14,7 +14,7 @@ import { getDatabase } from './db.js';
 import type { ToolContext } from '../agent/types.js';
 
 // ── Domain imports ──────────────────────────────────────────────────────────
-import { logPractice, taskUpsert, dueTasks, taskComplete } from '../domain/practice.js';
+import { logPractice, recentPractice, taskUpsert, dueTasks, taskComplete } from '../domain/practice.js';
 import { upsertWords, reviewWord, dueWords, wordLookup } from '../domain/vocabulary.js';
 import { studySummary, progressSnapshot, progressTrend } from '../domain/progress.js';
 import { sessionStart, sessionEnd } from '../domain/session.js';
@@ -22,14 +22,15 @@ import { profileUpsert, coachContext } from '../domain/profile.js';
 
 register({
   name: 'persist',
-  description: 'Typed gateway for English study.db. Default action="practice" writes practice evidence. Other actions: word_upsert, word_review, due_words, word_lookup, study_summary, coach_context, profile_upsert, task_upsert, due_tasks, task_complete, session_start, session_end, progress_snapshot, progress_trend. Skills must use this instead of raw db calls for learner data.',
+  description: 'Typed gateway for English study.db. Default action="practice" writes practice evidence. Other actions: word_upsert, word_review, due_words, word_lookup, study_summary, coach_context, recent_practice, profile_upsert, task_upsert, due_tasks, task_complete, session_start, session_end, progress_snapshot, progress_trend. Skills must use this instead of raw db calls for learner data.',
   parameters: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        description: 'practice (default) | word_upsert | word_review | due_words | word_lookup | study_summary | coach_context | profile_upsert | task_upsert | due_tasks | task_complete | session_start | session_end | progress_snapshot | progress_trend',
+        description: 'practice (default) | word_upsert | word_review | due_words | word_lookup | study_summary | coach_context | recent_practice | profile_upsert | task_upsert | due_tasks | task_complete | session_start | session_end | progress_snapshot | progress_trend',
       },
+      include_abandoned: { type: 'integer', description: 'For recent_practice: 1 (default) include completed=0 abandoned rows; 0 only completed=1.' },
       skill_type: { type: 'string', description: 'Practice skill identifier, e.g. listening.dictation, writing.essay, vocab.review.' },
       session_id: { type: 'string', description: 'Session key from the user input, e.g. tg:12345.' },
       prompt: { type: 'string', description: 'Practice prompt/question/topic. Required for action=practice unless completed=0.' },
@@ -139,6 +140,7 @@ register({
         case 'word_lookup':       return JSON.stringify(wordLookup(db, args));
         case 'study_summary':     return JSON.stringify(studySummary(db, args));
         case 'coach_context':     return JSON.stringify(coachContext(db, args));
+        case 'recent_practice':   return JSON.stringify(recentPractice(db, args));
         case 'profile_upsert':    return JSON.stringify(profileUpsert(db, args));
         case 'task_upsert':       return JSON.stringify(taskUpsert(db, args));
         case 'due_tasks':         return JSON.stringify(dueTasks(db, args));
