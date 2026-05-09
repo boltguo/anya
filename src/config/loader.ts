@@ -64,6 +64,7 @@ function applyEnvOverrides(config: AnyaConfig): AnyaConfig {
     ANYA_TELEGRAM_BOT_TOKEN: (c, v) => { c.telegram.bot_token = v; },
     ANYA_LOG_LEVEL: (c, v) => { c.advanced.log_level = v; },
     ANYA_MODEL: (c, v) => { c.provider.model = v; },
+    ANYA_PROVIDER_BACKEND: (c, v) => { c.provider.backend = v as 'gemini' | 'codex'; },
   };
 
   for (const [envKey, setter] of Object.entries(envMap)) {
@@ -96,6 +97,7 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
   const provider = raw.provider;
   if (provider && (provider.gemini || provider.openai || provider.active)) {
     migrated.provider = {
+      backend: 'gemini',
       model: provider.gemini?.model || provider.openai?.model || 'gemini-3-flash-preview',
       max_tokens: provider.max_tokens || 8192,
       temperature: provider.temperature ?? 0.7,
@@ -113,6 +115,23 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
   delete migrated.vertex;
   delete migrated.image_gen;
   delete migrated.vision;
+  delete migrated.agent;
+  delete migrated.user;
+
+  // v0.4 → v0.5: add provider.backend if missing
+  if (migrated.provider && typeof migrated.provider === 'object' && !migrated.provider.backend) {
+    const model = migrated.provider.model || '';
+    // Infer backend from model name
+    if (model.startsWith('gpt') || model.startsWith('codex') || model.startsWith('o')) {
+      migrated.provider.backend = 'codex';
+    } else {
+      migrated.provider.backend = 'gemini';
+      // If model looks like an OpenAI model but we're defaulting to gemini, fix model too
+      if (model.startsWith('gpt') || model.startsWith('codex')) {
+        migrated.provider.model = 'gemini-3-flash-preview';
+      }
+    }
+  }
 
   // Clean up legacy tool config.
   if (migrated.tools && typeof migrated.tools === 'object') {

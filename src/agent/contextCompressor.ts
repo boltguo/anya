@@ -96,11 +96,13 @@ export class ContextCompressor implements ContextEngine {
     const threshold = contextLimit * this.thresholdRatio;
     if (estimatedTokens > threshold) return true;
 
-    // Economic: prevent unbounded token spend on long conversations.
-    // Conservative ceiling — only fires for genuinely bloated sessions since
-    // compressed results aren't persisted and each trigger costs a summarizer call.
-    const ECONOMIC_TOKEN_CEILING = 60_000;
-    const ECONOMIC_MESSAGE_FLOOR = 50;
+    // Economic: cap token spend within a single skill session.
+    // Since skill switches create new sessions (shedding old history), a session
+    // reaching 25K tokens / 20 messages indicates accumulated practice turns
+    // worth compressing. Each trigger costs 1 summarizer call, but compression
+    // reduces message count to ~12, preventing re-triggers for several more turns.
+    const ECONOMIC_TOKEN_CEILING = 25_000;
+    const ECONOMIC_MESSAGE_FLOOR = 20;
     if (estimatedTokens > ECONOMIC_TOKEN_CEILING && messages.length > ECONOMIC_MESSAGE_FLOOR) return true;
 
     return false;

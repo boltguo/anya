@@ -70,12 +70,21 @@ export function runUsage(month?: string): void {
   console.log();
 
   // ── LLM ──
-  console.log(chalk.bold('  🧠 LLM (ChatGPT)'));
+  console.log(chalk.bold('  🧠 LLM'));
   console.log(`     Calls:         ${chalk.white(fmtNum(usage.llm.calls))}`);
   console.log(`     Input tokens:  ${chalk.white(fmtNum(usage.llm.input_tokens))}`);
   console.log(`     Output tokens: ${chalk.white(fmtNum(usage.llm.output_tokens))}`);
-  if (usage.llm.cached_tokens > 0) {
-    console.log(`     Cached tokens: ${chalk.white(fmtNum(usage.llm.cached_tokens))}`);
+  const cacheHitPct = usage.llm.input_tokens > 0
+    ? Math.round((usage.llm.cached_tokens / usage.llm.input_tokens) * 100)
+    : 0;
+  console.log(`     Cached tokens: ${chalk.white(fmtNum(usage.llm.cached_tokens))} ${chalk.dim(`(${cacheHitPct}% hit)`)}`);
+
+  // Per-provider breakdown
+  const providers = Object.entries(usage.llm_by_provider);
+  if (providers.length > 0) {
+    for (const [name, stats] of providers) {
+      console.log(`     ${chalk.dim(`📌 ${name}:`)} ${fmtNum(stats.calls)} calls, ${fmtNum(stats.input_tokens)}/${fmtNum(stats.output_tokens)} tok`);
+    }
   }
   console.log();
 

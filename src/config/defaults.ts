@@ -19,6 +19,8 @@ export interface AnyaConfig {
 
   /** Settings for the primary Large Language Model provider. */
   provider: {
+    /** The active provider backend ('gemini' or 'codex'). */
+    backend: 'gemini' | 'codex';
     /** The identifier of the specific model to use. */
     model: string;
     /** The absolute maximum output tokens allowed in a single generation. */
@@ -139,7 +141,8 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   version: '0.4.0',
 
   provider: {
-    model: 'gpt-5.4',
+    backend: 'gemini',
+    model: 'gemini-3-flash-preview',
     max_tokens: 8192,
     temperature: 0.7,
     max_retries: 3,

@@ -31,6 +31,7 @@ function ensureSchema(): void {
       month TEXT NOT NULL,
       day TEXT NOT NULL,
       service TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT '',
       calls INTEGER NOT NULL DEFAULT 1,
       input_tokens INTEGER NOT NULL DEFAULT 0,
       output_tokens INTEGER NOT NULL DEFAULT 0,
@@ -41,6 +42,8 @@ function ensureSchema(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_usage_month ON usage_events(month, service);
   `);
+  // Migration: add provider column to existing tables
+  try { db.exec(`ALTER TABLE usage_events ADD COLUMN provider TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
   _schemaReady = true;
 }
 
@@ -60,6 +63,14 @@ export interface MonthlyUsage {
     output_tokens: number;
     cached_tokens: number;
   };
+
+  /** LLM stats broken down by provider (gemini, codex) */
+  llm_by_provider: Record<string, {
+    calls: number;
+    input_tokens: number;
+    output_tokens: number;
+    cached_tokens: number;
+  }>;
 
   tts: {
     calls: number;
@@ -148,6 +159,7 @@ function emptyUsage(month: string): MonthlyUsage {
   return {
     month,
     llm: { calls: 0, input_tokens: 0, output_tokens: 0, cached_tokens: 0 },
+    llm_by_provider: {},
     tts: { calls: 0, chars: 0, duration_sec: 0 },
     stt: { calls: 0, duration_sec: 0 },
     pron_assess: { calls: 0, duration_sec: 0 },
@@ -189,12 +201,10 @@ export function loadUsage(month?: string): MonthlyUsage {
   for (const row of rows) {
     switch (row.service) {
       case 'llm':
-        usage.llm = {
-          calls: Number(row.total_calls),
-          input_tokens: Number(row.total_input_tokens),
-          output_tokens: Number(row.total_output_tokens),
-          cached_tokens: Number(row.total_cached_tokens),
-        };
+        usage.llm.calls += Number(row.total_calls);
+        usage.llm.input_tokens += Number(row.total_input_tokens);
+        usage.llm.output_tokens += Number(row.total_output_tokens);
+        usage.llm.cached_tokens += Number(row.total_cached_tokens);
         break;
       case 'tts':
         usage.tts = {
@@ -239,6 +249,32 @@ export function loadUsage(month?: string): MonthlyUsage {
     };
   }
 
+  // LLM per-provider breakdown
+  const providerRows = db.prepare(`
+    SELECT provider,
+           SUM(calls) AS total_calls,
+           SUM(input_tokens) AS total_input,
+           SUM(output_tokens) AS total_output,
+           SUM(cached_tokens) AS total_cached
+    FROM usage_events
+    WHERE month = ? AND service = 'llm' AND provider != ''
+    GROUP BY provider
+  `).all(m) as Array<{
+    provider: string;
+    total_calls: number;
+    total_input: number;
+    total_output: number;
+    total_cached: number;
+  }>;
+
+  for (const row of providerRows) {
+    usage.llm_by_provider[row.provider] = {
+      calls: Number(row.total_calls),
+      input_tokens: Number(row.total_input),
+      output_tokens: Number(row.total_output),
+      cached_tokens: Number(row.total_cached),
+    };
+  }
   return usage;
 }
 
@@ -246,13 +282,17 @@ export function loadUsage(month?: string): MonthlyUsage {
 
 /**
  * Track LLM API call with token counts.
+ * @param inputTokens - Total input tokens.
+ * @param outputTokens - Output tokens generated.
+ * @param cachedTokens - Tokens served from cache.
+ * @param provider - Provider name (e.g., 'gemini', 'codex').
  */
-export function trackLlm(inputTokens: number, outputTokens: number, cachedTokens = 0): void {
+export function trackLlm(inputTokens: number, outputTokens: number, cachedTokens = 0, provider = ''): void {
   ensureSchema();
   getDb().prepare(`
-    INSERT INTO usage_events (month, day, service, calls, input_tokens, output_tokens, cached_tokens)
-    VALUES (?, ?, 'llm', 1, ?, ?, ?)
-  `).run(currentMonth(), currentDay(), inputTokens, outputTokens, cachedTokens);
+    INSERT INTO usage_events (month, day, service, provider, calls, input_tokens, output_tokens, cached_tokens)
+    VALUES (?, ?, 'llm', ?, 1, ?, ?, ?)
+  `).run(currentMonth(), currentDay(), provider, inputTokens, outputTokens, cachedTokens);
 }
 
 /**

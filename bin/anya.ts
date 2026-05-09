@@ -113,11 +113,15 @@ program
 
     const config = loadConfig();
 
-    // ChatGPT — Codex
+    // LLM Provider
+    const backend = config.provider.backend;
     const { hasCodexAuth } = await import('../src/lib/auth.js');
     const hasCodex = hasCodexAuth();
+    const hasGeminiChat = !!config.gemini?.api_key;
+    const isCodex = backend === 'codex';
+    const providerReady = isCodex ? hasCodex : hasGeminiChat;
     console.log(
-      `  ChatGPT:   ${hasCodex ? '[ok]' : '[!!]'} Codex OAuth (${config.provider.model}) ${hasCodex ? '✓' : 'not authenticated'}`,
+      `  LLM:       ${providerReady ? '[ok]' : '[!!]'} ${backend} (${config.provider.model}) ${providerReady ? '✓' : isCodex ? 'not authenticated' : 'API key not set'}`,
     );
 
     // Vision — Gemini
@@ -453,6 +457,72 @@ program
   .action((file: string) => {
     execFileSync('tar', ['-czf', file, '-C', ANYA_HOME, '.'], { stdio: 'inherit' });
     console.log(`\n  [ok] Exported to ${file}\n`);
+  });
+
+// --- Model Command ---
+program
+  .command('model')
+  .description('Switch LLM provider (gemini / codex)')
+  .action(async () => {
+    if (!isInitialized()) {
+      console.log(chalk.yellow('~/.anya/ not initialized. Run "anya init" first.'));
+      return;
+    }
+
+    const { select } = await import('@inquirer/prompts');
+    const config = loadConfig();
+    const current = config.provider.backend;
+    const currentModel = config.provider.model;
+
+    console.log();
+    console.log(chalk.bold.cyan('  Model Settings'));
+    console.log(chalk.dim(`  Backend: ${current}`));
+    console.log(chalk.dim(`  Model:   ${currentModel}`));
+    console.log();
+
+    try {
+      const MODELS: Record<string, string> = {
+        gemini: 'gemini-3-flash-preview',
+        codex: 'gpt-5.4',
+      };
+
+      const backend = await select({
+        message: 'Select provider',
+        choices: [
+          {
+            name: `Gemini  ${current === 'gemini' ? chalk.green('← active') : ''}`,
+            value: 'gemini' as const,
+          },
+          {
+            name: `Codex (ChatGPT)  ${current === 'codex' ? chalk.green('← active') : ''}`,
+            value: 'codex' as const,
+          },
+        ],
+      });
+
+      config.provider.backend = backend;
+      config.provider.model = MODELS[backend] || config.provider.model;
+
+      const { saveConfig } = await import('../src/config/loader.js');
+      saveConfig(config);
+
+      console.log(chalk.green(`\n  [ok] Switched to ${backend} (${config.provider.model})`));
+
+      // Auto-restart gateway if running
+      try {
+        const gw = isServiceRunning('gateway');
+        if (gw.running) {
+          console.log(chalk.dim('  Restarting gateway...'));
+          await runGatewayRestart();
+        }
+      } catch { /* non-critical */ }
+    } catch (err) {
+      if ((err as Error)?.name === 'ExitPromptError') {
+        console.log(chalk.dim('\n  Cancelled.'));
+        return;
+      }
+      throw err;
+    }
   });
 
 // --- Usage Command ---

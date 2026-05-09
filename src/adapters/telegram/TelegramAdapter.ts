@@ -286,6 +286,35 @@ export class TelegramAdapter {
       await ctx.reply(`💀 Stopped.${extra}\nSession cleared — send a message to start over.`);
       agentLogger.info({ msg: 'tg_kill', chatId: ctx.chat.id, cancelled });
     });
+    this.bot.command('model', async (ctx) => {
+      const current = this.config.provider.backend;
+      const currentModel = this.config.provider.model;
+
+      const buttons = [
+        [
+          {
+            text: `${current === 'gemini' ? '✅ ' : ''}Gemini`,
+            callback_data: 'model:gemini',
+          },
+          {
+            text: `${current === 'codex' ? '✅ ' : ''}Codex (ChatGPT)`,
+            callback_data: 'model:codex',
+          },
+        ],
+      ];
+
+      await ctx.reply(
+        `🤖 <b>Model Settings</b>\n\n` +
+        `├ Backend: <code>${current}</code>\n` +
+        `└ Model: <code>${currentModel}</code>\n\n` +
+        `Select a provider:`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: buttons },
+        },
+      );
+      agentLogger.info({ msg: 'tg_model_command', chatId: ctx.chat.id });
+    });
 
     this.bot.command('usage', async (ctx) => {
       const { loadUsage } = await import('../../lib/usage.js');
@@ -300,11 +329,26 @@ export class TelegramAdapter {
       const AZURE_FREE_CHARS = 500_000;
       const AZURE_FREE_SPEECH_HOURS = 5;
       
-      const text = `📊 <b>Anya Usage — ${usage.month}</b>\n\n` +
-        `🧠 <b>LLM (ChatGPT)</b>\n` +
+      // Build per-provider LLM breakdown
+      const cacheHitPct = usage.llm.input_tokens > 0
+        ? Math.round((usage.llm.cached_tokens / usage.llm.input_tokens) * 100)
+        : 0;
+      let llmSection = `🧠 <b>LLM</b> (${this.config.provider.backend})\n` +
         `├ Calls: <code>${fmtNum(usage.llm.calls)}</code>\n` +
         `├ Input: <code>${fmtNum(usage.llm.input_tokens)}</code>\n` +
-        `└ Output: <code>${fmtNum(usage.llm.output_tokens)}</code>\n\n` +
+        `├ Output: <code>${fmtNum(usage.llm.output_tokens)}</code>\n` +
+        `└ Cached: <code>${fmtNum(usage.llm.cached_tokens)}</code> (${cacheHitPct}% hit)`;
+
+      const providers = Object.entries(usage.llm_by_provider);
+      if (providers.length > 1) {
+        llmSection += '\n';
+        for (const [name, stats] of providers) {
+          llmSection += `\n  📌 <i>${name}</i>: ${fmtNum(stats.calls)} calls, ${fmtNum(stats.input_tokens)}/${fmtNum(stats.output_tokens)} tok`;
+        }
+      }
+      
+      const text = `📊 <b>Anya Usage — ${usage.month}</b>\n\n` +
+        llmSection + `\n\n` +
         `📢 <b>TTS (Azure)</b>\n` +
         `├ Calls: <code>${fmtNum(usage.tts.calls)}</code>\n` +
         `├ Chars: <code>${fmtNum(usage.tts.chars)}</code> / ${fmtNum(AZURE_FREE_CHARS)}\n` +
@@ -333,17 +377,26 @@ export class TelegramAdapter {
       }
 
       agentLogger.info({ msg: 'tg_restart_command', chatId: ctx.chat.id, userId });
-      await ctx.reply('🔄 Restarting gateway...');
+      const statusMsg = await ctx.reply('🔄 Restarting gateway...');
 
-      // Spawn a detached process to restart after this process exits.
-      // Uses the same entry point: `anya gateway start`
+      // Clean up PID file so the new process doesn't detect "already running"
+      const { removePid } = await import('../../lib/pidfile.js');
+      removePid('gateway');
+
+      // Spawn a detached child process using the same entry point
       const { spawn } = await import('node:child_process');
       const { openSync } = await import('node:fs');
       const { LOGS_DIR } = await import('../../lib/paths.js');
       const logFd = openSync(path.join(LOGS_DIR, 'gateway.log'), 'a');
 
       const anyaBin = process.argv[1];
-      const child = spawn(process.execPath, [anyaBin, 'gateway', 'start', '--foreground'], {
+      const isTsx = process.argv[0].includes('tsx') || anyaBin.endsWith('.ts');
+      const execPath = isTsx ? 'npx' : process.execPath;
+      const execArgs = isTsx
+        ? ['tsx', anyaBin, 'gateway', 'start', '--_bg_child']
+        : [anyaBin, 'gateway', 'start', '--_bg_child'];
+
+      const child = spawn(execPath, execArgs, {
         detached: true,
         stdio: ['ignore', logFd, logFd],
         env: { ...process.env },
@@ -352,7 +405,16 @@ export class TelegramAdapter {
 
       agentLogger.info({ msg: 'tg_restart_spawned', newPid: child.pid });
 
-      // Give the reply time to send, then exit this process
+      // Edit the status message to confirm restart, then exit
+      try {
+        await this.bot.api.editMessageText(
+          ctx.chat.id,
+          statusMsg.message_id,
+          `✅ Gateway restarted (PID ${child.pid}).`,
+        );
+      } catch { /* best effort */ }
+
+      // Give the edit time to send, then exit this process
       setTimeout(() => {
         process.exit(0);
       }, 500);
@@ -370,8 +432,9 @@ export class TelegramAdapter {
       botCommands.push({ command: alias.cmd, description: alias.description });
     }
 
-    // Append restart and kill last so they appear at the bottom of the menu
+    // Append system commands last so they appear at the bottom of the menu
     botCommands.push(
+      { command: 'model', description: '🤖 Switch LLM provider' },
       { command: 'usage', description: '📊 Check API usage' },
       { command: 'restart', description: '♻️ Restart gateway' },
       { command: 'kill', description: '💀 Force stop & clear' },
@@ -562,6 +625,29 @@ export class TelegramAdapter {
             reply_markup: menu.keyboard,
           }).catch(() => {});
         }
+      }
+      // ── Model switch (from /model inline keyboard) ──
+      else if (data.startsWith('model:')) {
+        const backend = data.replace('model:', '') as 'gemini' | 'codex';
+        const MODELS: Record<string, string> = {
+          gemini: 'gemini-3-flash-preview',
+          codex: 'gpt-5.4',
+        };
+        this.config.provider.backend = backend;
+        this.config.provider.model = MODELS[backend] || this.config.provider.model;
+
+        const { persistConfig } = await import('../../config/loader.js');
+        persistConfig(this.config);
+
+        await ctx.editMessageText(
+          `🤖 <b>Model Updated</b>\n\n` +
+          `├ Backend: <code>${backend}</code>\n` +
+          `└ Model: <code>${this.config.provider.model}</code>\n\n` +
+          `✅ Changes saved. New conversations will use ${backend}.`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+
+        agentLogger.info({ msg: 'model_switch', backend, model: this.config.provider.model });
       }
       // ── Generic callback (from tg_msg keyboard) ──
       // Route unmatched button clicks back into the Agent as a new user input.

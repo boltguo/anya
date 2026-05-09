@@ -23,7 +23,7 @@
 import type { Message, Adapter, MessageFile, LLMProvider } from './types.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { buildSystemPrompt } from './promptBuilder.js';
-import { CodexProvider } from '../providers/openai.js';
+import { createProvider } from '../providers/index.js';
 import { getToolSchemas, dispatch } from '../tools/registry.js';
 import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle, getActiveSkill, setActiveSkill } from '../storage/sessionStore.js';
 import { getSkill } from '../skills/loader.js';
@@ -99,7 +99,7 @@ export class Agent {
   constructor(config: AnyaConfig, adapter: Adapter) {
     this.config = config;
     this.adapter = adapter;
-    this.provider = new CodexProvider();
+    this.provider = createProvider(config);
   }
 
   /**
@@ -126,8 +126,8 @@ export class Agent {
     let history = loadMessages(sessionId);
     const maxHistory = this.config.advanced.max_history_messages || 200;
     history = truncateHistory(history, maxHistory);
-    history = sanitizeHistory(history);
     history = trimOldToolResults(history);
+    history = sanitizeHistory(history);
 
     // Build system prompt with session-level active skill injection
     const baseSystemPrompt = buildSystemPrompt(this.config);
@@ -250,7 +250,7 @@ export class Agent {
       agentLogger.info(logEntry);
 
       if (u) {
-        trackLlm(u.promptTokens || 0, u.completionTokens || 0, u.cachedTokens || 0);
+        trackLlm(u.promptTokens || 0, u.completionTokens || 0, u.cachedTokens || 0, this.provider.name);
       }
 
       // Handle LLM dispatching tool calls.
@@ -394,15 +394,20 @@ const KEEP_RECENT_TOOL_RESULTS = 6;
 const MAX_OLD_TOOL_CHARS = 200;
 
 /**
- * Truncates old tool result messages in conversation history.
+ * Truncates old tool interactions in conversation history.
  *
  * Preserves the most recent {@link KEEP_RECENT_TOOL_RESULTS} tool messages
- * at full length. Older tool results are trimmed to {@link MAX_OLD_TOOL_CHARS}
- * characters to prevent stale content (SKILL.md bodies, large JSON, search
- * results) from inflating prompt tokens on every subsequent LLM call.
+ * at full length. Beyond that threshold:
+ * - Tool result content is truncated to {@link MAX_OLD_TOOL_CHARS}.
+ * - Assistant messages with toolCalls are stripped to a compact summary
+ *   (`[Executed tools: X, Y]`), making their paired tool results orphans.
+ *
+ * When followed by {@link sanitizeHistory}, orphaned tool messages are dropped
+ * entirely. Net effect: old tool interactions shrink from 2+ messages to a
+ * single compact assistant message.
  *
  * @param history - The conversation history array (mutated in place).
- * @returns The same array with old tool results trimmed.
+ * @returns The same array with old tool interactions trimmed.
  */
 function trimOldToolResults(history: Message[]): Message[] {
   let toolCount = 0;
@@ -417,6 +422,14 @@ function trimOldToolResults(history: Message[]): Message[] {
             content: content.substring(0, MAX_OLD_TOOL_CHARS) + '\n[...truncated]',
           };
         }
+      }
+    } else if (history[i].role === 'assistant' && history[i].toolCalls && history[i].toolCalls!.length > 0) {
+      if (toolCount > KEEP_RECENT_TOOL_RESULTS) {
+        const toolNames = history[i].toolCalls!.map(t => t.name).join(', ');
+        history[i] = {
+          role: 'assistant',
+          content: `[Executed tools: ${toolNames}]\n${history[i].content || ''}`.trim()
+        };
       }
     }
   }
