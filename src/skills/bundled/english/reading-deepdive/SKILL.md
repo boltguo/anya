@@ -13,7 +13,7 @@ Trigger when:
 
 - User says: `精读`, `read carefully`, `deep reading`, `analyze this`, `这段什么意思`, `句子太绕`.
 - Callback `reading-deepdive`.
-- Planner/coach routes here for weak `reading.syntax_parsing` / `reading.gist` / `inference_error` / repeated `paraphrase_miss`.
+- Planner routes here for weak `reading.syntax_parsing` / `reading.gist` / `inference_error` / repeated `paraphrase_miss`.
 
 Required context before generating:
 
@@ -88,7 +88,7 @@ Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
 
 Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptive within the tier's allowed range).
 
-`dd_syntax` / `dd_vocab` / `dd_outline` taps do NOT change credit (they're scaffolds, not signals of failure). They are recorded in `ui_feedback` so a "got the logic only after structure-hint" attempt is visible to `learner-state`.
+`dd_help` taps do NOT change credit (they're scaffolds, not signals of failure). They are recorded in `ui_feedback` so a "got the logic only after help" attempt is visible to `learner-state`.
 
 ### 2.4 Generation
 
@@ -96,7 +96,7 @@ Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptiv
 - Stretch **at most one** dimension per round: words, syntactic density, abstraction.
 - Reject any passage whose `prompt_hash` ∈ `recent_practice.recent_prompt_hashes`.
 - Don't repeat the same genre family for 2+ consecutive rounds.
-- Each passage MUST have at least one **killer sentence** (long subordinate / inverted / heavily nominalized) so `dd_syntax` has something to operate on.
+- Each passage MUST have at least one **killer sentence** (long subordinate / inverted / heavily nominalized) so `dd_help` has something to operate on.
 
 ## 3. Flow
 
@@ -104,43 +104,34 @@ Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptiv
 
 1. From §2.3 + `coach_context`, decide tier, word count, genre, killer-sentence target.
 2. Generate the passage. Compute `prompt_hash`; regenerate on dedup hit.
-3. Send the passage in a `tg_msg type="text"` call (plain text — no time pressure, no hide).
-4. Send a separate `tg_msg type="keyboard"` (no media):
+3. **Send the passage FIRST** via `tg_msg type="text"` — plain text, no buttons, no extra decoration. Let the user read at their own pace.
+4. **THEN send the question + buttons** via `tg_msg type="keyboard"`:
 
    Text:
 
    ```text
-   📖 慢慢读，不用急。读完用一句话告诉我：**这段话的核心论点和它是怎么被支撑的**？(中英文都行)
+   📖 读完用一句话告诉我：**这段话的核心论点和它是怎么被支撑的**？(中英文都行)
    ```
 
-   Buttons:
+   Buttons (2 only — help and abandon):
 
    ```json
-   [["😵 句子太绕|dd_syntax", "📚 生词太多|dd_vocab"], ["💡 提示一下结构|dd_outline", "🛑 完全读不动|dd_abandon"]]
+   [["🆘 看不太懂|dd_help", "🛑 太难了换一篇|dd_abandon"]]
    ```
 
 5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
-6. `force_reply` for the user's logic recap (after they read). Wait for typed answer or button tap.
+6. Wait for user's typed answer or button tap. **No `force_reply`** — the user reads at their own pace.
 
 ### State B: Button Handling (before answering)
 
-`dd_syntax`:
+`dd_help`:
 
-- Append `😵 句子太绕` to `ui_feedback`.
-- Identify the longest / hardest sentence in the passage. Break it down: Subject → main Verb → Object → modifiers → embedded clauses, with a 1-line Chinese gloss of how the grammar holds it together (the "why" — see Hard Rule 2).
-- Re-send the same keyboard so user can tap another scaffold or just answer.
-
-`dd_vocab`:
-
-- Append `📚 生词太多` to `ui_feedback`.
-- Provide a mini-glossary of the **3 hardest** words: word / IPA / Chinese gloss / how it's used in this passage (1-line context). Don't dump the dictionary entry.
-- Re-send the same keyboard.
-
-`dd_outline`:
-
-- Append `💡 提示一下结构` to `ui_feedback`.
-- Provide a **3-bullet** structural map in Chinese: paragraph 1 function / paragraph 2 function / paragraph 3 function (or sentence-level if single paragraph). Do NOT give the main claim — the user still has to articulate that.
-- Re-send the same keyboard.
+- Append `🆘 看不太懂` to `ui_feedback`.
+- Send **text-only** scaffolding via `tg_msg type="text"` (**no buttons**) combining:
+  - **生词**: 3 hardest words with IPA + Chinese gloss + in-passage usage
+  - **长难句**: break down the killer sentence (Subject → Verb → Object → modifiers)
+  - **结构提示**: 2-3 bullet structural map in Chinese
+- The user reads the help and then directly types their answer. No need to re-send buttons — they're still visible from the previous keyboard message.
 
 `dd_abandon`:
 
@@ -148,12 +139,10 @@ Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptiv
 
    ```
    completed=0, accuracy=0, response="",
-   feedback="Learner tapped '🛑 完全读不动'. Treat as strong negative evidence at this tier/genre.",
-   ui_feedback="<accumulated labels including 🛑 完全读不动>", load_score=0, minutes=0,
+   feedback="Learner tapped '🛑 太难了换一篇'. Treat as strong negative evidence at this tier/genre.",
+   ui_feedback="<accumulated labels including 🛑 太难了换一篇>", load_score=0, minutes=0,
    metadata={"abandoned_reason":"too_hard","tier":"<beginner|intermediate|advanced>","words":<n>,"genre":"<genre>"}
    ```
-
-   After `persist` returns, reset `ui_feedback`.
 
 2. **Replacement.** Apply demotion (§2.3). Brief Chinese ack, generate a shorter / easier passage → State A.
 
@@ -165,7 +154,7 @@ When the user submits their logic recap:
 2. **Grade against §2.0 rubric** to produce continuous `accuracy` (0..1). Identify whether they got tricked by a counter-claim, a hedging qualifier, or a paragraph-jump.
 3. Compute subcap scores:
    - `reading.gist` (0–10) ≈ `accuracy * 10` refined with one-line evidence.
-   - `reading.syntax_parsing` (0–10) — set lower if `dd_syntax` was tapped (means killer-sentence wasn't self-parseable).
+   - `reading.syntax_parsing` (0–10) — set lower if `dd_help` was tapped (means killer-sentence wasn't self-parseable).
 4. **Auto Vocabulary Harvest**: extract 2–3 high-value collocations / chunks from the passage (not single common words). For each, call `persist action="word_upsert"` with `mastery="queued_new"`, `is_user_word=0`, `origin="reading.deepdive"`, plus the exact in-passage sentence as `example_sentence`.
 5. **Persist FIRST, THEN feedback**. Sequential.
 
@@ -173,7 +162,7 @@ Feedback message must include:
 
 - A brief Chinese evaluation of their logic grasp; name the specific paragraph or pivot they got vs missed.
 - The actual main claim (your canonical 1-sentence answer in Chinese).
-- One **killer sentence** parsed (Subject / Verb / Object + how the grammar holds it). Mandatory regardless of whether `dd_syntax` was tapped — this is the deep-dive teaching moment.
+- One **killer sentence** parsed (Subject / Verb / Object + how the grammar holds it). Mandatory regardless of whether `dd_help` was tapped — this is the deep-dive teaching moment.
 - A 1-line note: "已经把 `X` 和 `Y` 加进生词本" (the auto-harvest collocations).
 
 Buttons (always, regardless of accuracy):
@@ -206,10 +195,10 @@ Minimum payload:
   "load_score": 2,
   "minutes": 4,
   "mode": "study",
-  "ui_feedback": "<comma-joined exact button labels tapped this round, e.g. '😵 句子太绕,💡 提示一下结构' — empty if none>",
+  "ui_feedback": "<comma-joined exact button labels tapped this round, e.g. '🆘 看不太懂' — empty if none>",
   "metadata": "{\"tier\":\"intermediate\",\"words\":180,\"genre\":\"argumentative\",\"killer_sentence_idx\":2,\"harvested_chunks\":[\"uneven adoption\",\"policy-driven\"],\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
   "errors": "[{\"key\":\"inference_error\",\"category\":\"reading\",\"severity\":\"medium\",\"original\":\"\",\"correction\":\"\",\"note\":\"Attributed the unevenness to technology gap; passage's pivot was that policy is the actual driver.\"}]",
-  "subcap_scores": "[{\"key\":\"reading.gist\",\"score\":7.0,\"evidence\":\"Main claim correct; pivot direction missed.\"},{\"key\":\"reading.syntax_parsing\",\"score\":6.0,\"evidence\":\"Used dd_syntax scaffold — fronted concessive needed help.\"}]"
+  "subcap_scores": "[{\"key\":\"reading.gist\",\"score\":7.0,\"evidence\":\"Main claim correct; pivot direction missed.\"},{\"key\":\"reading.syntax_parsing\",\"score\":6.0,\"evidence\":\"Used dd_help scaffold — fronted concessive needed help.\"}]"
 }
 ```
 
@@ -225,14 +214,14 @@ In **parallel** to this practice persist, call `word_upsert` for each harvested 
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next passage (State A step 2 — incl. dedup). Respect "no same genre family twice in a row" (§2.4).
 
 ## 4. Collaborates With
 
 - `planner`: routes here when `reading.syntax_parsing` / `reading.gist` is the highest-value drill.
 - `learner-state`: reads persisted evidence; updates `MEMORY.md`.
-- `coach`: uses errors / subcap scores to explain pivot misses.
+- `planner`: (proactive nudge) uses errors / subcap scores to explain pivot misses.
 - `vocab-harvest` / `vocab-review`: auto-called in State C to seed the SRS queue with passage chunks.
 - `reading-skim-drill`: graduates to skim once syntax is no longer the bottleneck.
 - `writing-rewrite`: hand off if a paragraph in the passage is upgrade-worthy.
@@ -242,7 +231,7 @@ In **parallel** to this practice persist, call `word_upsert` for each harvested 
 
 - User answers in 2 words ("讲气候") → grade per rubric (likely 0.25 for "domain right, claim missed"); ask once if they want to elaborate before persisting; if they say no, persist as-is.
 - User answers in fluent English explaining a different passage entirely → grade `0.00`; gently ask if they read this one; if user confirms confusion, treat as fail and demote.
-- `force_reply` ignored for >5 min → no auto-fail; user is reading. Wait.
+- `force_reply` — **never used**. The user reads at their own pace.
 - `persist` (practice or word_upsert) fails → still send feedback; mention what didn't save.
 - `<tg-spoiler>` is client-side; no callback. Don't invent `spoiler_used`.
 
@@ -252,7 +241,8 @@ In **parallel** to this practice persist, call `word_upsert` for each harvested 
 2. **The "Why" rule.** When parsing a killer sentence, do NOT just translate. Explain *how* the grammar holds the sentence together (which clause modifies which, why the verb is fronted, etc.).
 3. **One killer sentence parsed every round** — even on `accuracy=1.0`. The deep-dive's value is the syntax lesson, not just the score.
 4. **Auto-harvest 2-3 chunks per passage.** Single common words don't count — must be collocations / phrasal verbs / discourse markers / domain phrases.
-5. **Scaffolds aren't penalties.** `dd_syntax` / `dd_vocab` / `dd_outline` taps are recorded in `ui_feedback` but do NOT lower `accuracy` directly. The rubric grades the recap, not the path to it.
-6. Use `persist` for reads/writes; no raw DB.
-7. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-8. **One-call keyboard.** Feedback + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` to attach buttons.
+5. **Scaffolds aren't penalties.** `dd_help` taps are recorded in `ui_feedback` but do NOT lower `accuracy` directly. The rubric grades the recap, not the path to it.
+6. **No `force_reply`.** Never force the reply keyboard. The user reads at their own pace.
+7. Use `persist` for reads/writes; no raw DB.
+8. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
+9. **One-call keyboard.** Feedback + buttons go out in a single `tg_msg type="keyboard"` call.

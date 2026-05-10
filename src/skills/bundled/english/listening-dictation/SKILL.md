@@ -13,7 +13,7 @@ Trigger when:
 
 - User says: `听写`, `精听`, `dictation`, `intensive listening`, `听不清连读`, `听不懂快语速`.
 - Callback `listening-dictation`.
-- Planner/coach routes here for weak `listening.connected_speech`, `listening.detail_accuracy`, `function_word_miss`, plurals, weak forms, numbers, boundaries.
+- Planner routes here for weak `listening.connected_speech`, `listening.detail_accuracy`, `function_word_miss`, plurals, weak forms, numbers, boundaries.
 
 Required context before generating:
 
@@ -214,7 +214,7 @@ State D persists attempted sentences only. Abandoned rows are written in State B
 
 - `planner`: routes here when listening/detail/connected-speech is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running listening state, updates `MEMORY.md`.
-- `coach`: uses errors/subcap scores to explain next steps.
+- `planner`: (proactive nudge) uses errors/subcap scores to explain next steps.
 - `vocab-harvest` / `vocab-review`: turn repeated missed chunks into review items.
 - `support/data-contract`: defines the `persist` write protocol.
 

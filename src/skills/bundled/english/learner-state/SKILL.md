@@ -40,17 +40,44 @@ Execute the following actions:
 4. Do not use the `db` tool. `band_trend` is maintained incrementally by `persist action="practice"`; `progress_snapshots` is maintained by `learner-state`; MEMORY is the prompt-facing summary.
 
 ### State C: Delivery (UI)
-- Use `tg_msg(type=keyboard)` to present the findings to the user.
-  - **Text**: Present a highly structured, professional Markdown report.
-    - 📊 **核心能力雷达** (Show scores out of 100)
-    - ⚠️ **近期核心弱点** (Translate weakest subcaps into human-readable points)
-    - 🐛 **最高频错误陷阱** (Translate recurring errors into actionable insights)
-    - 📚 **词汇复习压力** (Show due-word count and 1-2 representative weak words/cards)
-    - 🔥 **近期活跃度** (Show days active and total minutes)
-  - **Buttons**: `[["💬 找教练复盘定制计划|coach"], ["🧭 回到主菜单|nav:main"]]`
-- **CRITICAL STOP**: End your turn.
+
+Use `tg_msg(type=keyboard)` to present a **compact, scannable** report. Do NOT dump raw data or repeat information across sections.
+
+**Template** (adapt numbers; do not add extra sections):
+
+```
+📊 能力快照 · {current_level}
+
+🎧 听力 {L}   🗣️ 口语 {S}   📖 阅读 {R}   ✍️ 写作 {W}
+
+⚠️ 最需要突破的点
+1. {weakness_1 — 1 line, Chinese, with a concrete example from errors}
+2. {weakness_2 — 1 line}
+3. {weakness_3 — 1 line, optional}
+
+📚 词汇 · {due_count} 个到期 · 代表: {1-2 weak words}
+
+🔥 最近 {active_days} 天 · {total_minutes} 分钟 · {samples_count} 次练习
+```
+
+**Rules for the report**:
+- Scores use the **0-100 scale** on one line, no bullet list.
+- **Merge** weak subcaps + recurring errors into ONE "最需要突破的点" block (max 3 items). Do NOT have separate "弱点" and "错误" sections — they overlap.
+- **Translate error keys** to plain Chinese. Never show raw keys like `pronunciation_vowel` or `verb_pattern`. Map them:
+  - `pronunciation_vowel` → 元音发音不稳
+  - `pronunciation_consonant` → 辅音/词尾收音不清
+  - `verb_pattern` / `verb_form_error` → 动词搭配/时态错误
+  - `l1_transfer` → 中式英语/母语迁移
+  - `function_word_miss` → 功能词（介词/冠词）漏听/漏写
+  - `collocation_error` → 搭配不自然
+  - Other keys → translate to short Chinese description
+- Each weakness line MUST include **one concrete example** from `coach_context.summary.errors` (e.g., "must to fix → must fix").
+- **Buttons**: `[["🧭 回到主菜单|nav:main"]]` — no coach button.
+- **CRITICAL STOP**: End your turn. Do NOT offer to explain errors or suggest next steps — that's planner's job.
 
 ## 3. Hard Rules
-1. **No Advice**: You are a data analyst, not a coach. Do not tell them *how* to fix the errors. Just report the data.
+1. **No Advice**: You are a data analyst, not a coach. Do not tell them *how* to fix the errors. Just report the data with concrete examples.
 2. **Compute, Don't Guess**: Use the EMA formula. Do not make up numbers.
 3. **Own Learning State**: Durable ability summaries, weekly snapshots, and MEMORY level records belong here. Other practice skills only write evidence through `persist action="practice"`.
+4. **Compact output**: The entire report should fit in ~10 lines. No paragraphs, no numbered sub-lists under each weakness. One line per item.
+5. **No raw keys**: Never expose database column names or error keys to the user. Always translate to Chinese.

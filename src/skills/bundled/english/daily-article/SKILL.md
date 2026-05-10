@@ -35,9 +35,9 @@ Once the article is written and words are seeded, deliver the payload:
 1. **Generate Audio**: Use the `tts` tool to generate the spoken audio of the English article. Choose a high-quality podcast-style voice (e.g., `en-US-AriaNeural` or `en-GB-RyanNeural`).
 2. **Execute Parallel UI Actions**: You MUST invoke the `tg_msg` tool multiple times concurrently (in the same turn) to send the audio and the text separately.
    - **Action 1 (Voice)**: `tg_msg(type="voice")` to send the generated audio file.
-   - **Action 2 (Text & Buttons)**: `tg_msg(type="keyboard")` to send the article text.
+   - **Action 2 (Text)**: `tg_msg(type="text")` to send the article text.
      - **Text**: Send the English article. Below it, include a short Chinese translation/summary wrapped in `<blockquote expandable>...</blockquote>` so it stays collapsed by default. Highlight the 3-5 words you seeded in **bold**.
-     - **Buttons**: `[["🧭 回到主菜单|nav:main"]]`
+     - **No buttons.** The skill ends here — the article is the payload.
 3. **CRITICAL STOP**: End your turn. The skill is complete.
 
 ## 4. Hard Rules

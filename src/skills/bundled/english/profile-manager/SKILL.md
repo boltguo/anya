@@ -149,20 +149,18 @@ Do NOT invent new markdown headers. You MUST map the collected intelligence into
 
 After updating `USER.md`, sync to DB via `persist action="profile_upsert"`.
 
-Then send the completion message and chain into `placement-quick`:
+Then send the completion message and **immediately** chain into `placement-quick` — no confirmation button:
 
-`tg_msg(type="keyboard")` 文案：
+1. Send `tg_msg(type="text")`:
 
 ```
 档案建立完成 ✅
 Boss 的喜好已经全部进入 Anya 加密档案库 🗂️
 
-接下来，让 Spy Scanner 给 Boss 做一次极速摸底体检，5–8 分钟搞定，会动态调整难度，全程不打分只定级 ✨
+接下来直接进入极速摸底体检，5–8 分钟搞定 ✨
 ```
 
-Buttons:
-
-`[["🚀 开启极速体检 | placement_quick_start"]]`
+2. Immediately call `skill_view("placement-quick")` to start the placement test. Do NOT wait for user input.
 
 ## Rules
 

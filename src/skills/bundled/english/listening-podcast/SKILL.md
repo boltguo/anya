@@ -45,7 +45,7 @@ Target **i+1**: one stretch above the learner's current successful comprehension
 | `0.25` | Off-topic but at least the domain was right (e.g., user heard "tech" but missed the actual subject). |
 | `0.00` | Totally off, hallucinated content, or no answer. |
 
-Use this rubric verbatim — do **not** reward typing length, English grammar, or detail recall. This skill measures **comprehension of the main idea**, nothing else. Granular `listening.gist` subcap (0–10) goes into `subcap_scores` separately for `coach`/`learner-state`.
+Use this rubric verbatim — do **not** reward typing length, English grammar, or detail recall. This skill measures **comprehension of the main idea**, nothing else. Granular `listening.gist` subcap (0–10) goes into `subcap_scores` separately for `learner-state`.
 
 Standard 100% speed only. Slow-down is the `pod_slow` button (State B), not a tier property.
 

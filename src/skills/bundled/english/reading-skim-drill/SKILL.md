@@ -13,7 +13,7 @@ Trigger when:
 
 - User says: `略读`, `快速浏览`, `skim`, `提速`, `读得太慢`.
 - Callback `reading-skim-drill`.
-- Planner/coach routes here for weak `reading.pace ≤ 5.5` AND `reading.gist ≤ 5.5`.
+- Planner routes here for weak `reading.pace ≤ 5.5` AND `reading.gist ≤ 5.5`.
 
 Required context before generating:
 
@@ -93,31 +93,48 @@ Hold: keep word count + skim window, swap topic family to probe a different weak
 
 1. From §2.3 + `coach_context`, decide tier, word count, skim window, topic.
 2. Generate the passage at chosen length / topic. Compute `prompt_hash`; regenerate on dedup hit. Make sure each paragraph has a distinct discourse function (claim / example / counter / conclusion) so paragraph-function questions are answerable.
-3. Send the passage in a `tg_msg type="text"` call wrapped in `<blockquote expandable>...</blockquote>`. Save the returned `message_id` as `passage_msg_id` for the hide step.
-4. Send a separate `tg_msg type="keyboard"` (no media) with text + start button:
-
-   Text:
-
-   ```text
-   📖 这段大约 {words} 词。点 "开始计时" 后你有 {seconds} 秒略读，时间到我会自动隐藏原文，凭印象答题。
-   ```
-
-   Buttons:
+3. **Message 1 — countdown + passage combined** via `tg_msg type="countdown"`:
 
    ```json
-   [["▶️ 开始计时|skim_start", "😵 完全读不懂|skim_hard"]]
+   {
+     "type": "countdown",
+     "text": "⏱️ 略读倒计时：<b>{seconds}</b> 秒\n\n{passage text}",
+     "seconds": 75,
+     "expire_text": "⏱️ 时间到！\n\n📖 已隐藏 — 凭记忆答题 ✍️",
+     "tag": "passage_timer"
+   }
+   ```
+
+   The countdown edits this SAME message every few seconds (only updating the timer number). When it reaches 0, the entire message content is replaced by `expire_text` — passage is hidden.
+
+4. **Message 2 — instructions + buttons** via `tg_msg type="keyboard"`:
+
+   - Text: `📖 这段大约 {words} 词，倒计时 {seconds} 秒。看完点“准备好了”开始答题！`
+   - Buttons:
+
+   ```json
+   [["🆘 看不太懂|skim_help", "✅ 准备好了|skim_ready", "🛑 太难了|skim_hard"]]
    ```
 
 5. Init empty `ui_feedback` accumulator.
+6. Wait for `skim_ready` tap, timer expiry, or other button tap. **No `force_reply`.**
 
-### State B: Button Handling (before answering)
+### State B: Answering
 
-`skim_start`:
+When the user taps `✅ 准备好了` (`skim_ready`), the timer expires, or taps `skim_help` / `skim_hard`:
 
-- Append `▶️ 开始计时` to `ui_feedback`.
-- Record `start_ts = now()`.
-- After `seconds` elapse (checked when learner submits OR via a wake — implementation may schedule an edit; see Hard Rule 5), edit the passage message: `tg_msg type="edit" message_id=passage_msg_id text="📖 已隐藏 — 凭记忆回答"`. If edit fails, send a long separator `tg_msg type="text" text="\\n\\n\\n📖 已隐藏 — 凭记忆回答\\n\\n\\n"` to push the passage out of view.
-- Send the main-idea prompt as `tg_msg type="force_reply" text="一句话说主旨（≤ 15 字）"`.
+`skim_ready`:
+
+- Immediately hide the passage: edit `passage_timer` message to `expire_text`.
+- Proceed to the **Answering flow** below.
+
+`skim_help`:
+
+- Append `🆘 看不太懂` to `ui_feedback`.
+- Send **text-only** scaffolding via `tg_msg type="text"` (**no buttons**):
+  - 3 hardest words with Chinese gloss
+  - 1-line structural hint: "注意第二段的转折"
+- Wait for user's next action.
 
 `skim_hard`:
 
@@ -125,16 +142,21 @@ Hold: keep word count + skim window, swap topic family to probe a different weak
 
    ```
    completed=0, accuracy=0, response="",
-   feedback="Learner tapped '😵 完全读不懂' before answering. Treat as strong negative evidence at this tier/topic.",
-   ui_feedback="😵 完全读不懂", load_score=0, minutes=0,
+   feedback="Learner tapped '🛑 太难了' before answering. Treat as strong negative evidence at this tier/topic.",
+   ui_feedback="🛑 太难了", load_score=0, minutes=0,
    metadata={"abandoned_reason":"too_hard","tier":"<beginner|intermediate|advanced>","words":<n>,"topic":"<topic>"}
    ```
 
-   After `persist` returns, reset `ui_feedback`.
-
 2. **Replacement.** Apply demotion (§2.3). Brief Chinese ack, generate a shorter / easier passage → State A.
 
-After the main-idea reply lands, send 3-4 paragraph-function `quiz` questions (one per paragraph; e.g. "第 2 段的功能是 A. 提出反例 B. 总结 C. 引用数据 D. 类比"), then 1 detail-trap MCQ where the wrong answer is a plausible keyword match.
+**Answering flow** (triggered by `skim_ready` tap or timer expiry):
+
+First, make sure the passage is hidden (edit `passage_timer` to `expire_text` if not already).
+
+Then ask questions sequentially:
+
+1. Main-idea: `tg_msg type="text"` — `一句话说主旨（≤ 15 字）`. **No `force_reply`.**
+2. After main-idea reply, send 3-4 paragraph-function questions + 1 detail-trap MCQ, **one at a time via `tg_msg type="keyboard"`** with inline option buttons. Each button callback encodes the answer: `skim_q1_a`, `skim_q1_b`, etc. Do NOT use Telegram quiz/poll (`sendQuiz`).
 
 ### State C: Evaluate
 
@@ -209,34 +231,36 @@ State D persists fully-attempted passages only. Abandoned rows are written in St
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next passage (State A step 1 — incl. dedup). Respect "no same topic family twice in a row" (§2.4).
 
 ## 4. Collaborates With
 
 - `planner`: routes here when `reading.pace` / `reading.gist` is the highest-value drill.
 - `learner-state`: reads persisted evidence; updates `MEMORY.md`.
-- `coach`: uses errors / subcap scores to explain why they fell for the keyword trap or missed the pivot.
+- `planner`: (proactive nudge) uses errors / subcap scores to explain why they fell for the keyword trap or missed the pivot.
 - `vocab-harvest`: post-passage, optionally extract 1-2 high-value collocations (don't go beyond — this skill is about pace, not vocab).
 - `reading-deepdive`: graduates here once the user wants to slow down and parse syntax.
 - `support/data-contract`: defines the `persist` write protocol.
 
 ## 5. Failure And Fallbacks
 
-- `tg_msg type="edit"` fails → send the long separator block instead. Hide is sacred (Hard Rule 1).
-- `force_reply` ignored → wait once more, then ask if they want to skip; if yes, write `completed=0`.
+- `tg_msg type="edit"` fails → the countdown's `expire_text` will still hide the passage. Hide is sacred (Hard Rule 1).
 - User submits the gist BEFORE the skim window elapses → still grade; record `actual_skim_sec` < `skim_window_sec` (a fast skim is a real signal).
-- User submits AFTER the skim window passed by > 30s → grade normally but record `actual_skim_sec = skim_window_sec` for fair WPM (otherwise WPM craters from idle time).
+- User submits AFTER the skim window passed by > 30s → grade normally but record `actual_skim_sec = skim_window_sec` for fair WPM.
 - `persist` fails → still send feedback, but say it was not saved.
 - `<tg-spoiler>` is client-side; no callback. Don't invent `spoiler_used`.
 
 ## 6. Hard Rules
 
-1. **Hide is sacred.** Once the skim window elapses, the passage is replaced with `📖 已隐藏 — 凭记忆回答` until grading is complete. Never re-send the full passage in plain view before grading.
-2. **One main-idea + 3-4 paragraph-function + 1 detail trap.** Always 5 or 6 items total. No exceptions.
-3. **Every reveal uses `<tg-spoiler>`** for paragraph-function labels and the pivot phrase. Lets the learner self-test even on review.
-4. **WPM goes into metadata, not gating.** Pace is a watched signal but `accuracy` alone moves tier.
-5. **Trap is plausible.** The wrong-answer MCQ option must literally keyword-match the passage but mean the wrong thing. That's the lesson of this skill.
-6. Use `persist` for reads/writes; no raw DB.
-7. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-8. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` to attach buttons.
+1. **Countdown hides the passage.** The countdown + passage are in ONE combined message. When countdown expires, `expire_text` replaces the entire content — passage is gone. Never re-send the full passage in plain view before grading.
+2. **Only 2 messages for delivery.** Message 1 = countdown+passage. Message 2 = instructions+buttons. No extra messages.
+3. **One main-idea + 3-4 paragraph-function + 1 detail trap.** Always 5 or 6 items total.
+4. **Every reveal uses `<tg-spoiler>`** for paragraph-function labels and the pivot phrase.
+5. **WPM goes into metadata, not gating.** Pace is a watched signal but `accuracy` alone moves tier.
+6. **Trap is plausible.** The wrong-answer MCQ option must literally keyword-match the passage but mean the wrong thing.
+7. **No `force_reply`.** Never force the reply keyboard.
+8. Use `persist` for reads/writes; no raw DB.
+9. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
+10. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call.
+11. **MCQ via keyboard buttons.** Quiz questions MUST use `tg_msg type="keyboard"` with inline option buttons. Do NOT use Telegram quiz/poll.

@@ -94,10 +94,12 @@ Read the STT transcript:
 
 Required reply: 1–2 English sentences answering the question.
 
+**Rule of thumb**: this dimension scores **reading comprehension first**. Productive weakness (brevity, grammar, Chinglish) belongs mainly to Writing (§3.4), so do not double-penalize it here. However, a very short fragment is only enough evidence when it answers the question's fact / inference relationship, not merely when it repeats a keyword from the passage. Mark those cases as limited evidence and lower confidence.
+
 - `up`: paraphrases the gist in own words; correct; no copy-paste.
-- `hold-up`: short on-target answer; minor paraphrase; correct.
-- `hold-down`: copy-paste of a sentence containing the answer (≥ 5-token verbatim span from passage); OR very short single-keyword answer that's correct; OR answer in Chinese (≥ 60% Chinese tokens).
-- `down`: off-topic, wrong, or opt-out vocabulary.
+- `hold-up`: correct fact / inference, but expressed as a short fragment, broken grammar, or minor paraphrase. Comprehension is clear enough; expression is shaky. Add a `limited_evidence` flag if the answer is fewer than 5 words.
+- `hold-down`: copy-paste of a sentence containing the answer (≥ 5-token verbatim span from passage); OR answer in Chinese (≥ 60% Chinese tokens) — both signal "couldn't process into own English".
+- `down`: off-topic, factually wrong, keyword-only without the required relationship, or opt-out vocabulary.
 
 **Cap rule**: copy-paste verbatim ≥ 5 tokens caps the signal at `hold-down` regardless of correctness.
 
@@ -258,7 +260,7 @@ Add R3 only if R1 vs R2 disagree by ≥ 1 band.
 
 #### 6.1 Compute confidence per dimension
 
-- `high`: ≥ 3 rounds completed (≥ 2 for Speaking); two consecutive signals match; non-domain probe within 0.5 band of in-domain; zero opt-out / Chinese-dominant / copy-paste flags.
+- `high`: ≥ 3 rounds completed (≥ 2 for Speaking); two consecutive signals match; non-domain probe within 0.5 band of in-domain; zero opt-out / Chinese-dominant / copy-paste / limited-evidence flags.
 - `medium`: minor signal inconsistency, OR exactly one of the flags above.
 - `low`: ≥ 2 flags, OR non-domain probe ≥ 1 band below in-domain, OR fewer than the minimum rounds completed for the dimension, OR Round 2 non-domain probe was skipped.
 
@@ -324,7 +326,7 @@ End the turn after sending the report. Do not auto-chain to `planner`.
 
 - Execute **one state action per turn**, then STOP. Wait for the user.
 - Never simulate / pre-fill the user's reply.
-- Track per dimension across turns: `level`, `signal_history`, `domain_used` (`in / non`), `flags` (chinese_dominant / copy_paste / opt_out / replay_used). Do not lose them between probes.
+- Track per dimension across turns: `level`, `signal_history`, `domain_used` (`in / non`), `flags` (chinese_dominant / copy_paste / opt_out / replay_used / limited_evidence). Do not lose them between probes.
 - The 3-round minimum is non-negotiable for Vocab / Listening / Reading.
 - **Domain rotation Round 2 is mandatory** for Listening / Speaking / Reading. Skipping forces `confidence = low`.
 - Output schema MUST be the 3-tuple `{general_level, domain_level, confidence}` per dimension. Do not collapse to a single CEFR for MEMORY writes.

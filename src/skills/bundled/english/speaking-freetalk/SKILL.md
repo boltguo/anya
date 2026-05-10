@@ -5,7 +5,7 @@ description: "MUST trigger for conversational practice, free-flowing speaking, o
 
 # Speaking Freetalk (Impromptu And Debate)
 
-Open chat with no source clip and no fixed function. Different from `speaking-roleplay` (fixed scenario + role) and `speaking-repeat` (single-shot retell). Goal here: sustain 3–4 substantive turns in English about a topic, with stealth feedback at the end. The signal driving i+1 is a **rubric-graded engagement + topic-depth score** (0..1).
+Open chat with no source clip and no fixed function. Different from `speaking-roleplay` (fixed scenario + role) and `speaking-repeat` (single-shot retell). Goal here: sustain a natural multi-turn English conversation about a topic, with stealth feedback at the end. The signal driving i+1 is a **rubric-graded engagement + topic-depth score** (0..1).
 
 ## 1. Inputs
 
@@ -13,7 +13,7 @@ Trigger when:
 
 - User says: `Let's chat`, `口语闲聊`, `debate`, `freetalk`.
 - Callback `speaking-freetalk`.
-- Planner/coach routes here when `speaking.fluency` or `speaking.interaction` is weak and a low-pressure warm-up is appropriate.
+- Planner routes here when `speaking.fluency` or `speaking.interaction` is weak and a low-pressure warm-up is appropriate.
 
 Required context before generating:
 
@@ -46,7 +46,7 @@ Target **i+1**: one stretch above the learner's current successful chat depth. A
 | `0.25` | Engaged but mostly in Chinese / one-word answers / refused push-back. |
 | `0.00` | Refused, switched fully to Chinese, or off-topic throughout. |
 
-Use this rubric verbatim — score **engagement + topic depth**, NOT phoneme accuracy or grammar elegance. Granular `speaking.fluency` / `speaking.lexical_variety` / `speaking.grammar_accuracy` (0–10) go into `subcap_scores` separately for `coach`/`learner-state`.
+Use this rubric verbatim — score **engagement + topic depth**, NOT phoneme accuracy or grammar elegance. Granular `speaking.fluency` / `speaking.lexical_variety` / `speaking.grammar_accuracy` (0–10) go into `subcap_scores` separately for `learner-state`.
 
 | Tier (IELTS band ≈ CEFR) | Topic kind | Push-back | Expected turn substance |
 | --- | --- | --- | --- |
@@ -73,7 +73,7 @@ Fallback chain when fewer than `ACC_WINDOW` rows: 14-day `speaking.fluency` mean
 promotion_credit = walk recent_practice.rows newest→oldest (skip redo_count>0):
   count consecutive accuracy ≥ PASS; reset on any fail (< FAIL or completed=0); holds ([FAIL, PASS)) pass through.
 demotion_credit = mirror: count consecutive fail; reset on any pass; holds pass through.
-abandoned (completed=0, written by `freetalk_topic` mid-conversation) = 1 fail.
+abandoned (completed=0, early freetalk_end before meaningful turns) = 1 fail.
 ```
 
 | Credit | Action |
@@ -82,7 +82,7 @@ abandoned (completed=0, written by `freetalk_topic` mid-conversation) = 1 fail.
 | `promotion_credit ≥ STREAK` inside tier | Add **one** stretch (deeper push-back, more abstract topic, or stricter substance bar); reset `promotion_credit`. |
 | `demotion_credit ≥ STREAK` at tier floor | Demote tier; reset both credits; start at prev tier's most concrete topic. |
 | `demotion_credit ≥ STREAK` inside tier | Drop **one** stretch (no push-back, more concrete topic); reset `demotion_credit`. |
-| `freetalk_topic` mid-conversation | Persists abandoned row (State B); surfaces as fail next call. |
+| `freetalk_end` before meaningful turns | Persists abandoned row (`completed=0`); surfaces as fail next call. |
 
 Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
 
@@ -104,92 +104,78 @@ Hold: keep tier, optionally swap **one** topic family (work → hobby or vice ve
 2. `tts` for the hook question only (one short audio, ~5–10 seconds).
 3. Send voice FIRST: a separate `tg_msg type="voice"` call with the audio `url`. Wait for delivery.
 4. THEN send instruction: a separate `tg_msg type="keyboard"` call (text + buttons only — **never include `url` here**, the keyboard endpoint has no media slot). Never parallel — see Hard Rule 3.
-   - Text: the topic question in writing (replies to the voice — Telegram's reply-quote keeps the audio context visible). E.g. `💬 <topic question>\n\n按住录音键说说你的看法（中文卡壳就点 SOS）。`
-   - Buttons: `[["🆘 不知道怎么用英文说|freetalk_sos", "🔄 换个话题|freetalk_topic"]]`
+   - Text: the topic question in writing. E.g. `💬 <topic question>\n\n按住录音键说说你的看法（卡壳就点 SOS）。`
+   - Buttons (2 only, entire duration of conversation):
+
+   ```json
+   [["🆘 不知道怎么说|freetalk_sos", "👋 结束聊天|freetalk_end"]]
+   ```
+
 5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
 6. Wait for the user's voice / text reply, or button tap.
 
-### State B: Mid-Conversation Button Handling
+### State B: SOS Handling
 
 `freetalk_sos`:
 
-- Append `🆘 不知道怎么用英文说` to `ui_feedback` (mandatory — survives into State D so a "scaffolded" turn is not mistaken for spontaneous).
-- Brief ack via `tg_msg type="text"`.
-- **Scaffolding mode**: provide 3 useful verb phrases + 1 sentence starter tailored to the current topic + 1 example chunk. Example: `先用这几个：\n• "I think it depends on…"\n• "What I usually do is…"\n• "For example, …"\n再试一次，按住录音键说说看 💪`
-- Send via `tg_msg type="keyboard"` with the same mid-loop buttons (so user can SOS again or topic-change).
-- Wait for next user turn.
+- Append `🆘 不知道怎么说` to `ui_feedback`.
+- Send **text-only** scaffolding via `tg_msg type="text"` (**no buttons, no keyboard**). The user just reads and then directly records their voice. Showing buttons here is unnecessary — they know how to continue.
+- **Scaffolding content**: 3 useful phrases + 1 sentence starter tailored to the current topic. Example:
 
-`freetalk_topic`:
+  ```text
+  试试这几个：
+  • "I think it depends on…"
+  • "What I usually do is…"
+  • "For example, …"
 
-If tapped **before any substantive turn**: just generate a new topic per §2.4 (no abandon row written — the user just rejected the topic upfront).
+  直接录音说说看 💪
+  ```
 
-If tapped **mid-conversation** (after at least one user turn): treat as abandon.
+- Wait for user's next voice/text reply. When it arrives, handle it in State C as a normal turn.
 
-1. **Persist abandoned record FIRST**:
+### State C: Conversation Loop
 
-   ```json
-   {
-     "action": "practice",
-     "skill_type": "speaking.freetalk",
-     "session_id": "<session>",
-     "completed": 0,
-     "accuracy": 0,
-     "prompt": "<original topic question>",
-     "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
-     "response": "<user turns completed so far, joined>",
-     "feedback": "Learner tapped '换个话题' mid-conversation after <n> turns. Treat as topic-mismatch evidence.",
-     "audio_path": "",
-     "ui_feedback": "🔄 换个话题",
-     "section": "speaking",
-     "domain": "speaking",
-     "load_score": 1,
-     "minutes": 1,
-     "mode": "study",
-     "metadata": "{\"abandoned_reason\":\"topic_mismatch\",\"tier\":\"<beginner|...|advanced>\",\"topic\":\"<topic>\",\"turns_completed\":<n>}"
-   }
-   ```
+The conversation continues **until the user taps `👋 结束聊天` or max 8 turns reached** (whichever first). The user controls when to stop; 8-turn cap is a safety net to prevent infinite token spend.
 
-   After `persist` returns, reset `ui_feedback`.
-
-2. **Replacement.** Generate a new topic per §2.4 (different family from the abandoned one). → State A.
-
-### State C: Active Listening Loop And Close
-
-Default session is **3–4 back-and-forth turns**. Each user turn:
+Each user turn:
 
 1. Listen to their response (transcribe if voice; accept text directly).
-2. Push back gently per tier plan (§2.0): "I see your point, but what about…", "Could you give an example?", "How would that work in practice?". For Beginner tier, just acknowledge and ask one simple follow-up.
-3. **Stealth feedback**: do NOT stop the flow to correct every error. Mention 1 glaring error or suggest 1 advanced phrase **at the end of YOUR response in the SAME turn** (Hard Rule 1 — fluency over accuracy).
-4. Send the next push-back via `tg_msg type="voice"` + `tg_msg type="keyboard"` (same mid-loop buttons), or via `tg_msg type="keyboard"` with text-only if TTS budget is tight.
-5. Loop until 3–4 turns total. Then close.
+2. Push back gently per tier plan (§2.0): "I see your point, but what about…", "Could you give an example?". For Beginner tier, just acknowledge and ask one simple follow-up.
+3. **Stealth feedback**: do NOT stop the flow to correct every error. Mention at most 1 advanced phrase **within YOUR response naturally** — don't break the conversation.
+4. Send the next response via `tg_msg type="voice"` + `tg_msg type="keyboard"` with the same 2 buttons:
 
-**Close**: after the 3rd or 4th turn, gracefully wrap (`Thanks, that was a fun chat — let me give you some quick feedback.`) and proceed to evaluation:
+   ```json
+   [["🆘 不知道怎么说|freetalk_sos", "👋 结束聊天|freetalk_end"]]
+   ```
+
+   Voice first, then keyboard — never parallel.
+
+### State C-End: Summary & Evaluation
+
+When user taps `👋 结束聊天` (`freetalk_end` callback) or max 8 turns reached:
 
 1. **Grade against §2.0 rubric** to produce a continuous `accuracy` (0..1).
 2. Compute granular subcaps (`speaking.fluency`, `speaking.lexical_variety`, `speaking.grammar_accuracy`) on 0–10 scale.
-3. Pick **at most 1–2** errors that you gave stealth feedback on this round (don't dump 5 at the end — see Hard Rule 4).
-4. **Persist FIRST, THEN feedback.** Sequential — the row must be in DB before feedback reaches the learner.
+3. **Persist FIRST** (State D), then send the summary.
 
-Feedback content (no fixed header/template) — every reply MUST cover, in some natural form:
+Summary content — deliver as a natural Chinese wrap-up:
 
-- the rubric score (e.g. `🎯 整体: 0.70/1.0 — 撑住了 3 轮，话题深度可以再加点`)
-- 1 thing they did well (specific quote or specific verb-phrase pattern they used)
-- 1 specific upgrade: 原句 → 升级版 → 原因 (the upgrade you gave mid-flow stealth, OR the highest-leverage one if no stealth was given)
-- one **encouraging next step** (e.g. "下次这个 push-back，可以试试用 'It depends on…' 起头")
+- 🎯 整体评分 (e.g. `0.70/1.0 — 聊了 4 轮，观点清晰但用词重复`)
+- ✅ 做得好的地方 (quote 1 specific phrase they used well)
+- 📝 升级建议 (1 concrete upgrade: 原句 → 升级版 → 原因)
+- 💡 下次可以试试 (1 sentence of actionable next-step)
 
-Two to four sentences after the score line, conversational.
-
-Buttons (always, regardless of accuracy):
+**Buttons (post-session, always):**
 
 ```json
-[["🔄 换个话题再聊|freetalk_next", "🧭 练习其他|nav:main"]]
+[["🔄 换个话题继续聊|freetalk_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` — see Hard Rule 9.
+**Critical**: summary + buttons in **one** `tg_msg type="keyboard"` call.
 
 ### State D: Persist Evidence
 
-Call `persist action="practice"` (or omit `action`) **before** sending the State C feedback `tg_msg`.
+Call `persist action="practice"` **before** sending the State C-End summary.
 
 ONE row per freetalk session (not per turn).
 
@@ -205,40 +191,40 @@ Minimum payload:
   "accuracy": 0.70,
   "raw_score": 0.70,
   "max_score": 1,
-  "feedback": "<IN ENGLISH: engagement + depth verdict + 1 upgrade. e.g. 'Sustained 3 turns on TFT vs Honor of Kings; opinions clear but vocabulary repetitive (\"good\" 4x). Upgrade: \"good\" → \"rewarding\". Reason: comparing skill-vs-luck needs evaluative adjectives.'>",
+  "feedback": "<IN ENGLISH: engagement + depth verdict + 1 upgrade.>",
   "audio_path": "",
   "section": "speaking",
   "domain": "speaking",
   "load_score": 2,
   "minutes": 3,
   "mode": "study",
-  "ui_feedback": "<comma-joined exact button labels tapped this round, e.g. '🆘 不知道怎么用英文说,🔄 换个话题' — empty if none>",
+  "ui_feedback": "<comma-joined exact button labels tapped, e.g. '🆘 不知道怎么说' — empty if none>",
   "metadata": "{\"tier\":\"intermediate\",\"topic\":\"tft_vs_honor_of_kings\",\"topic_family\":\"hobby_game\",\"turns_completed\":3,\"sos_used\":false,\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
-  "errors": "[{\"key\":\"vocabulary_repetition\",\"category\":\"speaking\",\"severity\":\"medium\",\"original\":\"good\",\"correction\":\"rewarding\",\"note\":\"Reused 'good' 4x where evaluative adjectives would fit.\"},{\"key\":\"filler_overuse\",\"category\":\"speaking\",\"severity\":\"low\",\"note\":\"3+ um/like fillers in turn 2.\"}]",
-  "subcap_scores": "[{\"key\":\"speaking.fluency\",\"score\":6.5,\"evidence\":\"Sustained turns; minor pauses; one filler cluster.\"},{\"key\":\"speaking.lexical_variety\",\"score\":5.5,\"evidence\":\"'good' 4x; needs evaluative adjectives.\"},{\"key\":\"speaking.interaction\",\"score\":7.0,\"evidence\":\"Engaged with push-back at turn 2.\"}]"
+  "errors": "[{\"key\":\"vocabulary_repetition\",\"category\":\"speaking\",\"severity\":\"medium\",\"original\":\"good\",\"correction\":\"rewarding\",\"note\":\"Reused 'good' 4x.\"}]",
+  "subcap_scores": "[{\"key\":\"speaking.fluency\",\"score\":6.5,\"evidence\":\"Sustained turns; minor pauses.\"},{\"key\":\"speaking.lexical_variety\",\"score\":5.5,\"evidence\":\"'good' 4x.\"},{\"key\":\"speaking.interaction\",\"score\":7.0,\"evidence\":\"Engaged with push-back.\"}]"
 }
 ```
 
 `prompt_hash` = first 16 hex chars of `SHA-1(normalized topic question)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
 
-`ui_feedback` mandatory whenever any 🆘 / 🔄 button was tapped, even on `accuracy=1.0` — without it, `learner-state` over-promotes "passed only after scaffolding" passes.
+`ui_feedback` mandatory whenever any 🆘 button was tapped, even on `accuracy=1.0`.
 
-State D persists fully-completed freetalks only (3–4 turns reached). Mid-conversation abandons are written by State B.
+State D persists fully-completed freetalks only (3+ turns). If user taps `freetalk_end` before 3 turns, persist with `completed=0`.
 
-Error keys: `filler_overuse`, `verb_form_error`, `l1_transfer`, `vocabulary_repetition`, `register_mismatch`, `topic_drift`. Record only 1–2 errors you gave stealth feedback on (Hard Rule 4).
+Error keys: `filler_overuse`, `verb_form_error`, `l1_transfer`, `vocabulary_repetition`, `register_mismatch`, `topic_drift`. Record only 1–2 errors (Hard Rule 4).
 
 ### State E: Continue (`freetalk_next`)
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next topic (State A step 1 — incl. dedup, topic rotation per §2.4). Respect "no more than 2 consecutive same topic family" (§2.4).
 
 ## 4. Collaborates With
 
 - `planner`: routes here when `speaking.fluency` / engagement is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running fluency state, updates `MEMORY.md`.
-- `coach`: uses errors/subcap scores to explain fluency / lexical-variety patterns.
+- `planner`: (proactive nudge) uses errors/subcap scores to explain fluency / lexical-variety patterns.
 - `vocab-harvest`: turns auto-harvested upgrades into review items.
 - `support/data-contract`: defines the `persist` write protocol.
 
@@ -256,8 +242,9 @@ Error keys: `filler_overuse`, `verb_form_error`, `l1_transfer`, `vocabulary_repe
 2. **The "I'm Stuck" protocol**: if the user uses native language or hits SOS, do NOT grade them. Provide a word bank immediately and resume.
 3. **Voice before instruction, sequential.** Never `tg_msg type="voice"` and `type="keyboard"` in parallel.
 4. **At most 1–2 errors logged** per session, only ones you gave stealth feedback on. Don't list 5 at the end — that's overwhelming and inconsistent with the stealth-feedback rule.
-5. **3–4 turns.** Less = under-practice; more = fatigue.
+5. **User controls when to stop; max 8 turns as safety net.** The conversation ends on `👋 结束聊天` tap or after 8 turns, whichever comes first.
 6. **Feedback after, not during** (except inline stealth in §State C step 3).
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
 9. **One-call keyboard** (State A and State C close): text + buttons in a single `tg_msg type="keyboard"` call.
+10. **TTS = English question ONLY.** The `tts` call text must be the English hook question verbatim — do NOT include Chinese prompts ("按住录音键…"), button descriptions, or emoji in the TTS input.

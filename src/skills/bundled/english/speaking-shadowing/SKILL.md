@@ -35,7 +35,7 @@ Target **i+1**: one stretch above the learner's current successful pronunciation
 | `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
 | `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
 
-**Score normalization (CRITICAL):** `pron_assess` returns 4 scores 0–100: `accuracy`, `fluency`, `completeness`, `prosody`. DB `accuracy` column = `pron_accuracy / 100` (this drives credit gating — pronunciation accuracy is the i+1 signal). `fluency` goes to `subcap_scores.speaking.fluency` separately for `coach`/`learner-state`; not used for tier decisions.
+**Score normalization (CRITICAL):** `pron_assess` returns 4 scores 0–100: `accuracy`, `fluency`, `completeness`, `prosody`. DB `accuracy` column = `pron_accuracy / 100` (this drives credit gating — pronunciation accuracy is the i+1 signal). `fluency` goes to `subcap_scores.speaking.fluency` separately for `learner-state`; not used for tier decisions.
 
 Standard 100% speed only. Slow-down is the `speak_slow` button (State B), not a tier property.
 
@@ -162,10 +162,13 @@ Two to four sentences after the score line, conversational.
 **Buttons (binary by `accuracy` vs `PASS_THRESHOLD`):**
 
 - `accuracy < PASS` (Azure pron < 85) — forced re-practice, **NO buttons**:
-  1. Generate coaching audio (see "Low-score coaching TTS" below); send AFTER feedback text but BEFORE waiting.
-  2. Append: `对照刚才的精度示范，按住录音再读一遍发给我！💪`
-  3. Wait for the next voice message → re-evaluate via State F.
-- `accuracy ≥ PASS` (Azure pron ≥ 85, clean pass): `[["🔄 练下一句|speak_next", "🧭 练习其他|nav:main"]]`
+  1. Generate coaching audio (see "Low-score coaching TTS" below).
+  2. **Send voice FIRST**: `tg_msg type="voice"` with the coaching audio (separate message, no caption).
+  3. **THEN send feedback text**: `tg_msg type="text"` with the feedback + nudge (`对照刚才的精度示范，按住录音再读一遍发给我！💪`). Voice and text are always separate messages.
+  4. Wait for the next voice message → re-evaluate via State F.
+- `accuracy ≥ PASS` (Azure pron ≥ 85, clean pass): **ONE `tg_msg type="keyboard"`** with feedback text + buttons `[["🔄 练下一句|speak_next", "🧭 练习其他|nav:main"]]`.
+
+**Max retry rule**: If the **same phoneme** has failed 3 consecutive times across re-practices (State F), stop drilling it. Send a short ack ("这个音今天先放一放，下次再攻克 💪"), auto-advance to `speak_next` (State E). Prevents frustration loops.
 
 **Low-score coaching TTS** (mandatory when `accuracy < PASS`):
 
@@ -188,16 +191,6 @@ Example call (one item — `/θ/`):
   "segments": "[{\"voice\":\"en-US-AriaNeural\",\"text\":\"think\",\"rate\":\"-25%\"},{\"break\":\"800ms\"},{\"voice\":\"en-US-AriaNeural\",\"text\":\"I think it's right.\",\"rate\":\"-25%\"}]"
 }
 ```
-
-Example call (two items — `/θ/` + `/r/`):
-
-```json
-{
-  "segments": "[{\"voice\":\"en-US-AriaNeural\",\"text\":\"think\",\"rate\":\"-25%\"},{\"break\":\"800ms\"},{\"voice\":\"en-US-AriaNeural\",\"text\":\"I think it's right.\",\"rate\":\"-25%\"},{\"break\":\"1500ms\"},{\"voice\":\"en-US-AriaNeural\",\"text\":\"red\",\"rate\":\"-25%\"},{\"break\":\"800ms\"},{\"voice\":\"en-US-AriaNeural\",\"text\":\"The red apple.\",\"rate\":\"-25%\"}]"
-}
-```
-
-Send sequentially (Hard Rule 3): report `tg_msg type="text"`, THEN coaching `tg_msg type="voice"`, THEN nudge `tg_msg type="text"`. Don't bundle into `keyboard` — there are no buttons in this branch.
 
 Append `🎯 发音示范` to `ui_feedback` so State D records that coaching was given.
 
@@ -243,29 +236,33 @@ Error keys: `pronunciation_vowel`, `pronunciation_consonant`, `pronunciation_str
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next sentence (State A step 1 — incl. dedup, topic rotation per §2.4).
 
 ### State F: Implicit re-practice (`accuracy < PASS` loop)
 
 When the user sends another voice message after a sub-pass evaluation (no buttons shown), treat as consolidation retry on the **same sentence**:
 
-1. **Recover parent sample** from chat memory (`id`, `prompt`, `prompt_hash`, `audio_path`, `redo_count`). If session was compacted, `persist {"action":"recent_practice","session_id":"<session>","skill_type":"speaking.shadowing","limit":1}` and grab them from the most-recent row. Do NOT regenerate the sentence.
-2. Run `pron_assess` with the recovered `prompt` as `reference_text` and the user's new audio.
-3. Persist via State D **with these overrides**:
+**⚡ Retry cost budget: 2-3 tool calls MAX per retry turn.** Do NOT re-call `recent_practice` or `coach_context` — tier cannot change mid-retry and the prompt is already known.
+
+1. **Recover parent sample** from chat memory (`id`, `prompt`, `prompt_hash`, `audio_path`, `redo_count`). These are all available in the current conversation context — do NOT call `persist` to retrieve them. Only if the session was compacted and chat memory is truly empty, fall back to `persist {"action":"recent_practice","session_id":"<session>","skill_type":"speaking.shadowing","limit":1}`.
+2. Run `pron_assess` with the recovered `prompt` as `reference_text` and the user's new audio. **(Tool call 1)**
+3. Send voice (separate `tg_msg type="voice"`) THEN feedback text (`tg_msg type="text"` or `type="keyboard"` depending on pass/fail). **(Tool calls 2-3)**
+4. Persist via State D **with these overrides**: **(Tool call 3)**
    - `parent_sample_id` = previous round's sample `id`
    - `redo_count` = `(previous.redo_count ?? 0) + 1` (null/missing → 0; first retry → 1)
    - `prompt_hash` = same as previous (intentional collision — same item)
    - `metadata` includes `"is_redo": true` and `"parent_accuracy": <previous accuracy>`
-4. Apply the **same binary button logic** as State C:
-   - Still `< PASS` → no buttons; fresh coaching TTS targeting a **different** phoneme if possible (don't loop on the same sound forever); nudge again.
-   - `≥ PASS` → `[["🔄 练下一句|speak_next", "🧭 练习其他|nav:main"]]`. Skip coaching TTS — success doesn't need it.
+5. Apply the **same binary button logic** as State C:
+    - Still `< PASS` → no buttons; fresh coaching TTS targeting a **different** phoneme if possible; voice (separate) then text (separate).
+    - Still `< PASS` AND this is the **3rd consecutive fail on the same phoneme** → auto-advance (see "Max retry rule" in State C).
+    - `≥ PASS` → `[["🔄 练下一句|speak_next", "🧭 练习其他|nav:main"]]`. Skip coaching TTS — success doesn't need it.
 
 ## 4. Collaborates With
 
 - `planner`: routes here when phoneme accuracy is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running pronunciation state, updates `MEMORY.md`.
-- `coach`: uses errors/subcap scores to explain articulation patterns.
+- `planner`: (proactive nudge) uses errors/subcap scores to explain articulation patterns.
 - `listening-shadowing`: complementary rhythm-focused skill (see §1 disambiguation).
 - `speaking-azure-score`: defines the `pron_assess` request/response contract and error taxonomy.
 - `support/data-contract`: defines the `persist` write protocol.
@@ -290,3 +287,5 @@ When the user sends another voice message after a sub-pass evaluation (no button
 7. **Feedback content (not format)**: every report covers 4 scores (准确度/流利度/完整度/韵律感), correct sentence, brief translation, specific phoneme diagnosis. Format is the LLM's call — no fixed template.
 8. **Persist before feedback**: `await persist(...)` returns before sending the evaluation. State F needs the row in DB.
 9. **One-call keyboard**: when buttons are shown, report text + buttons in a single `tg_msg type="keyboard"` call. Never split.
+10. **Voice and text always separate.** Never bundle feedback text into voice `caption`. Send `tg_msg type="voice"` first (standalone), then `tg_msg type="text"` or `type="keyboard"` separately. When accuracy ≥ PASS, combine feedback into the `tg_msg type="keyboard"` call (no voice needed).
+11. **3-fail auto-advance.** If the same phoneme fails 3 consecutive re-practices, stop drilling it and auto-advance to the next sentence.

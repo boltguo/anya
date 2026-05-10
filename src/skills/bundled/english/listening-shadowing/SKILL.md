@@ -35,7 +35,7 @@ Target **i+1**: one stretch above the learner's current successful tempo. Adapt 
 | `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
 | `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
 
-**Score normalization (CRITICAL):** `pron_assess` returns `fluency` and pronunciation `accuracy` 0–100. DB `accuracy` column = `fluency / 100` (this drives credit gating — rhythm is the i+1 signal). Raw pronunciation goes to `band_pronunciation` separately for `coach`/`learner-state` later; not used for tier decisions.
+**Score normalization (CRITICAL):** `pron_assess` returns `fluency` and pronunciation `accuracy` 0–100. DB `accuracy` column = `fluency / 100` (this drives credit gating — rhythm is the i+1 signal). Raw pronunciation goes to `band_pronunciation` separately for `learner-state` later; not used for tier decisions.
 
 Standard 100% speed only. Slow-down is the `shadow_slow` button (State B), not a tier property.
 
@@ -264,7 +264,7 @@ When the user sends another voice message after a sub-pass evaluation (no button
 
 - `planner`: routes here when listening rhythm / connected-speech / chunking is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running tempo state, updates `MEMORY.md`.
-- `coach`: uses errors/subcap scores to explain rhythm/linking patterns.
+- `planner`: (proactive nudge) uses errors/subcap scores to explain rhythm/linking patterns.
 - `speaking-shadowing`: complementary phoneme-focused skill (see §1 disambiguation).
 - `support/data-contract`: defines the `persist` write protocol.
 

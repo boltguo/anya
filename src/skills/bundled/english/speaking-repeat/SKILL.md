@@ -13,7 +13,7 @@ Trigger when:
 
 - User says: `复述`, `retell`, `听一段再说`.
 - Callback `speaking-repeat`.
-- Planner/coach routes here when `speaking.interaction` or `speaking.lexical_variety` is weak, or Part 2 narrative structure is weak (5-element coverage < 3/5).
+- Planner routes here when `speaking.interaction` or `speaking.lexical_variety` is weak, or Part 2 narrative structure is weak (5-element coverage < 3/5).
 
 Required context before generating:
 
@@ -217,14 +217,14 @@ Error keys: `info_loss`, `paraphrase_parroting`, `register_mismatch`, `register_
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next source (State A step 1 — incl. dedup, topic rotation per §2.4). Respect "no more than 2 consecutive same register" (§2.4).
 
 ## 4. Collaborates With
 
 - `planner`: routes here when `speaking.interaction` / paraphrasing / Part-2 structure is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running retell ability, updates `MEMORY.md`.
-- `coach`: uses errors/subcap scores to explain paraphrase patterns and pivot detection.
+- `planner`: (proactive nudge) uses errors/subcap scores to explain paraphrase patterns and pivot detection.
 - `vocab-harvest`: turns auto-harvested upgrades into review items.
 - `speaking-azure-score`: optional `pron_assess` if pronunciation flagged weak.
 - `support/data-contract`: defines the `persist` write protocol.

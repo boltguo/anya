@@ -13,7 +13,7 @@ Trigger when:
 
 - User says: `题型`, `TFNG`, `Heading`, `Matching`, `Completion`, `MCQ`, `专项`.
 - Callback `reading-typetrain` (auto-pick weakest type) or `reading-typetrain:<type>` (force a specific type).
-- Planner/coach routes here when `feedback.question_accuracy` shows a particular type underperforming for ≥ 14 days.
+- Planner routes here when `feedback.question_accuracy` shows a particular type underperforming for ≥ 14 days.
 
 Required context before generating:
 
@@ -213,7 +213,7 @@ Subcap mapping by type:
 
 - `planner`: routes here when a specific question type is the highest-value drill.
 - `learner-state`: reads persisted evidence; updates per-type `feedback.question_accuracy` in `MEMORY.md`.
-- `coach`: uses errors / subcap scores to explain trap families.
+- `planner`: (proactive nudge) uses errors / subcap scores to explain trap families.
 - `reading-skim-drill`: graduates back here once timed pace is solid and the user wants type-specific accuracy work.
 - `support/data-contract`: defines the `persist` write protocol.
 
