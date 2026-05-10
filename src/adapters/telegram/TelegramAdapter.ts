@@ -376,8 +376,22 @@ export class TelegramAdapter {
         return;
       }
 
-      agentLogger.info({ msg: 'tg_restart_command', chatId: ctx.chat.id, userId });
+      const updateId = ctx.update.update_id;
+      agentLogger.info({ msg: 'tg_restart_command', chatId: ctx.chat.id, userId, updateId });
       const statusMsg = await ctx.reply('🔄 Restarting gateway...');
+
+      // CRITICAL: stop polling and explicitly ACK this /restart update past
+      // Telegram's queue BEFORE we exit. Otherwise the new child will re-read
+      // the same /restart update on its first getUpdates call (offset never
+      // advanced because we exited before grammy's next poll) and we loop
+      // forever. bot.stop() halts the in-flight long-poll so the explicit
+      // getUpdates call below doesn't 409 against ourselves.
+      try {
+        await this.bot.stop();
+        await this.bot.api.getUpdates({ offset: updateId + 1, limit: 1, timeout: 0 });
+      } catch (err) {
+        agentLogger.error({ msg: 'tg_restart_ack_failed', error: (err as Error).message });
+      }
 
       // Clean up PID file so the new process doesn't detect "already running"
       const { removePid } = await import('../../lib/pidfile.js');
@@ -403,9 +417,9 @@ export class TelegramAdapter {
       });
       child.unref();
 
-      agentLogger.info({ msg: 'tg_restart_spawned', newPid: child.pid });
+      agentLogger.info({ msg: 'tg_restart_spawned', newPid: child.pid, updateId });
 
-      // Edit the status message to confirm restart, then exit
+      // Edit the status message to confirm restart (best-effort), then exit
       try {
         await this.bot.api.editMessageText(
           ctx.chat.id,
@@ -414,10 +428,7 @@ export class TelegramAdapter {
         );
       } catch { /* best effort */ }
 
-      // Give the edit time to send, then exit this process
-      setTimeout(() => {
-        process.exit(0);
-      }, 500);
+      process.exit(0);
     });
 
     for (const alias of commandAliases) {

@@ -141,8 +141,8 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   version: '0.4.0',
 
   provider: {
-    backend: 'gemini',
-    model: 'gemini-3-flash-preview',
+    backend: 'codex',
+    model: 'gpt-5.4',
     max_tokens: 8192,
     temperature: 0.7,
     max_retries: 3,

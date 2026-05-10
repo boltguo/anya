@@ -97,8 +97,8 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
   const provider = raw.provider;
   if (provider && (provider.gemini || provider.openai || provider.active)) {
     migrated.provider = {
-      backend: 'gemini',
-      model: provider.gemini?.model || provider.openai?.model || 'gemini-3-flash-preview',
+      backend: provider.openai ? 'codex' : (provider.gemini ? 'gemini' : 'codex'),
+      model: provider.openai?.model || provider.gemini?.model || 'gpt-5.4',
       max_tokens: provider.max_tokens || 8192,
       temperature: provider.temperature ?? 0.7,
       max_retries: provider.max_retries || 3,
@@ -121,15 +121,14 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
   // v0.4 → v0.5: add provider.backend if missing
   if (migrated.provider && typeof migrated.provider === 'object' && !migrated.provider.backend) {
     const model = migrated.provider.model || '';
-    // Infer backend from model name
-    if (model.startsWith('gpt') || model.startsWith('codex') || model.startsWith('o')) {
+    if (model.startsWith('gemini')) {
+      migrated.provider.backend = 'gemini';
+    } else if (model.startsWith('gpt') || model.startsWith('codex') || model.startsWith('o')) {
       migrated.provider.backend = 'codex';
     } else {
-      migrated.provider.backend = 'gemini';
-      // If model looks like an OpenAI model but we're defaulting to gemini, fix model too
-      if (model.startsWith('gpt') || model.startsWith('codex')) {
-        migrated.provider.model = 'gemini-3-flash-preview';
-      }
+      // Empty / unknown model — adopt new default (codex / gpt-5.4)
+      migrated.provider.backend = 'codex';
+      migrated.provider.model = 'gpt-5.4';
     }
   }
 

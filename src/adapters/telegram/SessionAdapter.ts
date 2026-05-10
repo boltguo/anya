@@ -397,8 +397,8 @@ export class TelegramSessionAdapter implements Adapter {
       for (const row of buttons) {
         for (const btn of row) {
           const parts = btn.split('|', 2);
-          const label = parts[0];
-          const data = parts.length > 1 ? parts[1] : parts[0];
+          const label = (parts[0] || '').trim();
+          const data = (parts.length > 1 ? parts[1] : parts[0]).trim();
           keyboard.text(label, data);
         }
         keyboard.row();
@@ -479,7 +479,9 @@ export class TelegramSessionAdapter implements Adapter {
         for (const row of buttons) {
           for (const btn of row) {
             const parts = btn.split('|', 2);
-            keyboard.text(parts[0], parts.length > 1 ? parts[1] : parts[0]);
+            const label = (parts[0] || '').trim();
+            const data = (parts.length > 1 ? parts[1] : parts[0]).trim();
+            keyboard.text(label, data);
           }
           keyboard.row();
         }

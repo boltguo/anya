@@ -45,8 +45,8 @@
       "properties": {
         "model": {
           "type": "string",
-          "description": "Primary model name (e.g. gemini-3-flash-preview).",
-          "default": "gemini-3-flash-preview"
+          "description": "Primary model name (e.g. gpt-5.4 or gemini-3-flash-preview).",
+          "default": "gpt-5.4"
         },
         "max_tokens": {
           "type": "integer",

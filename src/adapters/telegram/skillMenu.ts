@@ -119,9 +119,10 @@ function buildKeyboard(buttons: string[][]): InlineKeyboard {
     for (const item of row) {
       const pipeIdx = item.lastIndexOf('|');
       if (pipeIdx === -1) {
-        kb.text(item, item);
+        const v = item.trim();
+        kb.text(v, v);
       } else {
-        kb.text(item.substring(0, pipeIdx), item.substring(pipeIdx + 1));
+        kb.text(item.substring(0, pipeIdx).trim(), item.substring(pipeIdx + 1).trim());
       }
     }
     kb.row();
