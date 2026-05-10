@@ -202,6 +202,17 @@ export class TelegramAdapter {
       await sessionAdapter.sendThinking();
       const result: RunResult = await agent.run(input, { sessionKey, files });
       if (!result.tgSent && result.content) {
+        // Warn if the agent used tools during the run but ended without sending
+        // via tg_msg — likely the LLM forgot to call tg_msg for its final reply,
+        // which causes the user to miss the response (the "口语扫描器卡了" pattern).
+        if (result.toolCallCount > 0) {
+          agentLogger.warn({
+            msg: 'tg_bare_text_fallback',
+            chatId: ctx.chat!.id,
+            toolCallCount: result.toolCallCount,
+            contentLen: result.content.length,
+          });
+        }
         await sessionAdapter.reply(result.content);
       }
     } catch (err) {

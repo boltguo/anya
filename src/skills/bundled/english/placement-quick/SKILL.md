@@ -66,6 +66,7 @@ These phrases in user replies are **signals, not answers**. Recognise them:
 3. **Execute exactly ONE probe per turn.** After sending the probe, **STOP** and wait for the user's reply.
 4. **No difficulty self-rating buttons.** The answer alone drives adaptation. Only buttons in this skill: State 0 kickoff.
 5. **Domain rotation Round 2 is non-negotiable** — skipping it forces `confidence = low` for that dimension.
+6. **ALL replies MUST use `tg_msg`.** Never return a bare text response. Every message to the user — probes, feedback, transitions, the final report — MUST go through a `tg_msg` tool call with the appropriate `type` (`force_reply`, `keyboard`, `voice`). Returning text without calling `tg_msg` will cause the message to be silently swallowed.
 
 ## 3. Adaptation Inference Rules
 

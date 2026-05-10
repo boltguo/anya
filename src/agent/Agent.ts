@@ -390,7 +390,7 @@ function degradeForStorage(messages: Message[]): Message[] {
  * Older tool results are truncated to {@link MAX_OLD_TOOL_CHARS} to reduce
  * prompt token waste from stale SKILL.md bodies, persist JSON, etc.
  */
-const KEEP_RECENT_TOOL_RESULTS = 6;
+const KEEP_RECENT_TOOL_RESULTS = 8;
 const MAX_OLD_TOOL_CHARS = 200;
 
 /**
@@ -425,10 +425,30 @@ function trimOldToolResults(history: Message[]): Message[] {
       }
     } else if (history[i].role === 'assistant' && history[i].toolCalls && history[i].toolCalls!.length > 0) {
       if (toolCount > KEEP_RECENT_TOOL_RESULTS) {
-        const toolNames = history[i].toolCalls!.map(t => t.name).join(', ');
+        const toolCalls = history[i].toolCalls!;
+        const toolNames = toolCalls.map(t => t.name).join(', ');
+
+        // Preserve the text sent to the user via tg_msg so the LLM retains
+        // conversational continuity (what it actually said) even after the
+        // toolCalls structure is stripped. Without this, the LLM loses track
+        // of the current placement test state and may emit bare text instead
+        const parts: string[] = [`[Executed tools: ${toolNames}]`];
+        for (const tc of toolCalls) {
+          if (tc.name === 'tg_msg' && tc.args?.text) {
+            const text = String(tc.args.text);
+            // Keep up to 500 chars of the sent text — enough for the LLM to
+            // refer back to specifics in long final reports (e.g. placement
+            // scanner result) without bloating the prompt.
+            const preview = text.length > 500 ? text.substring(0, 500) + '…' : text;
+            parts.push(`[Sent to user: ${preview}]`);
+          }
+        }
+        if (history[i].content) {
+          parts.push(history[i].content!);
+        }
         history[i] = {
           role: 'assistant',
-          content: `[Executed tools: ${toolNames}]\n${history[i].content || ''}`.trim()
+          content: parts.join('\n'),
         };
       }
     }

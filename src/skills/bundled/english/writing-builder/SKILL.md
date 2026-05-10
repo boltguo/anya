@@ -5,61 +5,235 @@ description: "MUST trigger when the user wants to practice basic writing mechani
 
 # Writing Builder (Micro-level Syntax Gym)
 
-## 1. When to Use (Trigger Contexts)
-- User phrases: "造句", "grammar drill", "build sentences", "练习写长句"
-- Callback/System triggers: `writing-builder`
+Sentence-level grammar gym. One micro-task at a time: deliver a constraint (use "Despite" + a target word, or combine 2 short sentences with a relative clause), let the learner type their attempt, evaluate against the constraint **and** native polish, persist, then adapt the next prompt by i+1.
 
-## 2. Adaptive Scaling (CRITICAL Constraint)
-Read the user's writing level from `MEMORY.md`.
-- **Beginner (< 5.0)**: Translate simple SVO sentences or combine 2 short sentences using "and/but".
-- **Intermediate (5.0-6.0)**: Use specific conjunctions (Although, Despite) or relative clauses (which, who).
-- **Advanced (6.5+)**: Paraphrase a simple sentence into an advanced academic structure (e.g., Inversion, Participle clauses, Nominalization).
+## 1. Inputs
 
-## 3. Workflow (Step-by-Step)
-Default session is **3 micro-tasks**.
+Trigger when:
 
-**Step 1: Challenge Delivery & UI Setup**
-- Send the micro-task (e.g., "用 'Despite' 和 'fluctuate' 把这两句话连起来...").
-- **MANDATORY UI**: Send an inline keyboard:
-  - Row 1: `[🆘 我卡壳了 (SOS)]`, `[💡 换个简单的]`
+- User says: `造句`, `grammar drill`, `build sentences`, `练习写长句`.
+- Callback `writing-builder`.
+- Planner/coach routes here for weak `writing.grammar_accuracy` / `writing.cohesion` / repeated `verb_form_error` / `sentence_fragment` / `run_on_sentence`.
 
-**Step 2: Handle Feedback (If clicked)**
-- `[🆘 我卡壳了 (SOS)]`: Give them a sentence starter (e.g., "你可以这样开头：Despite the fact that...").
-- `[💡 换个简单的]`: Drop the grammatical requirement and ask for a simpler version.
-- Log button usage to `ui_feedback`.
+Required context before generating:
 
-**Step 3: Evaluation & Native Polish**
-- Evaluate their sentence strictly on grammar and cohesion.
-- **MUST** provide a "Native Polish" version, explaining exactly why your version flows better.
+1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"writing.builder","limit":20}` (`limit` int). Returns rows + `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup; do not duplicate hashes in `metadata`.
+2. `persist {"action":"coach_context","days":14,"limit":8}` for subcaps / errors / due grammar items. Slow signal — only re-call when tier changes.
+3. `MEMORY.md` / `USER.md` only as fallback. No raw `study.db` access.
 
-## 4. End-of-Group UX (MANDATORY)
-After 3 tasks, you MUST send an inline keyboard in Chinese:
-- Row 1: `[🔄 再来一组]`, `[🧭 练习其他]`
+## 2. Difficulty Policy
 
-## 5. Persist (Data Contract)
+Target **i+1**: one structural stretch above the learner's last successful attempt. Adapt connector / clause type / vocab band; never combine two stretches in one round.
 
-**Follow `support/data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+### 2.0 Constants & Tier
 
-1. **`samples`** row:
-   - `skill_type = 'writing.builder'`
-   - `prompt` = the current micro-task
-   - `response` = the user's response
-   - `accuracy` = tasks graded correct / total (e.g. 2/3 = 0.67)
-   - `raw_score` = correct count, `max_score` = 3
-   - `load_score = 2`
-   - `ui_feedback` = clicked buttons (e.g. `"SOS,SOS"`)
-   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
-     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
+| Constant | Value | Meaning |
+| --- | --- | --- |
+| `PASS_THRESHOLD` | `0.80` | A round with `accuracy ≥ PASS` is a pass. |
+| `FAIL_THRESHOLD` | `0.60` | Below = fail; `[FAIL, PASS)` = "hold". |
+| `STREAK` | `2` | Passes/fails to move structure / tier. |
+| `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
+| `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
 
-2. **`errors`** — from `references/error-keys.md`:
-   - `verb_form_error`, `sentence_fragment`, `run_on_sentence`, `word_form_error`, `word_order_error`
-   - One row per grammar mistake, with `original_phrase` + `correction`
+**Score rubric (use verbatim — typed answer is rated 0..1, not binary):**
 
-3. **`subcap_scores`** — at least 1:
-   - `writing.grammar_accuracy` or `writing.cohesion`
+| Score | Rubric |
+| --- | --- |
+| `1.00` | Constraint met, grammar clean, phrasing native. |
+| `0.85` | Constraint met, grammar clean, phrasing slightly awkward (Native Polish still required). |
+| `0.70` | Constraint met but one minor grammar issue (article / plural / preposition). |
+| `0.50` | Constraint partially met (e.g. used connector but wrong clause structure) or one major grammar error. |
+| `0.25` | Attempted but dodged the constraint (rephrased to avoid it). |
+| `0.00` | No answer / abandoned / answered in Chinese. |
 
-4. **`activity_log`** — upsert today
+Native Polish is **always required** even at 1.00 (see Hard Rule 2). It is not part of the score.
+
+| Tier (IELTS band ≈ CEFR) | Constraint type | Vocab band |
+| --- | --- | --- |
+| Beginner (< 5.0 ≈ A1–A2) | SVO translation, or join 2 clauses with `and / but / so` | A1–A2 (high-frequency only) |
+| Intermediate (5.0–6.0 ≈ B1) | Specific connectors (`Although`, `Despite`, `Even though`) or relative clauses (`which`, `who`, `where`) | A2–B1 |
+| Advanced (≥ 6.5 ≈ B2+) | Inversion, participle clauses, nominalization, cleft sentences | B1–B2+ |
+
+**Reading the learner's level from `MEMORY.md`** (do NOT confuse capability score 0–100 with IELTS band 0–9):
+
+1. Prefer `Band Snapshot.Writing` (CEFR string). Map: `A1`/`A2` → Beginner, `B1` → Intermediate, `B2`/`C1`/`C2` → Advanced.
+2. Boundary suffix (`A2+`, `B1-`): **降一级起步**.
+3. If CEFR missing, fall back to 14-day `writing.grammar_accuracy` / `writing.cohesion` average from `coach_context.summary.subcaps` (0–10) and use the tier table above.
+4. **Never** read `Core Capabilities.Writing: <n>/100` as the IELTS band — that's a 0–100 capability score.
+
+### 2.2 Recent-accuracy
+
+Mean `accuracy` over last `ACC_WINDOW` `completed=1` rows of current `session_id` + `skill_type`. Abandoned (`completed=0`) excluded from mean but count as fail for `demotion_credit`.
+
+Fallback chain when fewer than `ACC_WINDOW` rows: 14-day mean from `coach_context.summary` → `MEMORY.md` band − 1 tier at simplest constraint → Beginner SVO. Never guess upward.
+
+### 2.3 Credit gating
+
+```
+promotion_credit = walk recent_practice.rows newest→oldest (skip redo_count>0):
+  count consecutive accuracy ≥ PASS; reset on any fail (< FAIL or completed=0); holds ([FAIL, PASS)) pass through.
+demotion_credit = mirror: count consecutive fail; reset on any pass; holds pass through.
+abandoned (completed=0) = 1 fail.
+```
+
+| Credit | Action |
+| --- | --- |
+| `promotion_credit ≥ STREAK` at tier ceiling | Promote tier; reset both credits; start at next tier's simplest constraint. |
+| `promotion_credit ≥ STREAK` inside tier | Swap to a harder constraint within the same tier; reset `promotion_credit`. |
+| `demotion_credit ≥ STREAK` at tier floor | Demote tier; reset both credits; start at prev tier's hardest constraint. |
+| `demotion_credit ≥ STREAK` inside tier | Swap to an easier constraint within the same tier; reset `demotion_credit`. |
+| `wb_easier` tap | Persists abandoned row (State B); surfaces as fail next call. |
+
+Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
+
+Hold: keep tier and constraint family; swap target word / vocab to probe the same structure with a different lexical load.
+
+### 2.4 Generation
+
+- Pick **one** target weakness from `coach_context.summary.errors|subcaps` (e.g. `verb_form_error`, `sentence_fragment`, missing relative clause).
+- Stretch **at most one** dimension per round: connector / clause type / vocab band.
+- Reject any prompt whose `prompt_hash` ∈ `recent_practice.recent_prompt_hashes`.
+- Don't repeat the same connector for 2+ consecutive rounds.
+
+## 3. Flow
+
+### State A: Prepare And Deliver
+
+1. From `coach_context` + §2.3 credits, decide: tier, target structure, target word(s), expected subcaps.
+2. Generate the micro-task (e.g. "用 `Despite` 和 `fluctuate` 把这两句话连起来：The economy is recovering. Energy prices are rising fast."). Compute `prompt_hash`; regenerate on dedup hit.
+3. Send a single `tg_msg type="keyboard"` call (no media):
+
+   Text:
+
+   ```text
+   ✍️ {micro-task in Chinese, with target words bolded and 2 source clauses}
+   ```
+
+   Buttons:
+
+   ```json
+   [["🆘 我卡壳了|wb_sos", "💡 换个简单的|wb_easier"]]
+   ```
+
+4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+5. `force_reply` for the user's typed sentence. Wait for the typed answer or button tap.
+
+### State B: Button Handling (before typing)
+
+`wb_sos`:
+
+- Append `🆘 我卡壳了` to `ui_feedback`.
+- Reply with a **sentence starter only** (e.g. "你可以这样开头：`Despite the fact that energy prices...`"). Do NOT write the full target sentence.
+- Re-send the same keyboard so the user can still tap `wb_easier` if the starter wasn't enough.
+- Wait again. SOS does NOT change the score envelope; it only assists.
+
+`wb_easier`:
+
+1. **Persist abandoned record FIRST** (before generating the replacement). Same envelope as State D, with these differences:
+
+   ```
+   completed=0, accuracy=0, response="",
+   feedback="Learner tapped '💡 换个简单的' before answering. Treat as negative evidence at this constraint type.",
+   ui_feedback="💡 换个简单的", load_score=0, minutes=0,
+   metadata={"abandoned_reason":"too_hard","constraint_type":"<connector|relative|inversion|...>","i_plus_one_dimension":"<dim>"}
+   ```
+
+   After `persist` returns, reset `ui_feedback`.
+
+2. **Replacement.** Apply demotion / constraint-down (§2.3). Show the previous task's target sentence as a model (1 line, plain text — not as evidence the user "should have known", but as a teaching example). Generate a new simpler micro-task → State A.
+
+### State C: Evaluate
+
+When the learner submits a typed sentence:
+
+1. Check the **constraint**: did they actually use the required connector / clause / structure? If they paraphrased to avoid it, that is rubric `0.25`.
+2. Grade the **grammar** holistically: subject-verb agreement, tense, articles, plural, preposition, word order. Each major issue drops one rubric step.
+3. Grade against §2.0 rubric to produce continuous `accuracy` (0..1).
+4. **Persist FIRST, THEN feedback**. Sequential.
+
+Write the feedback as a natural short Chinese message — no fixed header, no ✅/❌ template. Every reply MUST cover, in some natural form:
+
+- the user's sentence, quoted;
+- a 1-line "Native Polish" — your improved version (mandatory even at 1.00, see Hard Rule 2);
+- the **specific** grammar issue(s) named (e.g. "`fluctuate` 是动词，主语缺了 the prices"), or the **specific** lexical/cohesion improvement that drove the polish;
+- one-phrase root cause when there were errors (verb form / article / fragment / connector misuse).
+
+Two to four sentences usually enough.
+
+Buttons (always, regardless of accuracy):
+
+```json
+[["✏️ 再写一句|wb_next", "🧭 练习其他|nav:main"]]
+```
+
+**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` — see Hard Rule 7.
+
+### State D: Persist Evidence
+
+Call `persist` with `action="practice"` (or omit `action`).
+
+Minimum payload:
+
+```json
+{
+  "skill_type": "writing.builder",
+  "session_id": "<session>",
+  "prompt": "<the micro-task as shown to the user, including target words>",
+  "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
+  "response": "<the user's typed sentence>",
+  "accuracy": 0.70,
+  "raw_score": 0.70,
+  "max_score": 1,
+  "feedback": "<IN ENGLISH for DB / learner-state — the user-facing UI uses the Chinese feedback in §3 State C> Constraint met (used 'Despite + noun phrase'), but the verb 'fluctuate' was treated as a noun. Native polish swapped to 'Despite the fluctuating prices, the economy is recovering.'",
+  "section": "writing",
+  "domain": "writing",
+  "load_score": 2,
+  "minutes": 1,
+  "mode": "study",
+  "ui_feedback": "<comma-joined exact button labels tapped this round, e.g. '🆘 我卡壳了' — empty if none>",
+  "metadata": "{\"target_constraint\":\"despite_clause\",\"target_word\":\"fluctuate\",\"i_plus_one_dimension\":\"connector\",\"tier\":\"intermediate\",\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
+  "errors": "[{\"key\":\"word_form_error\",\"category\":\"writing\",\"severity\":\"medium\",\"original\":\"prices fluctuate\",\"correction\":\"the fluctuating prices\",\"note\":\"Used the verb form where a participle adjective was needed inside a 'Despite' phrase.\"}]",
+  "subcap_scores": "[{\"key\":\"writing.grammar_accuracy\",\"score\":7.0,\"evidence\":\"Constraint met; one verb-form slip.\"},{\"key\":\"writing.cohesion\",\"score\":7.5,\"evidence\":\"Connector chosen correctly; clause boundary clear.\"}]"
+}
+```
+
+`prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
+
+`ui_feedback` mandatory if any button was tapped, even on `accuracy=1.0`.
+
+State D persists attempted sentences only. Abandoned rows are written in State B. Use `response`, never `raw_content`.
+
+### State E: Continue (`wb_next`)
+
+- Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
+- Apply §2.3 (skip `redo_count > 0`) before generating.
+- Skip `coach_context` re-call unless tier changed.
+- Generate next micro-task (State A step 2 — incl. dedup). Respect "no same connector twice in a row" (§2.4).
+
+## 4. Collaborates With
+
+- `planner`: routes here when `writing.grammar_accuracy` / `writing.cohesion` is the highest-value drill.
+- `learner-state`: reads persisted evidence; updates `MEMORY.md`.
+- `coach`: uses errors / subcap scores to explain next steps and surface lingering verb-form / fragment issues.
+- `vocab-harvest`: when the Native Polish introduces a teachable chunk (collocation / phrasal verb), auto-call to save it.
+- `writing-rewrite`: graduates here once a learner can produce single sentences cleanly and is ready for paragraph upgrade.
+- `support/data-contract`: defines the `persist` write protocol.
+
+## 5. Failure And Fallbacks
+
+- `force_reply` ignored / user replies in Chinese → don't score; gently re-state the constraint and wait. If they explicitly say "skip", write `completed=0`.
+- `persist` fails → still send feedback, but say it was not saved.
+- User writes the **whole pair of source clauses unchanged** (no constraint applied) → grade as `0.25`, point out the constraint was dodged, do NOT silently let it pass.
+- User writes fluent English that violates the constraint (e.g. uses `Although` when asked for `Despite`) → grade `0.50`, name the swap, polish to the requested form.
+- `<tg-spoiler>` is client-side; no callback. Don't invent `spoiler_used`.
 
 ## 6. Hard Rules
-1. **High Intensity**: Keep instructions punchy.
-2. **Always Provide Polish**: Never just say "Correct". Always show a slightly better way to write it.
+
+1. **One micro-task per round.** No batches. Each row = one prompt + one response.
+2. **Always provide Native Polish.** Even at `accuracy=1.0`, show one slightly-better version. Never just say "Correct".
+3. **Constraint is non-negotiable.** If the prompt asked for `Despite + noun phrase`, an answer using `Although + clause` is rubric `0.50`, not `1.00`.
+4. **Diff every word** in the polish — explain what changed (lexical / grammatical / cohesive) so the learner knows the lesson.
+5. Use `persist` for reads/writes; no raw DB.
+6. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
+7. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` to attach buttons.
+8. **No full sample writing.** SOS gives a sentence-starter, not the full answer. The user must complete the sentence themselves — that's the drill.

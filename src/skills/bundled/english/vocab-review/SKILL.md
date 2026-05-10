@@ -1,78 +1,176 @@
 ---
 name: vocab-review
-description: "MUST trigger when the user asks to review vocabulary, check their memory, study words, or do flashcards. This manages the core Spaced Repetition System (SRS)."
+description: "MUST trigger when the user asks to review vocabulary, check their memory, study words, or do flashcards. This manages the core Spaced Repetition System (SRS) — pulls due items, runs an active-recall flashcard, then a micro-lesson on reveal."
 ---
 
 # Vocabulary Review (SRS & Micro-lessons)
 
-## 1. When to Use (Trigger Contexts)
-- User phrases: "背单词", "review words", "flashcards", "考考我昨天的词"
-- Callback/System triggers: `vocab-review`
+SRS-driven flashcard drill. Pull due items, run active recall on each (audio + hidden meaning), grade by user self-report (秒懂 / 模糊 / 忘了), reveal a fixed-layout micro-lesson, persist per-word reviews + a batch sample row, then loop or end. Promotion is handled by the persist tool's SRS algorithm — this skill does not run §2-style credit gating.
 
-## 2. Adaptive Batching (CRITICAL Constraint)
-Before starting, call `persist` with `{"action":"due_words","limit":8}` to get due SRS items.
-- A standard review batch is **5-8 words**. Do NOT overwhelm the user with 20 words at once.
+## 1. Inputs
 
-## 3. Workflow (State Machine)
-Execute these steps strictly as a two-turn state machine for EACH word in the batch:
+Trigger when:
 
-### State A: Active Recall (The Flashcard)
-For the current word in the batch, present a flashcard test.
-- **MANDATORY Audio**: Send a voice message (`tts`) for the word. You MUST use SSML `<break>` tags for the phonetic segmented breakdown. 
-  - Format: Word (Normal speed) x 3, Segmented Breakdown x 1, Example Sentence x 1.
-  - Example TTS text: `apple. apple. apple. ap <break time="500ms"/> ple. I ate an apple.`
-- **MANDATORY Hidden Meaning**: Do NOT show the Chinese meaning or the full definition yet. 
-- Present the word and its phonetic spelling (IPA) if available. Provide a short, engaging fill-in-the-blank example sentence using the word, OR ask a clever question (e.g., "If you are 'exhausted', are you full of energy or ready to sleep?").
-- **MANDATORY UI**: Send an inline keyboard (`tg_msg` tool `type: "keyboard"`) with Chinese buttons representing the user's memory state:
-  - Row 1: `[🎯 秒懂 (Easy)|srs:easy:word]`, `[🤔 模糊 (Hard)|srs:hard:word]`
-  - Row 2: `[❌ 忘了 (Again)|srs:again:word]`
-- **STOP AND WAIT**. Do not generate the lesson yet. Wait for the user to click a callback button.
+- User says: `背单词`, `review words`, `flashcards`, `考考我昨天的词`, `复习生词`.
+- Callback `vocab-review`.
+- Planner/coach routes here when SRS due-count is high or `Vocabulary Profile.due_count` is the dominant signal.
 
-### State B: Handle Feedback & Reveal (Micro-lesson)
-When you receive the user's callback click (`srs:easy`, `srs:hard`, or `srs:again`):
+Required context before generating:
 
-1. **Persist SRS Feedback via `persist` tool**:
-   - `[🎯 秒懂]`: call `persist action="word_review"` with `rating=5`.
-   - `[🤔 模糊]`: call `persist action="word_review"` with `rating=3`.
-   - `[❌ 忘了]`: call `persist action="word_review"` with `rating=1`. **Add this word to the end of the current batch to be tested again**.
-   - The tool updates counters, `srs_due`, interval, ease, `word_reviews`, and mastery.
+1. `persist {"action":"due_words","limit":8}` — pulls due SRS items in `srs_due` order. The list is the source of truth for the batch.
+2. `persist {"action":"coach_context","days":14,"limit":8}` for `Vocabulary Profile.cefr` (caps which words the LLM can mint on the fly when seeding examples) and `coach_context.summary.subcaps.vocab.recall` (informs whether to include extra production hints).
+3. `MEMORY.md` / `USER.md` only as fallback. No raw `study.db` access.
 
-2. **Reveal Micro-lesson (MANDATORY Layout)**:
-   Reply to the user with this exact, scannable format:
-   * **[Word]** /IPA/ 
-   * 📖 **释义**: [Concise Chinese meaning]
-   * 🔪 **拆解 (Etymology)**: [Explain prefix/root/suffix. E.g., in-(not) + vincible(conquer) = invincible] *Only if applicable.*
-   * 🗣️ **地道平替 (Native Slang/Idiom)**: [1 casual/native alternative. E.g., instead of 'exhausted', say 'wiped out'].
-   * 📝 **高频搭配 (Collocation)**: [1-2 common word combinations. E.g., 'heavily rely on'].
+If `due_words` returns 0 items, **do not invent**. Send a message: `📚 现在没有到期单词。要不要 vocab-topic 学一组新的？` with `[["📚 学一组新词|vocab-topic", "🧭 练习其他|nav:main"]]` and stop.
 
-3. **Proceed**: If the batch is not finished, automatically loop back to **State A** and present the next word. If finished, proceed to Step 4.
+## 2. SRS Promotion
 
-## 4. End-of-Group UX (MANDATORY)
-After the batch of 5-8 words is complete (including any `[❌ 忘了]` words that were re-tested), you MUST send an inline keyboard:
-- Row 1: `[🔄 再背一组|vocab-review]`, `[🧭 练习其他|nav:main]`
+This skill does NOT run §2.3-style PASS / FAIL / STREAK credit gating. Promotion is owned by the `persist action="word_review"` algorithm, which updates per-word `ease`, `interval`, `srs_due`, `mastery`, and `word_reviews` based on the per-card `rating` you submit (`5` = Easy, `3` = Hard, `1` = Again).
 
-## 5. Persist (Data Contract)
+What this skill controls:
 
-**Follow `support/data-contract/references/post-practice-protocol.md` for all writes.** Do NOT update MEMORY.md — `learner-state` skill handles that.
+- **Batch size**: 5–8 words per session (use the `due_words` `limit` parameter; default 8).
+- **Re-test rule**: any word rated `1` (Again) **must** appear again before the batch ends — append it to the queue.
+- **Rating mapping** (mandatory):
+  - `[🎯 秒懂 (Easy)]` → `rating=5`.
+  - `[🤔 模糊 (Hard)]` → `rating=3`.
+  - `[❌ 忘了 (Again)]` → `rating=1`.
+- **Mastery query**: never override the SRS algorithm's `mastery` field manually. Read it for display only.
 
-After the entire batch is complete:
+The batch-level `accuracy` written in State D is informational (used for `samples` row + activity rollup), not a gating signal.
 
-1. **`samples`** row — one per batch:
-   - `skill_type = 'vocab'`
-   - `prompt = 'review-batch'`
-   - `response` = comma-separated results (e.g. `"resilient:pass, fluctuate:fail, elaborate:pass"`)
-   - `accuracy` = easy+hard / total (0.0–1.0). `again` = fail.
-   - `raw_score` = pass count, `max_score` = total words tested
-   - `load_score = 2`
-   - `feedback` = A concise but detailed textual analysis of this specific attempt. Write about what exactly the user missed, the root cause, and overall performance. Do NOT use JSON.
-     Example: "The user struggled with relative clauses and vocabulary precision, but maintained good overall flow."
+## 3. Flow
 
-2. **`word_review` actions** — one per word during the batch (already in State B).
+Two-turn state machine, looped for each word in the batch.
 
-3. **`activity_log`** — updated automatically by `persist`.
+### State A: Active Recall (the flashcard)
+
+For the current word, present a flashcard test. Hidden meaning until the user taps a memory button.
+
+1. Pre-step: confirm the word came from this batch's `due_words` list (don't run State A on a word that wasn't fetched).
+2. **Audio (mandatory)**: send a `tg_msg type="voice"` with TTS. Use SSML `<break>` tags for the segmented breakdown:
+
+   ```
+   apple. apple. apple. ap <break time="500ms"/> ple. I ate an apple.
+   ```
+
+   Format: word ×3 (normal speed) → word with one mid-syllable break ×1 → example sentence ×1.
+
+3. **Card text (mandatory)**: send a separate `tg_msg type="keyboard"` (no media — the voice already played):
+
+   Text:
+
+   ```text
+   {word} /{IPA}/
+
+   {fill-in-the-blank example sentence using the word, OR a clever yes/no question that forces recall}
+
+   先想 5 秒再点 ↓
+   ```
+
+   Buttons:
+
+   ```json
+   [["🎯 秒懂 (Easy)|srs:easy:{word}", "🤔 模糊 (Hard)|srs:hard:{word}"], ["❌ 忘了 (Again)|srs:again:{word}"]]
+   ```
+
+4. **Stop and wait.** Do NOT generate the micro-lesson. Wait for callback.
+
+### State B: Handle Feedback (and reveal)
+
+When the callback arrives (`srs:easy:<word>` / `srs:hard:<word>` / `srs:again:<word>`):
+
+1. **Persist SRS feedback FIRST** via `persist action="word_review"` with the mapped `rating` (see §2). The tool updates `ease`, `interval`, `srs_due`, `mastery`, and appends to `word_reviews`. Do this BEFORE rendering the micro-lesson — if the call fails, surface that to the user.
+
+2. **If `rating=1` (Again)**: append this word to the end of the current batch's queue. The user must see it again before the batch ends.
+
+3. **Reveal micro-lesson** in the EXACT layout below — no paragraphs, no extra commentary:
+
+   ```text
+   **{word}** /{IPA}/
+   📖 **释义**: {concise Chinese meaning, ≤ 12 字}
+   🔪 **拆解**: {prefix(meaning) + root(meaning) + suffix(meaning) — only if morphology is informative; omit the line otherwise}
+   🗣️ **地道平替**: {1 native-feel slang/idiom alternative — e.g. instead of 'exhausted' say 'wiped out'}
+   📝 **高频搭配**: {1–2 collocations in the form '{verb/adj} + {word}' or '{word} + {prep/noun}'}
+   ```
+
+4. **Proceed**: if more words remain in the batch (including any `Again` re-tests), loop back to State A with the next word. If all done, go to State D for the batch sample row, then State E.
+
+### State C (skipped — covered by State B)
+
+This skill folds State C into State B (the rating *is* the evaluation; the reveal is the feedback). State C is intentionally left as a header to keep the skeleton aligned with other skills.
+
+### State D: Persist Evidence (batch close)
+
+After the entire batch is finished (every original word scored, plus any `Again` re-tests resolved), call `persist action="practice"` once for the whole batch.
+
+Minimum payload:
+
+```json
+{
+  "skill_type": "vocab",
+  "session_id": "<session>",
+  "prompt": "review-batch",
+  "prompt_hash": "<sha1('review-batch:' + sorted comma-joined words)>",
+  "response": "<comma-joined per-word results, e.g. 'resilient:easy, fluctuate:hard, elaborate:again, elaborate:hard'>",
+  "accuracy": 0.71,
+  "raw_score": 5,
+  "max_score": 7,
+  "feedback": "<IN ENGLISH for DB / learner-state> 5 of 7 retests landed easy or hard. 'elaborate' needed two passes. 'fluctuate' shaky on collocation. Suggest seeing 'fluctuate' inside a chart-description prompt next.",
+  "section": "vocab",
+  "domain": "vocab",
+  "load_score": 2,
+  "minutes": 4,
+  "mode": "study",
+  "ui_feedback": "<comma-joined exact button labels tapped this batch, capturing per-word ratings — e.g. '🎯 秒懂 (Easy),🤔 模糊 (Hard),❌ 忘了 (Again),🤔 模糊 (Hard)'>",
+  "metadata": "{\"batch_size\":7,\"easy_count\":2,\"hard_count\":3,\"again_count\":1,\"retest_count\":1,\"weakest_word\":\"elaborate\"}",
+  "subcap_scores": "[{\"key\":\"vocab.recall\",\"score\":6.0,\"evidence\":\"5 of 7 retests successful; one word required a second pass.\"}]"
+}
+```
+
+`raw_score` = count of words rated Easy or Hard on their **last** appearance (Again-then-Easy counts as 1). `max_score` = number of unique words in the original batch (NOT including re-test counts, otherwise the denominator inflates). `accuracy` = `raw_score / max_score`.
+
+Per-word `word_review` calls were already made in State B; do NOT re-submit them in State D's payload.
+
+### State E: Continue (`vocab-review`)
+
+- Re-call `persist action="due_words"` to fetch the next batch (the algorithm will return whatever is now due; recently-rated words are pushed forward).
+- Skip `coach_context` re-call unless `Vocabulary Profile.cefr` changed.
+- If 0 items, fall back to the empty-due message in §1.
+
+End-of-batch buttons (after State D persist returns):
+
+```json
+[["🔄 再背一组|vocab-review", "🎯 考考我刚学的|vocab-testme", "🧭 练习其他|nav:main"]]
+```
+
+**Critical**: send the batch summary + buttons in **one** `tg_msg type="keyboard"` call.
+
+## 4. Collaborates With
+
+- `planner`: routes here when SRS due-count is the strongest signal.
+- `learner-state`: reads `samples` rows; updates `MEMORY.md` `Vocabulary Profile`.
+- `coach`: uses `vocab.recall` subcap to recommend rebalancing (more reading-deepdive harvests, less new vocab-topic, etc.).
+- `vocab-harvest`: feeds new items into the queue (`origin="practice_harvest"`) — vocab-review pulls them in due order.
+- `vocab-topic` / `vocab-testme`: alternative routes when due-count is low.
+- `support/data-contract`: defines the `persist` write protocol.
+
+## 5. Failure And Fallbacks
+
+- TTS fails → send the card text without audio; flag `metadata.tts_failed=true`. Do NOT swallow the failure silently.
+- `persist action="word_review"` fails on a card → still reveal the micro-lesson (the lesson is value even if SRS state didn't move) but tell the user "未保存，下次还会来"; do NOT proceed to the next card until the user acknowledges.
+- User answers in plain text instead of tapping a button → ask once: "点一下按钮告诉我你记得的程度好吗？" If they reply with the literal word "easy" / "hard" / "again", accept it and persist with the corresponding rating.
+- Batch interrupted mid-way → State D is **not** written. Each per-word `word_review` is already saved (State B). The next session's `due_words` will reflect whatever was rated.
+- `<tg-spoiler>` is client-side; no callback. Don't use `<tg-spoiler>` for the reveal — the reveal must be a server-rendered separate message (the user already committed by tapping a button).
 
 ## 6. Hard Rules
-1. **No Info Dumping**: The Micro-lesson MUST be concise. Do not write paragraphs of text. Use the emojis and bolding as shown.
-2. **Active Recall First**: NEVER reveal the meaning before the user clicks a memory button. The effort of trying to remember is what builds neural pathways.
-3. **Audio Mandatory**: Every flashcard MUST include the TTS audio with SSML breaks as specified in State A.
-4. **Re-test Failures**: If they click `[❌ 忘了]`, they MUST see that word again before the batch ends.
+
+1. **No info dumping.** The micro-lesson uses the 5-line fixed layout — no paragraphs, no extra context. Brevity is the lesson format.
+2. **Active recall first.** NEVER reveal the meaning before the user taps a memory button. The effort of trying is what builds the trace.
+3. **Audio mandatory.** Every flashcard sends a TTS voice with the SSML break pattern. No silent flashcards.
+4. **Re-test all `Again` words.** A word rated `1` MUST appear again before the batch ends. Otherwise the SRS schedule lies.
+5. **Word_review per card, not per batch.** Persist each rating in State B as it happens — do NOT batch them into State D's payload.
+6. **Don't override `mastery`.** The persist algorithm owns it. Read for display, never write directly from this skill.
+7. Use `persist` for reads/writes; no raw DB.
+8. Don't update `MEMORY.md`; `learner-state` owns durable vocab state.
+9. **One-call keyboard** for the card and for the batch summary. Never `type="text"` then `type="edit"` to attach buttons.
