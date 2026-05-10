@@ -13,7 +13,7 @@ Trigger when:
 
 - User says: `背单词`, `review words`, `flashcards`, `考考我昨天的词`, `复习生词`.
 - Callback `vocab-review`.
-- Planner/coach routes here when SRS due-count is high or `Vocabulary Profile.due_count` is the dominant signal.
+- Planner routes here when SRS due-count is high or `Vocabulary Profile.due_count` is the dominant signal.
 
 Required context before generating:
 
@@ -71,7 +71,7 @@ For the current word, present a flashcard test. Hidden meaning until the user ta
    Buttons:
 
    ```json
-   [["🎯 秒懂 (Easy)|srs:easy:{word}", "🤔 模糊 (Hard)|srs:hard:{word}"], ["❌ 忘了 (Again)|srs:again:{word}"]]
+   [["👍 认识|srs:easy:{word}", "🤔 模糊|srs:hard:{word}"], ["❌ 不认识|srs:again:{word}"]]
    ```
 
 4. **Stop and wait.** Do NOT generate the micro-lesson. Wait for callback.
@@ -80,19 +80,26 @@ For the current word, present a flashcard test. Hidden meaning until the user ta
 
 When the callback arrives (`srs:easy:<word>` / `srs:hard:<word>` / `srs:again:<word>`):
 
-1. **Persist SRS feedback FIRST** via `persist action="word_review"` with the mapped `rating` (see §2). The tool updates `ease`, `interval`, `srs_due`, `mastery`, and appends to `word_reviews`. Do this BEFORE rendering the micro-lesson — if the call fails, surface that to the user.
+**⚡ CALLBACK BUDGET (normal path): 2 tool calls** — `persist word_review` + `tg_msg edit`. Do NOT call `persist coach_context`, `persist recent_practice`, or `skill_view`. The batch data is already in context from State A. **Exception**: if `word_review` fails with "word not found", an extra `word_upsert` + retry `word_review` is allowed (max 4 calls in this rare case).
+
+1. **Persist SRS feedback FIRST** via `persist action="word_review"` with the mapped `rating` (see §2). The tool updates `ease`, `interval`, `srs_due`, `mastery`, and appends to `word_reviews`. Do this BEFORE rendering the micro-lesson — if the call fails with "word not found", call `persist action="word_upsert"` to create the word entry first, then retry `word_review`.
 
 2. **If `rating=1` (Again)**: append this word to the end of the current batch's queue. The user must see it again before the batch ends.
 
-3. **Reveal micro-lesson** in the EXACT layout below — no paragraphs, no extra commentary:
+3. **Reveal micro-lesson by EDITING the original card message** — do NOT send a new message. Use `tg_msg type="edit" message_id=<card_msg_id>` to replace the card text with the full reveal:
 
    ```text
-   **{word}** /{IPA}/
+   {original card text}
+   ——————
    📖 **释义**: {concise Chinese meaning, ≤ 12 字}
    🔪 **拆解**: {prefix(meaning) + root(meaning) + suffix(meaning) — only if morphology is informative; omit the line otherwise}
    🗣️ **地道平替**: {1 native-feel slang/idiom alternative — e.g. instead of 'exhausted' say 'wiped out'}
    📝 **高频搭配**: {1–2 collocations in the form '{verb/adj} + {word}' or '{word} + {prep/noun}'}
    ```
+
+   This appends the reveal IN PLACE on the same message, avoiding a separate message that clutters the chat.
+
+   **Reveal data sources**: Use the word's existing DB fields (`chinese`, `definition`, `collocations`, `ipa`) from the `due_words` result already in context. Only fall back to LLM-generated content if the DB fields are empty.
 
 4. **Proceed**: if more words remain in the batch (including any `Again` re-tests), loop back to State A with the next word. If all done, go to State D for the batch sample row, then State E.
 
@@ -141,7 +148,7 @@ Per-word `word_review` calls were already made in State B; do NOT re-submit them
 End-of-batch buttons (after State D persist returns):
 
 ```json
-[["🔄 再背一组|vocab-review", "🎯 考考我刚学的|vocab-testme", "🧭 练习其他|nav:main"]]
+[["🔄 再背一组|vocab-review", "🧭 练习其他|nav:main"]]
 ```
 
 **Critical**: send the batch summary + buttons in **one** `tg_msg type="keyboard"` call.
@@ -150,7 +157,7 @@ End-of-batch buttons (after State D persist returns):
 
 - `planner`: routes here when SRS due-count is the strongest signal.
 - `learner-state`: reads `samples` rows; updates `MEMORY.md` `Vocabulary Profile`.
-- `coach`: uses `vocab.recall` subcap to recommend rebalancing (more reading-deepdive harvests, less new vocab-topic, etc.).
+- `planner`: (proactive nudge) uses `vocab.recall` subcap to recommend rebalancing (more reading-deepdive harvests, less new vocab-topic, etc.).
 - `vocab-harvest`: feeds new items into the queue (`origin="practice_harvest"`) — vocab-review pulls them in due order.
 - `vocab-topic` / `vocab-testme`: alternative routes when due-count is low.
 - `support/data-contract`: defines the `persist` write protocol.
@@ -173,4 +180,8 @@ End-of-batch buttons (after State D persist returns):
 6. **Don't override `mastery`.** The persist algorithm owns it. Read for display, never write directly from this skill.
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable vocab state.
-9. **One-call keyboard** for the card and for the batch summary. Never `type="text"` then `type="edit"` to attach buttons.
+9. **Edit card for reveal.** Use `tg_msg type="edit"` to append the micro-lesson to the existing card message. Do NOT send the reveal as a separate new message.
+10. **Batch sample mandatory.** State D MUST write a `persist action="practice"` row for every completed batch. Without it, learner-state underestimates vocab-review volume.
+11. **Handle word-not-found.** If `word_review` returns "word not found", call `word_upsert` to create the word first, then retry. Never silently skip.
+12. **Callback = 2 tools (normal path).** SRS callback (`srs:*`): `persist word_review` + `tg_msg edit`. No context re-reads, no coach_context, no recent_practice. Word-not-found exception may use `word_upsert` + retry, max 4 calls.
+13. **Skip coach_context on continue.** When generating the next card (State A within the same batch), do NOT re-read `coach_context` or `recent_practice`. The data from the first load is still valid.

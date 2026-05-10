@@ -5,7 +5,7 @@ description: "Use this skill whenever the user wants to write a daily journal, s
 
 # Writing Journal (Daily Diary & Casual Polish)
 
-Low-pressure, high-emotional-value writing outlet. The user writes about their day / feelings / random thoughts — casual language, incomplete sentences, even mixed Chinese is allowed. The coach is an empathetic listener first, an English coach second. **This skill is intentionally not band-scored or credit-gated**; the goal is sustained writing volume, not measured progress.
+Low-pressure, high-emotional-value writing outlet. The user writes about their day / feelings / random thoughts — casual language, incomplete sentences, even mixed Chinese is allowed. Anya is an empathetic listener first, an English tutor second. **This skill is intentionally not band-scored or credit-gated**; the goal is sustained writing volume, not measured progress.
 
 ## 1. Inputs
 
@@ -34,7 +34,7 @@ So:
 - `accuracy = NULL`. No band scores.
 - No `PASS_THRESHOLD` / `STREAK` / etc.
 - `recent_practice` is read for dedup of follow-up questions, not for promotion.
-- Persist still happens (so `learner-state` can see vocabulary in use, and `vocab-harvest` can pick up phrasal verbs the coach taught), but the row is informational.
+- Persist still happens (so `learner-state` can see vocabulary in use, and `vocab-harvest` can pick up phrasal verbs Anya taught), but the row is informational.
 
 If the user wants graded writing, route them to `writing-builder` / `writing-rewrite` / `writing-essay`.
 
@@ -119,7 +119,7 @@ Minimum payload:
 - No `subcap_scores`. (Journal does NOT contribute to writing subcap rollups — `learner-state` filters this skill out of band aggregation.)
 - No `prompt_hash` collision check (each day is its own row; identical prompts on different days are fine).
 
-`errors` are limited to **1–2 entries max** — only the phrases the coach actually polished. Severity is always `low` for journal because there's no graded penalty.
+`errors` are limited to **1–2 entries max** — only the phrases Anya actually polished. Severity is always `low` for journal because there's no graded penalty.
 
 `metadata.word_count` is recorded for habit tracking but does NOT participate in any gating.
 
@@ -128,7 +128,7 @@ Minimum payload:
 ## 4. Collaborates With
 
 - `learner-state`: reads journal `samples` rows for vocabulary-in-use signals; ignores them for band aggregation (see "Mandatory absences" above).
-- `coach`: uses `metadata.emotion` and `metadata.topic` to spot when the user is venting work stress and might benefit from a softer week.
+- `planner`: (proactive nudge) uses `metadata.emotion` and `metadata.topic` to spot when the user is venting work stress and might benefit from a softer week.
 - `vocab-harvest` / `vocab-review`: receives phrasal verbs / idioms taught in State B; the polished phrase becomes an SRS item.
 - `writing-rewrite` / `writing-essay`: alternative routes when the user wants graded writing instead.
 - `support/data-contract`: defines the `persist` write protocol.

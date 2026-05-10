@@ -30,7 +30,7 @@ Owner of `USER.md`. Builds or corrects a short natural-language user profile. On
 
 **Interaction Rules** (apply to every bundle below):
 
-1. Send **ONE** question per turn via `tg_msg(type="force_reply")`. **Never** use `keyboard` here — every bundle is free-text so the user can answer in their own words.
+1. Send **ONE** question per turn via `tg_msg(type="text")`. **Never** use `keyboard` here — every bundle is free-text so the user can answer in their own words.
 2. After sending, **STOP** and **WAIT** for the user's reply. Do not preview the next question.
 3. UI language is **Chinese**. Tone: Anya the spy — playful, encouraging, never lecturing.
 4. Every bundle shares the same template:
@@ -42,7 +42,7 @@ Owner of `USER.md`. Builds or corrects a short natural-language user profile. On
 
 ### Bundle 1 — 💼 职业与生存语境
 
-`tg_msg(type="force_reply")` 文案：
+`tg_msg(type="text")` 文案：
 
 ```
 Boss！为了以后能给你派发最对味儿的间谍任务，我们先建个专属档案 🕵️‍♀️
@@ -61,7 +61,7 @@ Boss！为了以后能给你派发最对味儿的间谍任务，我们先建个�
 
 ### Bundle 2 — 🎯 近期想搞定的具体目标
 
-`tg_msg(type="force_reply")` 文案（**注意：无按钮，纯自由文本**）：
+`tg_msg(type="text")` 文案（**注意：无按钮，纯自由文本**）：
 
 ```
 收到！第 2 题（共 4 题）：未来 3 个月里，你最想用英语搞定的一件具体事情是什么？
@@ -79,7 +79,7 @@ Boss！为了以后能给你派发最对味儿的间谍任务，我们先建个�
 
 ### Bundle 3 — 🎮 狂热爱好与多巴胺源
 
-`tg_msg(type="force_reply")` 文案：
+`tg_msg(type="text")` 文案：
 
 ```
 太棒了，目标已锁定 🎯 第 3 题（共 4 题）：周末或下班后，你最愿意把时间花在什么事物上？
@@ -96,7 +96,7 @@ Boss！为了以后能给你派发最对味儿的间谍任务，我们先建个�
 
 ### Bundle 4 — 📺 信息摄入偏好
 
-`tg_msg(type="force_reply")` 文案（同样改为纯自由文本，跟前 3 题统一）：
+`tg_msg(type="text")` 文案（同样改为纯自由文本，跟前 3 题统一）：
 
 ```
 记下来啦！最后一题（4/4）：你平时主要通过哪种方式消磨碎片时间？常去哪些平台？关注哪类博主 / 频道？
@@ -165,7 +165,7 @@ Boss 的喜好已经全部进入 Anya 加密档案库 🗂️
 ## Rules
 
 1. **Never ask for information that is already clearly present.**
-2. **One question per turn.** Send one `tg_msg(type="force_reply")`, then **stop and wait**.
+2. **One question per turn.** Send one `tg_msg(type="text")`, then **stop and wait**.
 3. **No buttons in the 4 onboarding bundles.** All four are free-text — keep the format consistent.
 4. **Only first-run mode chains placement.** Update and lookup modes do not.
 5. **Use HTML inline tags sparingly** (`<b>`, `<i>`, `<code>`) — bullet lists and emoji markers are fine and render correctly via the framework's auto-conversion.

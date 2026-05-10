@@ -117,7 +117,7 @@ Hold: keep word count + skim window, swap topic family to probe a different weak
    ```
 
 5. Init empty `ui_feedback` accumulator.
-6. Wait for `skim_ready` tap, timer expiry, or other button tap. **No `force_reply`.**
+6. Wait for `skim_ready` tap, timer expiry, or other button tap.
 
 ### State B: Answering
 
@@ -155,7 +155,7 @@ First, make sure the passage is hidden (edit `passage_timer` to `expire_text` if
 
 Then ask questions sequentially:
 
-1. Main-idea: `tg_msg type="text"` — `一句话说主旨（≤ 15 字）`. **No `force_reply`.**
+1. Main-idea: `tg_msg type="text"` — `一句话说主旨（≤ 15 字）`.
 2. After main-idea reply, send 3-4 paragraph-function questions + 1 detail-trap MCQ, **one at a time via `tg_msg type="keyboard"`** with inline option buttons. Each button callback encodes the answer: `skim_q1_a`, `skim_q1_b`, etc. Do NOT use Telegram quiz/poll (`sendQuiz`).
 
 ### State C: Evaluate
@@ -259,7 +259,7 @@ State D persists fully-attempted passages only. Abandoned rows are written in St
 4. **Every reveal uses `<tg-spoiler>`** for paragraph-function labels and the pivot phrase.
 5. **WPM goes into metadata, not gating.** Pace is a watched signal but `accuracy` alone moves tier.
 6. **Trap is plausible.** The wrong-answer MCQ option must literally keyword-match the passage but mean the wrong thing.
-7. **No `force_reply`.** Never force the reply keyboard.
+7. **No forced keyboard.** The user answers at their own pace.
 8. Use `persist` for reads/writes; no raw DB.
 9. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
 10. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call.

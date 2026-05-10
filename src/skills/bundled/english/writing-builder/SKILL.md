@@ -13,7 +13,7 @@ Trigger when:
 
 - User says: `造句`, `grammar drill`, `build sentences`, `练习写长句`.
 - Callback `writing-builder`.
-- Planner/coach routes here for weak `writing.grammar_accuracy` / `writing.cohesion` / repeated `verb_form_error` / `sentence_fragment` / `run_on_sentence`.
+- Planner routes here for weak `writing.grammar_accuracy` / `writing.cohesion` / repeated `verb_form_error` / `sentence_fragment` / `run_on_sentence`.
 
 Required context before generating:
 
@@ -116,7 +116,7 @@ Hold: keep tier and constraint family; swap target word / vocab to probe the sam
    ```
 
 4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
-5. `force_reply` for the user's typed sentence. Wait for the typed answer or button tap.
+5. Wait for the user's typed sentence.
 
 ### State B: Button Handling (before typing)
 
@@ -207,21 +207,21 @@ State D persists attempted sentences only. Abandoned rows are written in State B
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next micro-task (State A step 2 — incl. dedup). Respect "no same connector twice in a row" (§2.4).
 
 ## 4. Collaborates With
 
 - `planner`: routes here when `writing.grammar_accuracy` / `writing.cohesion` is the highest-value drill.
 - `learner-state`: reads persisted evidence; updates `MEMORY.md`.
-- `coach`: uses errors / subcap scores to explain next steps and surface lingering verb-form / fragment issues.
+- `planner`: (proactive nudge) uses errors / subcap scores to explain next steps and surface lingering verb-form / fragment issues.
 - `vocab-harvest`: when the Native Polish introduces a teachable chunk (collocation / phrasal verb), auto-call to save it.
 - `writing-rewrite`: graduates here once a learner can produce single sentences cleanly and is ready for paragraph upgrade.
 - `support/data-contract`: defines the `persist` write protocol.
 
 ## 5. Failure And Fallbacks
 
-- `force_reply` ignored / user replies in Chinese → don't score; gently re-state the constraint and wait. If they explicitly say "skip", write `completed=0`.
+- User replies in Chinese → don't score; gently re-state the constraint and wait. If they explicitly say "skip", write `completed=0`.
 - `persist` fails → still send feedback, but say it was not saved.
 - User writes the **whole pair of source clauses unchanged** (no constraint applied) → grade as `0.25`, point out the constraint was dodged, do NOT silently let it pass.
 - User writes fluent English that violates the constraint (e.g. uses `Although` when asked for `Despite`) → grade `0.50`, name the swap, polish to the requested form.

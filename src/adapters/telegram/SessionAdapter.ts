@@ -30,6 +30,7 @@ export class TelegramSessionAdapter implements Adapter {
   private pendingApprovals: Map<string, PendingApproval>;
   private pendingChoices: Map<string, PendingChoice>;
   private activePolls: Map<string, { chatId: number; options: string[]; correctIndex: number }>;
+  private paginatedMessages: Map<number, { pages: string[]; buttons: string; chatId: number }>;
 
   // Maps user-defined tags to Telegram message_id for later reference.
   private taggedMessages = new Map<string, number>();
@@ -54,12 +55,14 @@ export class TelegramSessionAdapter implements Adapter {
     pendingApprovals: Map<string, PendingApproval>,
     pendingChoices: Map<string, PendingChoice>,
     activePolls?: Map<string, { chatId: number; options: string[]; correctIndex: number }>,
+    paginatedMessages?: Map<number, { pages: string[]; buttons: string; chatId: number }>,
   ) {
     this.ctx = ctx;
     this.bot = bot;
     this.pendingApprovals = pendingApprovals;
     this.pendingChoices = pendingChoices;
     this.activePolls = activePolls ?? new Map();
+    this.paginatedMessages = paginatedMessages ?? new Map();
   }
 
   /** Allows overriding chatId for contexts without ctx.chat (e.g., poll_answer). */
@@ -266,6 +269,80 @@ export class TelegramSessionAdapter implements Adapter {
    * @param opts - Standard send options.
    * @returns The message_id of the countdown message (returned immediately).
    */
+
+  /**
+   * Send a paginated message. All pages are stored in memory; the user flips
+   * through them with ⬅️/➡️ buttons that edit the message in-place (no LLM call).
+   *
+   * @param pages - Array of HTML page strings.
+   * @param trailingButtons - JSON 2D array string for constant buttons below the nav row.
+   * @param opts - Standard send options.
+   * @returns The message_id of the paginated message.
+   */
+  async sendPaginate(
+    pages: string[],
+    trailingButtons: string,
+    opts?: SendMessageOptions,
+  ): Promise<number> {
+    return this.enqueue(async () => {
+      const replyTo = this.autoReplyTo(opts?.replyTo);
+      const pageCount = pages.length;
+
+      // Build initial keyboard: nav buttons (page 1, so only ➡️) + trailing
+      const navRow: Array<{ text: string; callback_data: string }> = [];
+      // For page 0 (first page), only show next if there are more pages
+      // We'll fill the callback_data with a placeholder; it gets the real msgId after send
+
+      let trailingRows: Array<Array<{ text: string; callback_data: string }>> = [];
+      try {
+        const parsed = JSON.parse(trailingButtons) as string[][];
+        trailingRows = parsed.map((row) =>
+          row.map((cell) => {
+            const [label, cb] = cell.split('|');
+            return { text: label, callback_data: cb || label };
+          }),
+        );
+      } catch { /* ignore bad JSON */ }
+
+      // Send the first page
+      const msg = await this.bot.api.sendMessage(this.chatId, pages[0], {
+        parse_mode: 'HTML',
+        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
+        reply_markup: {
+          inline_keyboard: [
+            // nav row placeholder — will be set after we know msg.message_id
+            ...trailingRows,
+          ],
+        },
+      });
+
+      this.trackMessage(msg.message_id, opts?.tag);
+      this.hasSentContent = true;
+
+      // Store pages for later flipping
+      this.paginatedMessages.set(msg.message_id, {
+        pages,
+        buttons: trailingButtons,
+        chatId: this.chatId,
+      });
+
+      // Now edit to add the real nav buttons (we needed msg.message_id first)
+      if (pageCount > 1) {
+        navRow.push({ text: `➡️ 2/${pageCount}`, callback_data: `page:${msg.message_id}:1` });
+        await this.bot.api.editMessageReplyMarkup(this.chatId, msg.message_id, {
+          reply_markup: {
+            inline_keyboard: [
+              navRow,
+              ...trailingRows,
+            ],
+          },
+        }).catch(() => {});
+      }
+
+      return msg.message_id;
+    });
+  }
+
   async sendCountdown(
     initialText: string,
     seconds: number,
@@ -503,23 +580,6 @@ export class TelegramSessionAdapter implements Adapter {
       });
 
       return { messageId: msg.message_id, pollId: msg.poll!.id };
-    });
-  }
-
-  /** Send a message with force_reply markup (opens user's keyboard for free-text input). */
-  async sendForceReply(text: string, opts?: SendMessageOptions): Promise<number> {
-    return this.enqueue(async () => {
-      const replyTo = this.autoReplyTo(opts?.replyTo);
-
-      const msg = await this.bot.api.sendMessage(this.chatId, text, {
-        parse_mode: 'HTML',
-        reply_markup: { force_reply: true, selective: true },
-        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
-      });
-
-      this.trackMessage(msg.message_id, opts?.tag);
-      this.hasSentContent = true;
-      return msg.message_id;
     });
   }
 

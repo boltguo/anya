@@ -13,7 +13,7 @@ Trigger when:
 
 - User says: `改写`, `rewrite`, `样文升级`, `从 5.5 改到 6`.
 - Callback `writing-rewrite`.
-- Planner/coach routes here when `writing.lexical_sophistication` or `writing.cohesion_logic` is the weakest writing subcap.
+- Planner routes here when `writing.lexical_sophistication` or `writing.cohesion_logic` is the weakest writing subcap.
 
 Required context before generating:
 
@@ -94,10 +94,15 @@ Hold: keep tier source/target; swap topic family.
 
 1. From §2.3 + `coach_context`, decide tier → source band, target band, source length.
 2. Generate the source paragraph at the chosen band. Compute `prompt_hash`; regenerate on dedup hit. Mark 1–2 weak spots with `~...~`.
-3. Send a `tg_msg type="text"` containing:
+3. Send a **single** `tg_msg type="keyboard"` containing task + buttons:
+
+   Text:
 
    ```text
-   📝 把下面这段从 Band {source} 升级到 Band {target}。
+   📝 润色升级任务
+
+   下面是一段 Band {source} 的段落，你的目标是把它升级到 Band {target}。
+   💡 润色 = 不改原意，升级表达：换更好的词、改更紧凑的句型、加逻辑连接词。
 
    <blockquote>{source paragraph with ~weak spots~ marked}</blockquote>
 
@@ -106,14 +111,8 @@ Hold: keep tier source/target; swap topic family.
    2. 结构紧凑（变换句首 / 嵌入从句 / 名词化）
    3. 连接控制（discourse markers 串起逻辑）
    4. 保持原意（不要换主题，不要丢信息）
-   ```
 
-4. Send a separate `tg_msg type="keyboard"`:
-
-   Text:
-
-   ```text
-   写好后直接回复你的改写版本。
+   写好后直接发给我你的改写版本。
    ```
 
    Buttons:
@@ -122,8 +121,8 @@ Hold: keep tier source/target; swap topic family.
    [["🆘 给我起头|rw_starter", "📚 解析样段|rw_explain", "💡 换个简单的|rw_easier"]]
    ```
 
-5. Init empty `ui_feedback` accumulator.
-6. `force_reply` for the user's rewrite. Wait.
+4. Init empty `ui_feedback` accumulator.
+5. Wait for user's rewrite.
 
 ### State B: Button Handling (before submitting)
 
@@ -182,7 +181,7 @@ Feedback message must include:
 Buttons (always, regardless of band):
 
 ```json
-[["✏️ 再升级一段|rw_next", "🎯 用刚学的写一句|rw_drill", "🧭 练习其他|nav:main"]]
+[["✏️ 再升级一段|rw_next", "🧭 练习其他|nav:main"]]
 ```
 
 **Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. The model rewrite and side-by-side diff can be inside the same body. Never `type="text"` then `type="edit"` to attach buttons.
@@ -228,38 +227,14 @@ State D persists fully-attempted rewrites only. Abandoned rows are written in St
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next source paragraph (State A step 2 — incl. dedup).
-
-### State F: Implicit micro-drill (`rw_drill`)
-
-When the learner taps `🎯 用刚学的写一句`:
-
-1. **Bypass tier/length recompute** — this is consolidation, not a new probe.
-2. Send a `tg_msg type="force_reply"`:
-
-   ```text
-   ✍️ 用 `<takeaway_chunk>` 写一句话，跟刚才那段同一个话题。
-   ```
-
-3. When the user responds, grade just this single sentence (1.0 if chunk used naturally + grammatical, 0.5 if used but awkward, 0.0 if not used or wrong).
-4. Persist as a State D row with these **overrides**:
-   - `parent_sample_id` = the immediately-preceding rewrite row's id.
-   - `redo_count` = `parent.redo_count + 1` (typically `1`).
-   - `is_redo = true` (in `metadata`).
-   - `parent_band_overall` = parent's `band_overall` (in `metadata`).
-   - `accuracy` = `1.0` / `0.5` / `0.0` (the micro-drill is single-point, treat as accuracy).
-   - `band_*` fields all NULL (not band-scored at this granularity).
-   - `prompt` = the micro-drill question.
-   - `prompt_hash` = hash of the question (do NOT reuse parent's hash).
-   - `metadata.is_micro_drill = true`, `metadata.takeaway_chunk = "<chunk>"`.
-5. Brief feedback (1-line: 用得自然 / 用了但稍硬 / 没用上要重练), then State E buttons. State F rows do NOT count for credit gating (`redo_count > 0`).
 
 ## 4. Collaborates With
 
 - `planner`: routes here when `writing.lexical_sophistication` / `writing.cohesion_logic` is the weakest writing subcap.
 - `learner-state`: reads persisted band evidence; updates `MEMORY.md` band snapshot.
-- `coach`: uses 4-axis subcap scores to explain which dimension is the bottleneck.
+- `planner`: (proactive nudge) uses 4-axis subcap scores to explain which dimension is the bottleneck.
 - `vocab-harvest` / `vocab-review`: auto-called for the takeaway chunk in State C.
 - `writing-builder`: fallback when learner stuck below tier floor (sentence-level mechanics need work first).
 - `writing-essay`: graduates here once the learner can hold target band on rewrites consistently — apply same techniques to original prompts.
@@ -270,7 +245,7 @@ When the learner taps `🎯 用刚学的写一句`:
 - User rewrites less than 50% of source length → flag as "短改" in feedback; band might still be valid but record `metadata.coverage="partial"`.
 - User changes the topic instead of upgrading → grade `band_task` at 4.0 (failed task achievement); name the issue as "保留原意" miss.
 - User rewrites in 100% original phrasing (no upgrade attempted) → grade as if Band = source; do NOT auto-pass.
-- `force_reply` ignored for >10 min → no auto-fail; user is composing. Wait.
+- User doesn't respond for >10 min → no auto-fail; user is composing. Wait.
 - `persist` (practice or word_upsert) fails → still send feedback; mention what didn't save.
 - `<tg-spoiler>` is client-side; no callback. Don't invent `spoiler_used`.
 

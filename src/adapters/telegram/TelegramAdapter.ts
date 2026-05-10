@@ -85,6 +85,13 @@ export class TelegramAdapter {
    * Keys are `poll_id`, Values map to chat context and correct answer data.
    */
   activePolls = new Map<string, { chatId: number; options: string[]; correctIndex: number }>();
+  /**
+   * In-memory store for paginated messages.
+   * Keyed by Telegram message_id, stores an array of HTML page strings + the
+   * trailing buttons that stay constant across pages. When a `page:<msgId>:<n>`
+   * callback fires, the adapter edits the message to show page N — no LLM call.
+   */
+  paginatedMessages = new Map<number, { pages: string[]; buttons: string; chatId: number }>();
 
   constructor(config: AnyaConfig) {
     if (!config.telegram.bot_token) {
@@ -194,7 +201,7 @@ export class TelegramAdapter {
     agentLogger.info({ msg: 'tg_incoming', chatId: ctx.chat!.id, userId, input: input.substring(0, 200) });
 
     const sessionAdapter = new TelegramSessionAdapter(
-      ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls,
+      ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls, this.paginatedMessages,
     );
     const agent = new Agent(this.config, sessionAdapter);
 
@@ -630,6 +637,51 @@ export class TelegramAdapter {
           ).catch(() => {});
         }
       }
+      // ── Client-side pagination (no agent call) ──
+      // Callback format: `page:<messageId>:<pageIndex>`
+      // Edits the message in-place to show the requested page.
+      else if (data.startsWith('page:')) {
+        const parts = data.split(':');
+        const msgId = Number(parts[1]);
+        const pageIdx = Number(parts[2]);
+        const entry = this.paginatedMessages.get(msgId);
+        if (entry && pageIdx >= 0 && pageIdx < entry.pages.length) {
+          const pageCount = entry.pages.length;
+          const navRow: Array<{ text: string; cb: string }> = [];
+          if (pageIdx > 0) navRow.push({ text: `⬅️ ${pageIdx}/${pageCount}`, cb: `page:${msgId}:${pageIdx - 1}` });
+          if (pageIdx < pageCount - 1) navRow.push({ text: `➡️ ${pageIdx + 2}/${pageCount}`, cb: `page:${msgId}:${pageIdx + 1}` });
+
+          // Parse the trailing buttons JSON and build full keyboard
+          let trailingRows: Array<Array<{ text: string; callback_data: string }>> = [];
+          try {
+            const parsed = JSON.parse(entry.buttons) as string[][];
+            trailingRows = parsed.map((row) =>
+              row.map((cell) => {
+                const [label, cb] = cell.split('|');
+                return { text: label, callback_data: cb || label };
+              }),
+            );
+          } catch { /* ignore bad JSON */ }
+
+          const keyboard = {
+            inline_keyboard: [
+              ...(navRow.length ? [navRow.map((b) => ({ text: b.text, callback_data: b.cb }))] : []),
+              ...trailingRows,
+            ],
+          };
+
+          try {
+            await this.bot.api.editMessageText(entry.chatId, msgId, entry.pages[pageIdx], {
+              parse_mode: 'HTML',
+              reply_markup: keyboard,
+            });
+          } catch (err) {
+            agentLogger.error({ msg: 'page_flip_failed', msgId, pageIdx, error: (err as Error).message });
+          }
+        } else {
+          agentLogger.warn({ msg: 'page_unknown', data, hasMsgId: !!entry });
+        }
+      }
       // ── Practice menu navigation (client-side, no agent) ──
       // If the source message is itself a menu page (every button is nav:* / menu / a known
       // skill slug), edit it in-place so navigation feels like a single drill-down screen.
@@ -740,7 +792,7 @@ export class TelegramAdapter {
           console.log(`[gateway] callback: ${selectedLabel} (${data})${isSkillSwitch ? ' [skill-switch]' : ''}`);
 
           this.enqueuePerChat(chatId, async () => {
-            const sessionAdapter = new TelegramSessionAdapter(ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls);
+            const sessionAdapter = new TelegramSessionAdapter(ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls, this.paginatedMessages);
             const agent = new Agent(this.config, sessionAdapter);
 
             try {
@@ -800,7 +852,7 @@ export class TelegramAdapter {
         // so we send directly via bot.api
         const sessionKey = `tg:${poll.chatId}`;
         const sessionAdapter = new TelegramSessionAdapter(
-          ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls,
+          ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls, this.paginatedMessages,
         );
         // Override chatId since poll_answer ctx doesn't have ctx.chat
         sessionAdapter.setChatIdOverride(poll.chatId);

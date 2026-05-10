@@ -8,7 +8,7 @@
  *
  * Supported multimodal payloads:
  * - `text`, `audio`, `voice`, `document`, `keyboard`, `quiz`
- * - `force_reply`, `edit`, `delete`, `react`, `action`, `countdown`
+ * - `edit`, `delete`, `react`, `action`, `countdown`, `paginate`
  */
 
 import { register } from './registry.js';
@@ -99,21 +99,21 @@ function getCaption(args: Record<string, unknown>): string | undefined {
 //   document       → Send a file (PDF, ZIP, etc.) with optional caption
 //   keyboard       → Message with inline buttons (callback-based)
 //   quiz           → Native poll with auto-scoring
-//   force_reply    → Forces user's keyboard open for free-text input
 //   edit           → Edit an existing message's text/buttons
 //   delete         → Delete a message by id or tag
 //   react          → Add emoji reaction to a message
 //   action         → Show typing/recording indicator
 //   countdown      → Auto-editing countdown timer
+//   paginate       → Multi-page message with client-side ⬅️/➡️ flipping (no LLM call per page)
 
 register({
   name: 'tg_msg',
-  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), force_reply, edit, delete, react, action, countdown (auto-edit timer with {seconds} placeholder). Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
+  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), edit, delete, react, action, countdown (auto-edit timer with {seconds} placeholder), paginate (multi-page with client-side flipping). Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
   parameters: {
     type: 'object',
     properties: {
-      type:       { type: 'string', description: 'Message type: text | audio | voice | document | keyboard | quiz | force_reply | edit | delete | react | action | countdown' },
-      text:       { type: 'string', description: 'Message text/caption (HTML format). For countdown: use {seconds} as placeholder for the remaining time.' },
+      type:       { type: 'string', description: 'Message type: text | audio | voice | document | keyboard | quiz | edit | delete | react | action | countdown | paginate' },
+      text:       { type: 'string', description: 'Message text/caption (HTML format). For countdown: use {seconds} as placeholder. For paginate: pages separated by ---PAGE--- delimiter.' },
       url:        { type: 'string', description: 'For audio/voice/document: URL or file path of the media to send.' },
       buttons:    { type: 'string', description: 'JSON 2D array for keyboard: [["label|callback_data",...]].' },
       options:    { type: 'string', description: 'For quiz: JSON array of option strings.' },
@@ -204,14 +204,6 @@ register({
         return JSON.stringify({ ok: true, ...result, sent_content: true });
       }
 
-      case 'force_reply': {
-        const replyTo = resolveReplyTo(args.reply_to, tg);
-        const parseMode = (args.parse_mode as string) || 'HTML';
-        const msgId = await tg.sendForceReply(renderText(args.text as string, parseMode), {
-          replyTo, tag: args.tag as string,
-        });
-        return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
-      }
 
       case 'edit': {
         const msgRef = args.message_id as string;
@@ -266,8 +258,23 @@ register({
         return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
       }
 
+      case 'paginate': {
+        const delimiter = '---PAGE---';
+        const rawText = String(args.text || '');
+        const pages = rawText.split(delimiter).map((p) => renderText(p.trim(), 'HTML'));
+        if (pages.length === 0) {
+          return JSON.stringify({ error: 'paginate requires at least one page in text, separated by ---PAGE---' });
+        }
+        const trailingButtons = String(args.buttons || '[]');
+        const replyTo = resolveReplyTo(args.reply_to, tg);
+        const msgId = await tg.sendPaginate(pages, trailingButtons, {
+          replyTo, tag: args.tag as string,
+        });
+        return JSON.stringify({ ok: true, message_id: msgId, page_count: pages.length, sent_content: true });
+      }
+
       default:
-        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, audio, voice, document, keyboard, quiz, force_reply, edit, delete, react, action.` });
+        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, audio, voice, document, keyboard, quiz, edit, delete, react, action, paginate.` });
     }
   },
 });

@@ -14,7 +14,7 @@ Trigger when:
 - User says: `Write an essay`, `Write a letter`, `Task 1`, `Task 2`, `写作文`, `写信`, `图表作文`.
 - User submits a paragraph or essay for grading (no preamble).
 - Callback `writing-essay`.
-- Planner/coach routes here when band-snapshot for Writing has stalled and the user needs full-length practice (not just rewrite).
+- Planner routes here when band-snapshot for Writing has stalled and the user needs full-length practice (not just rewrite).
 
 Required context before generating:
 
@@ -93,38 +93,17 @@ Hold: keep tier and word range; rotate task topic.
 ### State A: Prepare And Deliver
 
 1. From §2.3 + `coach_context`, decide tier → task type, word count, time budget.
-2. Generate the prompt. Compute `prompt_hash`; regenerate on dedup hit.
-3. **Prompt delivery**:
-   - If user said "give me a topic" or no specific task, offer a 3-choice menu via `tg_msg type="keyboard"`:
-
-     ```text
-     ✍️ 选一个任务（{tier}, ~{word_count} 词，~{time} 分钟）：
-
-     A. {task A short description}
-     B. {task B short description}
-     C. {task C short description}
-     ```
-
-     Buttons:
-
-     ```json
-     [["A|we_pick_a", "B|we_pick_b", "C|we_pick_c"]]
-     ```
-
-   - If callback or trigger forces a specific task, skip the menu and go directly to the prompt:
-
-     ```text
-     ✍️ {task type} · ~{word_count} 词 · ~{time} 分钟
-
-     <prompt body>
-     ```
-
-4. After the user picks (or for forced tasks, immediately), send a separate `tg_msg type="keyboard"`:
+2. Generate **one** prompt directly (no 3-choice menu — choosing wastes a full LLM round). Compute `prompt_hash`; regenerate on dedup hit.
+3. **Prompt delivery** in a single `tg_msg type="keyboard"`:
 
    Text:
 
    ```text
-   写好后整段直接回复给我。
+   ✍️ {task type} · ~{word_count} 词 · ~{time} 分钟
+
+   {prompt body}
+
+   写好后整段直接发给我就行。
    ```
 
    Buttons:
@@ -133,8 +112,8 @@ Hold: keep tier and word range; rotate task topic.
    [["💡 给我提纲|we_outline", "🆘 卡壳了|we_sos", "💡 换个简单的|we_easier"]]
    ```
 
-5. Init empty `ui_feedback` accumulator.
-6. `force_reply` for the user's full essay. Wait.
+4. Init empty `ui_feedback` accumulator.
+5. Wait for user's essay submission.
 
 ### State B: Button Handling (before submitting)
 
@@ -194,7 +173,7 @@ Feedback message must include:
 Buttons (always, regardless of band):
 
 ```json
-[["✍️ 再写一篇|writing-essay", "🔄 改写这一段|writing-rewrite", "🧭 练习其他|nav:main"]]
+[["✍️ 再写一篇|writing-essay", "🧭 练习其他|nav:main"]]
 ```
 
 **Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. The Native Polish sentences fit inside the same body. Never `type="text"` then `type="edit"` to attach buttons.
@@ -241,14 +220,14 @@ State D persists fully-attempted essays only. Abandoned rows are written in Stat
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next prompt (State A — incl. dedup). Respect "no same topic family for 3+ consecutive rounds" (§2.4).
 
 ## 4. Collaborates With
 
 - `planner`: routes here when long-form writing has stalled and the user needs full-length practice.
 - `learner-state`: reads persisted band evidence; updates `MEMORY.md` band snapshot.
-- `coach`: uses 4-axis subcap scores to explain which dimension is the bottleneck.
+- `planner`: (proactive nudge) uses 4-axis subcap scores to explain which dimension is the bottleneck.
 - `writing-rewrite`: handoff target after a low-band essay — pick one paragraph and rewrite it as the next round.
 - `writing-builder`: handoff for sentence-level mechanics if grammar errors dominate.
 - `vocab-harvest` / `vocab-review`: optional auto-call when the Native Polish introduces a teachable chunk.
@@ -259,7 +238,7 @@ State D persists fully-attempted essays only. Abandoned rows are written in Stat
 - User submits less than 70% of target word count → grade per submitted text but flag `metadata.coverage="under"`. Lexical / cohesion bands cap at -0.5 below what the text alone would warrant.
 - User submits in mixed Chinese / English → ask once for an English-only redo; if user insists, grade English-only portion and flag `metadata.mixed_language=true`.
 - User submits a piece that doesn't address the prompt (off-topic) → `band_task` capped at 4.0; explain why in feedback.
-- `force_reply` ignored for >30 min → no auto-fail; user is composing. Wait. After 24h with no submit, write `completed=0` if asked.
+- User doesn't respond for >30 min → no auto-fail; user is composing. Wait. After 24h with no submit, write `completed=0` if asked.
 - `persist` fails → still send feedback, but say it was not saved.
 - User asks for a full sample mid-writing → refuse the first time (Hard Rule 3 — progressive hinting); only after they've attempted at least the introduction will you provide one.
 

@@ -120,7 +120,7 @@ Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptiv
    ```
 
 5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
-6. Wait for user's typed answer or button tap. **No `force_reply`** — the user reads at their own pace.
+6. Wait for user's typed answer or button tap. The user reads at their own pace.
 
 ### State B: Button Handling (before answering)
 
@@ -231,7 +231,6 @@ In **parallel** to this practice persist, call `word_upsert` for each harvested 
 
 - User answers in 2 words ("讲气候") → grade per rubric (likely 0.25 for "domain right, claim missed"); ask once if they want to elaborate before persisting; if they say no, persist as-is.
 - User answers in fluent English explaining a different passage entirely → grade `0.00`; gently ask if they read this one; if user confirms confusion, treat as fail and demote.
-- `force_reply` — **never used**. The user reads at their own pace.
 - `persist` (practice or word_upsert) fails → still send feedback; mention what didn't save.
 - `<tg-spoiler>` is client-side; no callback. Don't invent `spoiler_used`.
 
@@ -242,7 +241,7 @@ In **parallel** to this practice persist, call `word_upsert` for each harvested 
 3. **One killer sentence parsed every round** — even on `accuracy=1.0`. The deep-dive's value is the syntax lesson, not just the score.
 4. **Auto-harvest 2-3 chunks per passage.** Single common words don't count — must be collocations / phrasal verbs / discourse markers / domain phrases.
 5. **Scaffolds aren't penalties.** `dd_help` taps are recorded in `ui_feedback` but do NOT lower `accuracy` directly. The rubric grades the recap, not the path to it.
-6. **No `force_reply`.** Never force the reply keyboard. The user reads at their own pace.
+6. **No forced keyboard.** The user reads at their own pace.
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
 9. **One-call keyboard.** Feedback + buttons go out in a single `tg_msg type="keyboard"` call.

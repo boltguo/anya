@@ -118,7 +118,7 @@ When user taps `👋 结束讨论` (`discussion_end` callback) or max 5 turns re
 1. **Chinese summary uses spoiler.** Every source excerpt must include a `<tg-spoiler>` Chinese summary — never show Chinese directly (the user should try to read English first).
 2. **Recast, don't correct.** Use the recasting technique for errors — repeat their point in correct English naturally.
 3. **Source-grounded.** At least 1 push-back per discussion must reference the source material.
-4. **No `force_reply`.** Never force the reply keyboard. The user engages at their own pace.
+4. **No forced keyboard.** The user engages at their own pace.
 5. **TTS optional.** Only use TTS for the discussion question if voice practice is the goal. Don't TTS the source article.
 6. Use `persist` for reads/writes; no raw DB.
 7. Don't update `MEMORY.md`; `learner-state` owns durable ability state.

@@ -102,14 +102,24 @@ Hold: keep difficulty, swap topic family.
 
 1. From the chosen `question_type` and §2.3 credits, decide difficulty (easy / medium / hard) and pick (words, items, time) from the §2.0 table.
 2. Generate the passage + items. Compute `prompt_hash`; regenerate on dedup hit.
-3. Send a `tg_msg type="text"` with a **strategy nudge ≤ 5 lines** for this type (not a textbook; e.g. for TFNG: "找到原文具体句; 看是否同义改写 → T; 是否反义/数字不同 → F; 完全没提 → NG; `some` vs `most`, `may` vs `will` 是高频陷阱").
-4. Send the passage in a `tg_msg type="text"` call (plain — no `<blockquote>` because typetrain expects re-reading during the timed session).
-5. Send a separate `tg_msg type="keyboard"` (no media) with text + buttons:
+3. Send the **strategy nudge + passage** in a single `tg_msg type="text"`:
+
+   ```text
+   💡 {strategy nudge ≤ 3 lines for this type}
+
+   {passage text — plain, no <blockquote>}
+   ```
+
+4. Send a **single** `tg_msg type="keyboard"` with timer info + items + buttons:
 
    Text:
 
    ```text
-   ⏱️ {type} · {difficulty} — {items} 题，限时 {time} 分钟。答完一次性 force_reply 提交。
+   ⏱️ {type} · {difficulty} — {items} 题，限时 {time} 分钟。
+
+   {items formatted clearly, one per line: Q1. ___ / Q2. ___ / ...}
+
+   答完直接发给我。
    ```
 
    Buttons:
@@ -118,8 +128,7 @@ Hold: keep difficulty, swap topic family.
    [["⏸️ 暂停|tt_pause", "🆘 看不懂题型策略|tt_strategy"]]
    ```
 
-6. Send the items as a single `tg_msg type="force_reply"` block formatted clearly (one item per line, e.g. `Q1. ___ / Q2. ___`).
-7. Init empty `ui_feedback` accumulator.
+5. Init empty `ui_feedback` accumulator.
 
 ### State B: Button Handling (during the timed session)
 
@@ -133,7 +142,7 @@ Hold: keep difficulty, swap topic family.
 
 - Append `🆘 看不懂题型策略` to `ui_feedback`.
 - Send a slightly longer (≤ 8 lines) strategy explanation for this type, with a worked mini-example **on a different passage** (so it's a teaching aid, not the answer).
-- Wait for the user's `force_reply` answer.
+- Wait for the user's typed answer.
 
 ### State C: Evaluate
 
@@ -155,7 +164,7 @@ Followed by a strategy recap: total accuracy, top recurring trap (if ≥ 2), one
 Buttons (always, regardless of accuracy):
 
 ```json
-[["🎯 同题型再来|reading-typetrain:<type>", "🔀 换题型|reading-typetrain", "🧭 练习其他|nav:main"]]
+[["🎯 再来一组|reading-typetrain:<type>", "🧭 练习其他|nav:main"]]
 ```
 
 **Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. The per-item evidence list can be a separate `tg_msg type="text"` before; feedback+buttons must go together.

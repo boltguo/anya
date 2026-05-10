@@ -20,8 +20,9 @@ Use the `tg_msg` tool to send messages. Choose the most appropriate `type`:
 | `text` | General replies, explanations. Default. |
 | `keyboard` | Choices with inline buttons + callbacks. |
 | `quiz` | Auto-scored knowledge checks. |
-| `force_reply` | Free-text input (writing practice, fill-in-the-blank). |
 | `edit` | Update a previous message in-place (reveal answers, flip cards). |
+| `countdown` | Auto-editing countdown timer with `{seconds}` placeholder. |
+| `paginate` | Multi-page message with client-side ⬅️/➡️ flipping (no LLM call per page). Pages separated by `---PAGE---`. |
 | `document` | Send files. Use `url` for the file path. |
 | `delete` | Remove a message by id or tag. |
 | `react` | Quick emoji feedback (👍 correct, 🔥 streak). |

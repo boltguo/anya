@@ -13,7 +13,7 @@ Trigger when:
 
 - User says: `话题词汇`, `教育话题`, `环境词汇`, `topic vocab`, `成组学`, `背一组关于X的词`.
 - Callback `vocab-topic` (auto-pick topic) or `vocab-topic:<topic>` (force a specific topic).
-- Planner/coach routes here when an upcoming `writing-essay` topic is known and the user lacks the lexical bank to write it.
+- Planner routes here when an upcoming `writing-essay` topic is known and the user lacks the lexical bank to write it.
 
 Required context before generating:
 
@@ -92,28 +92,40 @@ Persist via `persist action="word_review"` once per recalled/missed item.
    ```
 
 5. Optional: a `tts` audio bundle reading word + gloss + example for each item (skip if > 12 items or if user has audio fatigue from earlier in the session).
-6. Send a separate `tg_msg type="keyboard"`:
+6. Start the countdown timer via `tg_msg type="countdown"`:
+
+   ```json
+   {
+     "type": "countdown",
+     "text": "⏱️ 学习时间：<b>{seconds}</b> 秒",
+     "seconds": 90,
+     "expire_text": "📖 时间到！开始测试 →",
+     "tag": "timer"
+   }
+   ```
+
+7. Send a separate `tg_msg type="keyboard"`:
 
    Text:
 
    ```text
-   ⏱️ 看 90 秒，看完点 "我看完了"，我会自动隐藏然后开始测。
+   ⏱️ 90 秒学习时间，到时自动开始测试。
    ```
 
    Buttons:
 
    ```json
-   [["✅ 我看完了|vt_done", "🛑 太多了换一组|vt_easier"]]
+   [["🛑 太多了换一组|vt_easier"]]
    ```
 
-7. Init empty `ui_feedback` accumulator.
+8. Init empty `ui_feedback` accumulator.
 
-### State B: Button Handling (study window)
+### State B: Start Recall (after timer or user message)
 
-`vt_done` (or after 90s elapse, whichever comes first):
+When the user sends any message (or the timer expires and the user responds):
 
-- Append `✅ 我看完了` to `ui_feedback` if button was tapped.
-- Edit the bundle message: `tg_msg type="edit" message_id=<bundle_msg_id> text="📖 已隐藏 — 开始测"`. If edit fails, send a long separator block.
+- Append the event to `ui_feedback`.
+- Edit the bundle message to hide it: `tg_msg type="edit" message_id=<bundle_msg_id> text="📖 已隐藏 — 开始测"`. If edit fails, send a long separator block.
 - Proceed directly to State C.
 
 `vt_easier`:
@@ -137,11 +149,13 @@ After the bundle is hidden, run **5 mixed recall prompts** (no format dominates 
 
 | Format | UI | Item count |
 | --- | --- | --- |
-| CN → EN | `force_reply` (or `quiz` 4 EN options) | 1–2 |
-| Meaning → chunk (gist clue → chunk) | `quiz` 4 chunks, 1 fits | 1 |
-| Fill-in-blank (sentence with the topic word missing) | `force_reply` | 1 |
-| Register pick (formal vs informal alternative for a hedge) | `quiz` 2–4 options | 1 |
-| Production sentence (write 1 sentence on the topic using ≥ 2 items) | `force_reply` | 1 |
+| CN → EN | `keyboard` with text prompt (user types answer) | 1–2 |
+| Meaning → chunk (gist clue → chunk) | `keyboard` 4 option buttons, 1 fits | 1 |
+| Fill-in-blank (sentence with the topic word missing) | `keyboard` with text prompt (user types answer) | 1 |
+| Register pick (formal vs informal alternative for a hedge) | `keyboard` 2–4 option buttons | 1 |
+| Production sentence (write 1 sentence on the topic using ≥ 2 items) | `keyboard` with text prompt | 1 |
+
+Do NOT use `tg_msg type="quiz"`. All MC formats use `tg_msg type="keyboard"` with inline option buttons (callbacks like `vt_q1_a`, `vt_q1_b`, etc.). Text-input formats use `tg_msg type="keyboard"` with the prompt and no option buttons — the user types directly.
 
 Cover **at least one item from each kind** (concept / chunk / hedging). Don't test items the user already has at `mastery='mastered'` even if they were in the display bundle.
 
@@ -195,12 +209,12 @@ Per-item `word_review` calls were already made in State C; do NOT re-submit them
 ### State E: Continue (`vocab-topic` or `vocab-topic:<topic>`)
 
 - Re-call `due_words` for whichever topic is next (callback can force a specific one; otherwise rotate by weakest coverage).
-- Skip `coach_context` re-call unless `Vocabulary Profile.cefr` changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL). Only `due_words` needs re-reading for the next batch.
 
 End-of-batch buttons:
 
 ```json
-[["🔄 换个主题|vocab-topic", "🎯 测我刚学的|vocab-testme", "🧭 练习其他|nav:main"]]
+[["🔄 换个主题|vocab-topic", "🧭 练习其他|nav:main"]]
 ```
 
 **Critical**: send the recall summary + buttons in **one** `tg_msg type="keyboard"` call. The bundle reveal `tg_msg type="text"` with `<tg-spoiler>` for missed items is a separate message before.
@@ -209,7 +223,7 @@ End-of-batch buttons:
 
 - `planner`: routes here ahead of a writing-essay prompt to seed the lexical bank.
 - `learner-state`: reads `samples` rows + per-word `word_reviews`; updates `MEMORY.md` `Vocabulary Profile.topic_coverage`.
-- `coach`: uses topic coverage to recommend rotation (don't keep drilling 'education' if `environment` is at 0% coverage and exams are coming).
+- `planner`: (proactive nudge) uses topic coverage to recommend rotation (don't keep drilling 'education' if `environment` is at 0% coverage and exams are coming).
 - `vocab-testme`: hand-off after every topic session — verify recall under varied formats.
 - `vocab-review`: companion for due-flow (vocab-topic seeds new items into the queue).
 - `writing-essay` / `speaking-roleplay`: downstream consumers — once the bundle lands in mastery, prompts on that topic become accessible.
@@ -220,7 +234,7 @@ End-of-batch buttons:
 - Auto-seed adds < 10 items because LLM generation runs out of high-quality candidates → run with whatever was seeded (≥ 6 minimum); record `metadata.bundle_size` honestly.
 - `tg_msg type="edit"` (hide step) fails → send the long separator block instead. The bundle message remains visible but pushed off-screen.
 - User submits the production sentence using only 1 item (instead of 2+) → grade as shaky (`rating=3` for the item used, no review for items not used).
-- User answers all in Chinese → ask once; if persistent, count `force_reply` items as `rating=1` and proceed to next.
+- User answers all in Chinese → ask once; if persistent, count text-input items as `rating=1` and proceed to next.
 - `persist action="word_review"` fails on one item → still send the 1-line note, mention "未保存"; continue.
 - Recall round interrupted → State D not written. Per-item `word_reviews` from State C are saved.
 

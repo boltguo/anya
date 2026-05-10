@@ -133,8 +133,8 @@ Skills 是 Anya 的教学能力层。每个 skill 用 `SKILL.md` 描述触发条
 
 | 能力组 | Skills | 作用 |
 | --- | --- | --- |
-| 入口与画像 | `planner`, `profile-manager`, `placement-quick` | 展示训练菜单、收集用户画像、做快速水平校准。 |
-| 教练与状态 | `learner-state`, `coach`, `error-clinic` | 汇总学习数据、刷新能力画像、给出下一步建议、解释高频错因。 |
+| 入口与画像 | `planner`, `profile-manager`, `placement-quick` | 展示训练菜单、智能推荐、定时学习提醒、收集用户画像、做快速水平校准。 |
+| 状态与诊断 | `learner-state`, `error-clinic` | 汇总学习数据、定期刷新能力画像和 MEMORY、解释高频错因。 |
 | 听力 | `listening-dictation`, `listening-shadowing`, `listening-podcast`, `listening-numberdrill` | 精听听写、影子跟读、泛听抓主旨、数字/拼写专项。 |
 | 口语 | `speaking-freetalk`, `speaking-roleplay`, `speaking-repeat`, `speaking-shadowing`, `speaking-azure-score` | 自由表达、情景对话、复述、发音门诊、Azure 评分。 |
 | 阅读与输入 | `daily-article`, `material-discussion`, `reading-deepdive`, `reading-skim-drill`, `reading-typetrain` | 每日真实文章、材料讨论、精读、略读扫意、题型训练。 |
@@ -149,7 +149,7 @@ Skills 是 Anya 的教学能力层。每个 skill 用 `SKILL.md` 描述触发条
 - `SOUL.md` / `RULES.md`：约束 agent 的身份、行为和工具规则。
 - `USER.md` / `MEMORY.md`：给模型提供紧凑的用户画像和学习状态。
 
-训练 skill 完成一次练习后，应通过 `persist` 写入 `samples`、`errors`、`subcap_scores`、`words` 或 `word_reviews`。学习 block 的开始/结束走 `session_start` / `session_end`。`learner-state` 通过 `coach_context` 和 `progress_snapshot` 汇总长期结论并更新 `MEMORY.md`；`coach` 只基于这些数据给出下一步建议。
+训练 skill 完成一次练习后，应通过 `persist` 写入 `samples`、`errors`、`subcap_scores`、`words` 或 `word_reviews`。学习 block 的开始/结束走 `session_start` / `session_end`。`learner-state` 通过 `coach_context` 和 `progress_snapshot` 汇总长期结论并更新 `MEMORY.md`；`planner` 基于这些数据给出智能推荐和定时提醒。
 
 ## 快速上手
 

@@ -47,12 +47,12 @@ Cycle through these 5 formats; aim for at least 4 distinct formats per batch of 
 
 | Format | UI | What it tests |
 | --- | --- | --- |
-| Recall meaning | `quiz` 4 Chinese options | Receptive recall (EN word → CN meaning) |
-| Produce sentence | `force_reply` | Productive use in context |
-| Pick collocation | `quiz` 4 collocation candidates, 1 correct | Knowledge of natural pairing |
-| Spot wrong usage | `quiz` 4 sentences using the word, 1 grammatically/semantically wrong | Discriminative usage |
-| Register pick | `quiz` 4 words, 1 fits the formal/informal frame | Register awareness |
-| Paraphrase map | `quiz` 4 phrases, 1 paraphrases the target word in context | Synonym/paraphrase mapping |
+| Recall meaning | `keyboard` 4 Chinese option buttons | Receptive recall (EN word → CN meaning) |
+| Produce sentence | `keyboard` with text prompt | Productive use in context |
+| Pick collocation | `keyboard` 4 collocation buttons, 1 correct | Knowledge of natural pairing |
+| Spot wrong usage | `keyboard` 4 sentence buttons, 1 wrong | Discriminative usage |
+| Register pick | `keyboard` 4 word buttons, 1 fits the frame | Register awareness |
+| Paraphrase map | `keyboard` 4 phrase buttons, 1 paraphrases target | Synonym/paraphrase mapping |
 
 Bias by error key:
 
@@ -70,13 +70,15 @@ Per-question state machine, looped through the batch.
 For the current word in the batch:
 
 1. Pick a format (cycle, biased per §2.4).
-2. Generate the question. For `quiz` formats, ensure exactly 1 correct option and 3 plausible distractors. For `force_reply`, give the user a short topic frame ("写一句你今天工作里能用到 `<word>` 的话").
-3. Send a single `tg_msg type="quiz"` (for MC formats) or `tg_msg type="force_reply"` (for production), embedding the question, the word in **bold**, and (where helpful) the IPA.
+2. Generate the question. For `keyboard` MC formats, ensure exactly 1 correct option and 3 plausible distractors. For production formats, give the user a short topic frame ("写一句你今天工作里能用到 `<word>` 的话").
+3. Send via `tg_msg type="keyboard"` with one button per option (e.g. `[["A. xxx|tm_q1_a"], ["B. xxx|tm_q1_b"], ["C. xxx|tm_q1_c"], ["D. xxx|tm_q1_d"]]`). For production format, send `tg_msg type="keyboard"` with the prompt text and no option buttons — the user types their answer directly. Do NOT use `tg_msg type="quiz"`.
 4. Record `question_format`, `question_index`, `target_word`, and the canonical correct answer in working state.
 
 ### State B: Per-question Grading
 
 When the user's answer arrives:
+
+**⚡ CALLBACK BUDGET: max 2 tool calls per question** — `persist word_review` + `tg_msg` (1-line note + next question). Do NOT call `persist coach_context`, `persist recent_practice`, or `persist due_words` between questions. The batch data is already in context.
 
 1. **Quiz formats**: compare the chosen option to the canonical answer. Correct → `rating=4`; wrong → `rating=1`.
 2. **Production format**: evaluate naturalness:
@@ -130,12 +132,12 @@ Per-question `word_review` calls were already made in State B; do NOT re-submit 
 ### State E: Continue (`vocab-testme`)
 
 - Re-call `persist action="due_words"` for the next batch (the algorithm will return updated due-list — recently-rated items are pushed forward in their schedule).
-- Skip `coach_context` re-call unless `Vocabulary Profile.cefr` changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL). Only `due_words` needs re-reading for the next batch.
 
 End-of-batch buttons:
 
 ```json
-[["🎯 再考一组|vocab-testme", "🔄 复习一组|vocab-review", "🧭 练习其他|nav:main"]]
+[["🎯 再考一组|vocab-testme", "🧭 练习其他|nav:main"]]
 ```
 
 **Critical**: send the batch summary + buttons in **one** `tg_msg type="keyboard"` call.
@@ -144,13 +146,13 @@ End-of-batch buttons:
 
 - `planner`: routes here after `vocab-topic` or when `vocab.production` lags `vocab.recall`.
 - `learner-state`: reads `samples` rows + per-word `word_reviews`; updates `MEMORY.md` `Vocabulary Profile`.
-- `coach`: uses error keys (`collocation_error` / `register_mismatch` / `paraphrase_miss`) to recommend the next drill.
+- `planner`: (proactive nudge) uses error keys (`collocation_error` / `register_mismatch` / `paraphrase_miss`) to recommend the next drill.
 - `vocab-review` / `vocab-topic`: companion skills — use TestMe to verify, Review for due-flow, Topic for new clusters.
 - `support/data-contract`: defines the `persist` write protocol.
 
 ## 5. Failure And Fallbacks
 
-- `tg_msg type="quiz"` not supported by the client → fall back to `tg_msg type="keyboard"` with one button per option (`A. xxx|tm:opt:A`, etc.); grading logic is identical.
+- `tg_msg type="quiz"` should NEVER be used — always use `tg_msg type="keyboard"` with option buttons.
 - User taps the same option twice rapidly → debounce: ignore the second; persist only one `word_review`.
 - Production answer is in Chinese → ask once for an English answer; if user refuses, grade as `rating=1` (didn't use the word) and proceed.
 - `persist action="word_review"` fails on one card → still send the 1-line note, but mention "未保存，下次还会出现"; continue to the next question.
@@ -168,3 +170,5 @@ End-of-batch buttons:
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable vocab state.
 9. **One-call keyboard** for the batch summary. Never `type="text"` then `type="edit"` to attach buttons.
+10. **Callback = 2 tools max per question.** Answer callback → `persist word_review` + `tg_msg` (note + next question or batch summary). No context re-reads between questions.
+11. **Skip coach_context on continue.** Within the same batch, do NOT re-read `coach_context`. The data from batch start is still valid.

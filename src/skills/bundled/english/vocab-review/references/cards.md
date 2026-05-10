@@ -50,7 +50,7 @@ Then:
 
 Optional production check:
 ```
-tg_msg(type:"force_reply", text:"用这个句型造一个你自己的句子")
+tg_msg(type:"text", text:"用这个句型造一个你自己的句子")
 ```
 
 ## Paraphrase group
