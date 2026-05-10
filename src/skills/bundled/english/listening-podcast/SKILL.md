@@ -207,7 +207,7 @@ State D persists fully-attempted scripts only (with or without slow-down). Aband
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next script (State A step 1 — incl. dedup). Respect "no more than 2 consecutive same topic family" (§2.4).
 
 ## 4. Hard Rules

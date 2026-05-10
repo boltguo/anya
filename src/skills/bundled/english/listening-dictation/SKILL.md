@@ -207,7 +207,7 @@ State D persists attempted sentences only. Abandoned rows are written in State B
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next sentence (State A step 2 — incl. dedup).
 
 ## 4. Collaborates With

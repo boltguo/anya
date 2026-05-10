@@ -8,7 +8,7 @@
  *
  * Supported multimodal payloads:
  * - `text`, `audio`, `voice`, `document`, `keyboard`, `quiz`
- * - `force_reply`, `edit`, `delete`, `react`, `action`
+ * - `force_reply`, `edit`, `delete`, `react`, `action`, `countdown`
  */
 
 import { register } from './registry.js';
@@ -104,15 +104,16 @@ function getCaption(args: Record<string, unknown>): string | undefined {
 //   delete         → Delete a message by id or tag
 //   react          → Add emoji reaction to a message
 //   action         → Show typing/recording indicator
+//   countdown      → Auto-editing countdown timer
 
 register({
   name: 'tg_msg',
-  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), force_reply, edit, delete, react, action. Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
+  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), force_reply, edit, delete, react, action, countdown (auto-edit timer with {seconds} placeholder). Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
   parameters: {
     type: 'object',
     properties: {
-      type:       { type: 'string', description: 'Message type: text | audio | voice | document | keyboard | quiz | force_reply | edit | delete | react | action' },
-      text:       { type: 'string', description: 'Message text/caption (HTML format). Use <b>bold</b>, <i>italic</i>, <code>code</code>, <pre>block</pre>, <tg-spoiler>hidden</tg-spoiler>.' },
+      type:       { type: 'string', description: 'Message type: text | audio | voice | document | keyboard | quiz | force_reply | edit | delete | react | action | countdown' },
+      text:       { type: 'string', description: 'Message text/caption (HTML format). For countdown: use {seconds} as placeholder for the remaining time.' },
       url:        { type: 'string', description: 'For audio/voice/document: URL or file path of the media to send.' },
       buttons:    { type: 'string', description: 'JSON 2D array for keyboard: [["label|callback_data",...]].' },
       options:    { type: 'string', description: 'For quiz: JSON array of option strings.' },
@@ -124,6 +125,8 @@ register({
       emoji:      { type: 'string', description: 'For react: emoji to use.' },
       action:     { type: 'string', description: 'For action type: typing, record_voice, upload_document, etc.' },
       parse_mode: { type: 'string', description: 'Parse mode: HTML (default), Markdown, MarkdownV2, or none.' },
+      seconds:    { type: 'integer', description: 'For countdown: duration in seconds.' },
+      expire_text:{ type: 'string', description: 'For countdown: text to show when timer reaches 0.' },
     },
     required: ['type'],
   },
@@ -248,6 +251,19 @@ register({
       case 'action': {
         await tg.sendChatAction(String(args.action || 'typing'));
         return JSON.stringify({ ok: true, sent_content: false });
+      }
+
+      case 'countdown': {
+        const seconds = Number(args.seconds || 60);
+        const expireText = String(args.expire_text || '⏱️ 时间到！');
+        const replyTo = resolveReplyTo(args.reply_to, tg);
+        const msgId = await tg.sendCountdown(
+          renderText(args.text as string, 'HTML'),
+          seconds,
+          renderText(expireText, 'HTML'),
+          { replyTo, tag: args.tag as string },
+        );
+        return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
       }
 
       default:

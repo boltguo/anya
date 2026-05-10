@@ -141,7 +141,7 @@ export function buildSkillIndex(): string {
   }
 
   const lines = ['## Available Skills\n'];
-  lines.push('Use `skill_view` to load a skill\'s full procedure before executing it.\n');
+  lines.push('Use `skill_view` to load a skill\'s full procedure before first executing it. If `Active Skill Instructions` for that skill are already present in the system prompt, do not reload the same SKILL.md; continue the active workflow.\n');
 
   for (const [category, names] of categories) {
     lines.push(`- **${category}** (${names.length}): ${names.join(', ')}`);

@@ -231,13 +231,17 @@ export class TelegramSessionAdapter implements Adapter {
    * Always edits the same message — never creates new ones.
    */
   private async flushStatus(): Promise<void> {
-    const text = this.statusText;
+    try {
+      const text = this.statusText;
 
-    if (!this.statusMessageId) {
-      const msg = await this.ctx.reply(text, { parse_mode: undefined }).catch(() => null);
-      if (msg) this.statusMessageId = msg.message_id;
-    } else {
-      await this.bot.api.editMessageText(this.chatId, this.statusMessageId, text).catch(() => {});
+      if (!this.statusMessageId) {
+        const msg = await this.ctx.reply(text, { parse_mode: undefined }).catch(() => null);
+        if (msg) this.statusMessageId = msg.message_id;
+      } else {
+        await this.bot.api.editMessageText(this.chatId, this.statusMessageId, text).catch(() => {});
+      }
+    } catch {
+      // Callback-query contexts may lack chat info; swallow rather than crash the gateway
     }
   }
 
@@ -249,6 +253,59 @@ export class TelegramSessionAdapter implements Adapter {
       await this.bot.api.deleteMessage(this.chatId, this.statusMessageId).catch(() => {});
       this.statusMessageId = undefined;
     }
+  }
+
+  /**
+   * Send a countdown timer message that auto-edits at decreasing intervals.
+   * Uses sparse edits (every 5s) to avoid Telegram rate limits, with
+   * per-second edits only in the final 10 seconds for dramatic effect.
+   *
+   * @param initialText - Text template with `{seconds}` placeholder for the countdown.
+   * @param seconds - Duration in seconds.
+   * @param expireText - Text to show when the countdown finishes.
+   * @param opts - Standard send options.
+   * @returns The message_id of the countdown message (returned immediately).
+   */
+  async sendCountdown(
+    initialText: string,
+    seconds: number,
+    expireText: string,
+    opts?: SendMessageOptions,
+  ): Promise<number> {
+    return this.enqueue(async () => {
+      const replyTo = this.autoReplyTo(opts?.replyTo);
+      const formatText = (s: number) => initialText.replace(/\{seconds\}/g, String(s));
+
+      const msg = await this.bot.api.sendMessage(this.chatId, formatText(seconds), {
+        parse_mode: 'HTML',
+        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
+      });
+
+      this.trackMessage(msg.message_id, opts?.tag);
+      this.hasSentContent = true;
+
+      // Fire-and-forget: the countdown runs in the background.
+      // Sparse edits to avoid Telegram flood limits:
+      //   > 10s remaining → edit every 5 seconds
+      //   ≤ 10s remaining → edit every 1 second
+      let remaining = seconds;
+      const interval = setInterval(async () => {
+        remaining--;
+        if (remaining <= 0) {
+          clearInterval(interval);
+          await this.bot.api.editMessageText(this.chatId, msg.message_id, expireText, {
+            parse_mode: 'HTML',
+          }).catch(() => {});
+        } else if (remaining <= 10 || remaining % 5 === 0) {
+          // Edit at 5-second intervals, or every second in the last 10s
+          await this.bot.api.editMessageText(this.chatId, msg.message_id, formatText(remaining), {
+            parse_mode: 'HTML',
+          }).catch(() => {});
+        }
+      }, 1000);
+
+      return msg.message_id;
+    });
   }
 
   /**

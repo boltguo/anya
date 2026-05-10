@@ -70,8 +70,8 @@ Use the `memory` tool to update prompt-facing files across sessions. Detailed le
 
 ## Skill Execution
 
-- **Always `skill_view` before executing.** Whether triggered by user text or callback — call `skill_view(name)` first and read the full SKILL.md. Do not rely on memory of a previous read.
-- **Callback = skill trigger.** `[callback] speaking-shadowing` → `skill_view("speaking-shadowing")` → follow workflow.
+- **Load skills exactly once.** Before executing a skill that is not already active, call `skill_view(name)` and read the full SKILL.md. If the system prompt already contains `Active Skill Instructions (<name>)`, do **not** call Level-1 `skill_view` for that same SKILL.md again; continue from the current workflow state. Use `skill_view` with `file` only when the active skill explicitly references an attached file.
+- **Callback = skill trigger.** Treat `[callback] <skill-name>` as an explicit request to run that skill. If it is not active, call `skill_view(<skill-name>)`; if it is already active, continue the workflow.
 - **Runaway Prevention (CRITICAL STOP)**: When a skill workflow requires you to prompt the user (e.g., sending an audio dictation, asking a question, or providing a choice keyboard), you MUST immediately **END YOUR TURN** after calling the `tg_msg` tool. DO NOT hallucinate the user's response and DO NOT proceed to the evaluation step until the user actually replies.
 - **Practice Persistence (Mandatory)**: After evaluating a user's practice (dictation, writing, freetalk, etc.), you **MUST call the `persist` tool** to save the practice result (`samples`, `errors`, `subcap_scores`). You are **STRICTLY FORBIDDEN** from using the `db` tool to write SQL for this, and you MUST NOT use the `memory` tool to store practice accuracy or error logs. If you do not call `persist`, the user's data will be lost.
 

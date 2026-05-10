@@ -257,6 +257,8 @@ export interface ToolContext {
   adapter: Adapter;
   /** The current agent configuration payload. */
   config: import('../config/defaults.js').AnyaConfig;
-  /** The active session ID, useful for log tracing and persistence. */
+  /** The active session ID (internal UUID), useful for log tracing and persistence. */
   sessionId?: string;
+  /** The external session key (e.g., 'tg:5496437870') for domain-level data partitioning. */
+  sessionKey?: string;
 }

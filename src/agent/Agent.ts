@@ -136,7 +136,7 @@ export class Agent {
     if (activeSkillName) {
       const skill = getSkill(activeSkillName);
       if (skill) {
-        systemPrompt = `${baseSystemPrompt}\n\n## Active Skill Instructions (${activeSkillName})\n\n${skill.body}`;
+        systemPrompt = buildActiveSkillSystemPrompt(baseSystemPrompt, activeSkillName, skill.body);
       }
     }
 
@@ -275,6 +275,7 @@ export class Agent {
             adapter: this.adapter,
             config: this.config,
             sessionId,
+            sessionKey,
           });
 
           // Persist active skill to session when skill_view loads a valid SKILL.md
@@ -286,7 +287,7 @@ export class Agent {
               // Rebuild system prompt with newly activated skill
               messages[0] = {
                 role: 'system',
-                content: `${buildSystemPrompt(this.config)}\n\n## Active Skill Instructions (${skillName})\n\n${skill.body}`,
+                content: buildActiveSkillSystemPrompt(buildSystemPrompt(this.config), skillName, skill.body),
               };
               // Replace full body in tool result with short confirmation —
               // body is already in system prompt, no need to duplicate in history
@@ -456,3 +457,11 @@ function trimOldToolResults(history: Message[]): Message[] {
   return history;
 }
 
+function buildActiveSkillSystemPrompt(baseSystemPrompt: string, skillName: string, skillBody: string): string {
+  return [
+    baseSystemPrompt,
+    `\n## Active Skill Instructions (${skillName})\n`,
+    skillBody,
+    `\n> Active skill "${skillName}" is already loaded above. Do not call \`skill_view\` for this SKILL.md again. Use \`skill_view\` with \`file\` only when the active skill explicitly references an attached file. Continue from the current workflow state.`,
+  ].join('\n');
+}

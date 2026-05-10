@@ -20,6 +20,13 @@ import { studySummary, progressSnapshot, progressTrend } from '../domain/progres
 import { sessionStart, sessionEnd } from '../domain/session.js';
 import { profileUpsert, coachContext } from '../domain/profile.js';
 
+// ── coach_context in-memory cache ───────────────────────────────────────────
+// coach_context aggregates 14-day data and rarely changes within a session.
+// Cache hits avoid redundant DB queries when skills read it multiple times.
+// Invalidated on write operations (practice, word_review, word_upsert, task_complete).
+const COACH_CONTEXT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const coachContextCache = new Map<string, { data: unknown; ts: number }>();
+
 register({
   name: 'persist',
   description: 'Typed gateway for English study.db. Default action="practice" writes practice evidence. Other actions: word_upsert, word_review, due_words, word_lookup, study_summary, coach_context, recent_practice, profile_upsert, task_upsert, due_tasks, task_complete, session_start, session_end, progress_snapshot, progress_trend. Skills must use this instead of raw db calls for learner data.',
@@ -127,11 +134,23 @@ register({
     },
   },
 
-  async execute(args: Record<string, unknown>, _context: ToolContext): Promise<string> {
+  async execute(args: Record<string, unknown>, context: ToolContext): Promise<string> {
     const action = String(args.action || 'practice');
     const db = getDatabase('study');
 
+    // Auto-inject session_id from the real session key (e.g., 'tg:5496437870')
+    // to prevent LLM from filling garbage like 'tg:unknown' or 'tg:user'.
+    if (context.sessionKey) {
+      args.session_id = context.sessionKey;
+    }
+
     try {
+      // Invalidate coach_context cache on write operations that change aggregated data.
+      // coach_context reads: profile, study_summary, due_words, due_tasks, personal_error_cards
+      if (['practice', 'word_review', 'word_upsert', 'task_complete', 'profile_upsert', 'task_upsert'].includes(action)) {
+        coachContextCache.clear();
+      }
+
       switch (action) {
         case 'practice':          return JSON.stringify(logPractice(db, args));
         case 'word_upsert':       return JSON.stringify(upsertWords(db, args));
@@ -139,7 +158,19 @@ register({
         case 'due_words':         return JSON.stringify(dueWords(db, args));
         case 'word_lookup':       return JSON.stringify(wordLookup(db, args));
         case 'study_summary':     return JSON.stringify(studySummary(db, args));
-        case 'coach_context':     return JSON.stringify(coachContext(db, args));
+        case 'coach_context': {
+          const days = Number(args.days ?? 14);
+          const limit = Number(args.limit ?? 8);
+          const date = String(args.date || new Date().toISOString().slice(0, 10));
+          const cacheKey = `${context.sessionKey || ''}:${days}:${limit}:${date}`;
+          const cached = coachContextCache.get(cacheKey);
+          if (cached && Date.now() - cached.ts < COACH_CONTEXT_CACHE_TTL_MS) {
+            return JSON.stringify(cached.data);
+          }
+          const result = coachContext(db, args);
+          coachContextCache.set(cacheKey, { data: result, ts: Date.now() });
+          return JSON.stringify(result);
+        }
         case 'recent_practice':   return JSON.stringify(recentPractice(db, args));
         case 'profile_upsert':    return JSON.stringify(profileUpsert(db, args));
         case 'task_upsert':       return JSON.stringify(taskUpsert(db, args));

@@ -147,13 +147,19 @@ Hold: keep density, optionally swap **one** trap category (teen-vs-ty → date f
 
 When the learner types an answer:
 
-1. Normalize both target and response (lowercase, strip punctuation, preserve digit groupings, compare in order).
-2. Token-level edit distance: `D` (deletions), `S` (substitutions), `I` (insertions).
-3. Compute (clamped to 0):
-   - `accuracy = max(0, 1 - (D + S + I) / target_tokens)`
-   - `raw_score = target_tokens - D - S`
-   - `max_score = target_tokens`
-4. Identify **specifically** how the trap was missed (e.g., `13` written as `30`, missed "double", misspelled vowel) — drives the `errors` array, not overall accuracy.
+1. **Extract trap target(s)** from the original sentence (the number, date, time, price, or spelling that the trap tests). E.g. for "The booking reference is double zero seven three", the trap target is `0073`.
+2. **Primary scoring (accuracy)** — based on trap target match ONLY:
+   - Exact match of all trap targets → `1.0`
+   - Partial match (got the core digits but missed grouping, e.g. `73` vs `0073`) → `0.8`
+   - Close but confused (e.g. `30` instead of `13` — the exact trap they should catch) → `0.4`
+   - Completely wrong or missing → `0.0`
+3. **Secondary scoring (subcap only)** — full sentence token-level edit distance:
+   - Normalize both target and response (lowercase, strip punctuation, preserve digit groupings).
+   - Token-level edit distance: `D` (deletions), `S` (substitutions), `I` (insertions).
+   - `full_sentence_accuracy = max(0, 1 - (D + S + I) / target_tokens)`
+   - Store as `subcap_scores: [{key: "listening.full_transcription", score: <0-10 scaled>, evidence: "..."}]`
+   - This does NOT affect tier progression — `accuracy` alone drives credits.
+4. Identify **specifically** how the trap was missed (e.g., `13` written as `30`, missed "double", misspelled vowel) — drives the `errors` array.
 5. Send feedback and persist in the same evaluation turn.
 
 Feedback message must include:
@@ -209,7 +215,7 @@ State D persists fully-attempted sentences only (with or without slow-down). Aba
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
 - Apply §2.3 (skip `redo_count > 0`) before generating.
-- Skip `coach_context` re-call unless tier changed.
+- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next sentence (State A step 1 — incl. dedup). Respect "no more than 2 consecutive same trap category" (§2.4).
 
 ## 5. Hard Rules
