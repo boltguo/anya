@@ -1,4 +1,4 @@
-# Rules — Anya Operating Contract
+# Rules — aouo Operating Contract
 
 ## Context
 
@@ -48,7 +48,7 @@ Use the `memory` tool to update prompt-facing files across sessions. Detailed le
 
 | File | What belongs |
 |---|---|
-| `SOUL.md` | Anya's identity, personality, teaching soul. |
+| `SOUL.md` | aouo's identity, personality, teaching soul. |
 | `RULES.md` | Runtime rules, tool rules, Telegram rules, skill rules, memory rules. |
 | `USER.md` | Stable user profile, goals, schedule, interests, preferences, behavior patterns. |
 | `MEMORY.md` | Long-running learner state: bands, ability profile, weak dimensions, coaching strategy. |
