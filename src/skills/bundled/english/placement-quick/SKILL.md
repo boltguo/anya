@@ -12,7 +12,7 @@ A fast Computerized Adaptive Test (CAT) framed as a "Spy Scanner" mission. Measu
 - **Triggers**: `开始测试 / quick placement / test my English / 极速体检`，or routed from `profile-manager`，or `placement_quick_start` callback.
 - **Persona**: Anya in "Spy Scanner" mode — fun, encouraging, no harsh language, no red crosses.
 - **UI language**: Chinese for instructions; English for the test items themselves.
-- **User profile** (read once at State 0): `USER.md` — `interests` / `profession` / `target_cefr`. Used to compose **in-domain** probes ONLY when the rotation rule (§2.2) calls for it.
+- **User profile** (read once at State 0): call `persist action="coach_context" days=1 limit=3` and use the returned `profile` row — fields `interests` / `daily_english` / `target_level` / `notes`. Used to compose **in-domain** probes ONLY when the rotation rule (§2.2) calls for it. If `profile` is null (placement run before profile-manager), default in-domain to "general tech / current events".
 
 ## 2. Difficulty Policy
 
@@ -277,18 +277,33 @@ For each of Listening / Speaking / Reading / Writing / Vocab produce:
 
 Vocab additionally carries `size_estimate: <approx word count>`.
 
-#### 6.3 Memory write (`memory` tool)
+#### 6.3 Persist results to study.db
 
-Update `MEMORY.md`:
+All placement output goes to `study.db` — no markdown files. Issue these calls **in order**:
 
-- `Band Snapshot.Overall`: weighted avg of the 5 `general_level` values (CEFR sub-band string, e.g. `A2+ → B1-`).
-- Per dimension, write `general_level / domain_level / confidence` (do **not** collapse to a single CEFR).
-- Listening / Reading are receptive skills; Speaking / Writing are productive skills — note this explicitly under each dimension.
-- `Vocab.size_estimate`: numeric.
-- `Coaching.recommended_difficulty`: weighted `general_level` (NOT `domain_level`) — this is the i+1 anchor for downstream skills.
-- `Weak Spots`: 1–2 lowest dimensions OR most degraded under speed.
-- `Strong Dimensions`: highest 1.
-- `Profile Confidence`: lowest confidence among the 5 dimensions.
+1. **`persist action="profile_upsert"`** — update the learner profile with the new ability picture so downstream skills (planner, every practice skill) can read it via `coach_context`.
+
+   | Field           | Value                                                                                                          |
+   | --------------- | -------------------------------------------------------------------------------------------------------------- |
+   | `current_level` | Weighted average of the 5 `general_level` values, CEFR sub-band (e.g. `B1-`). This is the i+1 anchor.          |
+   | `strengths`     | One-line: the highest dimension (e.g. "Reading (B2-, comprehension solid)").                                   |
+   | `weaknesses`    | One-line: the 1–2 lowest dimensions or most degraded under speed (e.g. "Speaking (A2+, halting); Writing (A2+, frozen tense)"). |
+   | `notes`         | Append placement summary: per-dimension `{general / domain / confidence}` tuples + lowest confidence among the 5 + listening/reading marked as receptive, speaking/writing as productive + vocab size estimate. Keep it scannable, ≤ 6 short lines. |
+
+2. **`persist action="progress_snapshot"`** — store the numeric scores for the trend table.
+
+   | Field                | Value                                                                |
+   | -------------------- | -------------------------------------------------------------------- |
+   | `current_level`      | Same weighted CEFR sub-band as above.                                |
+   | `listening_score`    | 0–100, mapped from `general_level` (A2≈30, B1≈55, B2≈75, C1≈90, C2≈95; nudge by ±5 for sub-band). |
+   | `speaking_score`     | 0–100, same mapping.                                                 |
+   | `reading_score`      | 0–100, same mapping.                                                 |
+   | `writing_score`      | 0–100, same mapping.                                                 |
+   | `vocab_active_count` | Vocab `size_estimate` (numeric word count).                          |
+   | `weak_subcaps`       | JSON array of the 1–2 lowest dimensions, e.g. `["speaking","writing"]`. |
+   | `notes`              | One sentence — e.g. "placement-quick baseline; lowest dimension confidence: medium". |
+
+   Do **not** call `memory` — that tool is deprecated for this skill.
 
 #### 6.4 Render report
 
@@ -320,6 +335,8 @@ Send as natural markdown reply (framework auto-converts to Telegram HTML). Forma
 输入 `开始训练` 让 Anya 直接派发第一项任务 🕵️‍♀️
 ```
 
+After the report, call `persist action="onboarding_done" step="placement"` to flip the placement gating flag.
+
 End the turn after sending the report. Do not auto-chain to `planner`.
 
 ## 5. Anti-Hallucination Reminders
@@ -329,7 +346,7 @@ End the turn after sending the report. Do not auto-chain to `planner`.
 - Track per dimension across turns: `level`, `signal_history`, `domain_used` (`in / non`), `flags` (chinese_dominant / copy_paste / opt_out / replay_used / limited_evidence). Do not lose them between probes.
 - The 3-round minimum is non-negotiable for Vocab / Listening / Reading.
 - **Domain rotation Round 2 is mandatory** for Listening / Speaking / Reading. Skipping forces `confidence = low`.
-- Output schema MUST be the 3-tuple `{general_level, domain_level, confidence}` per dimension. Do not collapse to a single CEFR for MEMORY writes.
+- Output schema MUST be the 3-tuple `{general_level, domain_level, confidence}` per dimension. Do not collapse to a single CEFR when writing the `notes` field in `profile_upsert`; per-dimension granularity must survive.
 - Recognise Chinese opt-out vocabulary (§2.3) as signals, not answers — never echo `skip` or other English opt-out words back to the user.
 - Final report rendered via plain markdown (framework auto-converts to Telegram HTML).
 - Button strings: `label|callback` with NO spaces around the pipe (e.g. `"🚀 出发！开始体检|start_vocab"`).

@@ -1,8 +1,8 @@
-// storage/sessionStore.ts — session and message persistence
+// storage/state/sessions.ts — session and message persistence
 
 import { randomUUID } from 'node:crypto';
 import { getDb } from './db.js';
-import type { Message } from '../agent/types.js';
+import type { Message } from '../../agent/types.js';
 
 const MAX_WRITE_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 200;

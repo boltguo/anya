@@ -1,4 +1,4 @@
-// lib/scheduler.ts — cron job scheduler
+// services/scheduler.ts — cron job scheduler
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -7,8 +7,8 @@ import { CronExpressionParser } from 'cron-parser';
 import { Agent } from '../agent/Agent.js';
 import type { Adapter } from '../agent/types.js';
 import type { AnyaConfig } from '../config/defaults.js';
-import { ensureDirectories, CRON_DIR, CRON_JOBS_PATH, CRON_OUTPUT_DIR } from './paths.js';
-import { agentLogger } from './logger.js';
+import { ensureDirectories, CRON_DIR, CRON_JOBS_PATH, CRON_OUTPUT_DIR } from '../lib/paths.js';
+import { agentLogger } from '../lib/logger.js';
 import { registerAllTools } from '../tools/registry.js';
 
 export type CronSchedule =

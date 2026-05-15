@@ -6,11 +6,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import chalk from 'chalk';
 
 import { runInit } from '../src/commands/init.js';
 import { runUsage } from '../src/commands/usage.js';
 import { runConfigMenu, runConfigShow } from '../src/commands/config.js';
+import { runDoctor } from '../src/commands/doctor.js';
 import {
   runGatewayStart,
   runGatewayStop,
@@ -32,10 +32,7 @@ import {
   runCronTick,
   runCronUpdate,
 } from '../src/commands/cron.js';
-import { isInitialized, CONFIG_PATH } from '../src/lib/paths.js';
-import { loadConfig } from '../src/config/loader.js';
-import { loadSkills } from '../src/skills/loader.js';
-import { isServiceRunning } from '../src/lib/pidfile.js';
+import { CONFIG_PATH } from '../src/lib/paths.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 let version = '0.1.0';
@@ -93,55 +90,7 @@ program
   .command('doctor')
   .description('Check environment and configuration')
   .action(async () => {
-    console.log(chalk.bold.cyan('\nAnya Doctor\n'));
-
-    const inited = isInitialized();
-    if (!inited) {
-      console.log(chalk.yellow('  Not initialized. Run: anya init\n'));
-      return;
-    }
-
-    const config = loadConfig();
-
-    const { hasCodexAuth } = await import('../src/lib/auth.js');
-    const codexReady = hasCodexAuth();
-    console.log(
-      `  LLM:       ${codexReady ? '[ok]' : '[!!]'} codex (${config.provider.model}) ${codexReady ? '✓' : 'not authenticated'}`,
-    );
-
-    const hasGeminiKey = !!config.gemini?.api_key;
-    console.log(
-      `  Gemini:    ${hasGeminiKey ? '[ok]' : '[!!]'} Vision (${config.gemini?.vision_model}) ${hasGeminiKey ? '✓' : 'API key not set'}`,
-    );
-
-    const hasAzure = !!config.azure?.speech_key;
-    console.log(
-      `  Azure:     ${hasAzure ? '[ok]' : '[--]'} ${hasAzure ? `Speech (${config.azure.speech_region})` : 'not configured (TTS + pron unavailable)'}`,
-    );
-
-    const hasTavily = !!config.tools.web_search.api_key;
-    console.log(
-      `  Tavily:    ${hasTavily ? '[ok]' : '[--]'} ${hasTavily ? 'configured' : 'not configured (web_search unavailable)'}`,
-    );
-
-    const hasSTT = !!config.stt?.groq_api_key;
-    console.log(
-      `  STT:       ${hasSTT ? '[ok]' : '[--]'} ${hasSTT ? 'Groq Whisper' : 'not configured (voice messages unavailable)'}`,
-    );
-
-    const hasTelegram = config.telegram?.enabled;
-    console.log(
-      `  Telegram:  ${hasTelegram ? '[ok]' : '[--]'} ${hasTelegram ? 'enabled' : 'not configured'}`,
-    );
-
-    const skills = loadSkills();
-    console.log(`  Skills:    [..] ${skills.length} loaded`);
-
-    const gw = isServiceRunning('gateway');
-    console.log(
-      `  Gateway:   ${gw.running ? '[ok] running (PID ' + gw.pid + ')' : '[--] stopped'}`,
-    );
-    console.log();
+    await runDoctor();
   });
 
 const gatewayCmd = program

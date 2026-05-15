@@ -5,7 +5,7 @@ import { Bot, InlineKeyboard, InputFile, Context } from 'grammy';
 import PQueue from 'p-queue';
 import type { Adapter } from '../../agent/types.js';
 import { agentLogger } from '../../lib/logger.js';
-import { markdownToTelegramHtml } from '../../lib/tgFormat.js';
+import { markdownToTelegramHtml } from './format.js';
 import { stripMarkdown, splitMarkdownForTelegram } from './markdown.js';
 import type { SendMessageOptions, PendingApproval, PendingChoice } from './types.js';
 

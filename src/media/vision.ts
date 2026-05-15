@@ -1,10 +1,10 @@
-// lib/vision.ts — Gemini image analysis
+// media/vision.ts — Gemini image analysis
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { AnyaConfig } from '../config/defaults.js';
-import { agentLogger } from './logger.js';
-import { trackVision } from './usage.js';
+import { agentLogger } from '../lib/logger.js';
+import { trackVision } from '../lib/usage.js';
 
 const MIME_MAP: Record<string, string> = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',

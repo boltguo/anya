@@ -1,10 +1,10 @@
-// lib/tts.ts — Azure Neural text-to-speech
+// media/tts.ts — Azure Neural text-to-speech
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { TTS_DIR } from './paths.js';
-import { agentLogger } from './logger.js';
-import { trackTts, countBillableChars } from './usage.js';
+import { TTS_DIR } from '../lib/paths.js';
+import { agentLogger } from '../lib/logger.js';
+import { trackTts, countBillableChars } from '../lib/usage.js';
 import type { AnyaConfig } from '../config/defaults.js';
 
 const DEFAULT_VOICE = 'en-US-AriaNeural';

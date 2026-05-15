@@ -53,7 +53,7 @@ register({
       let contentType: string;
 
       if (isOgg) {
-        const { convertToWav } = await import('../lib/ffmpeg.js');
+        const { convertToWav } = await import('../media/ffmpeg.js');
         const wavPath = convertToWav(audioPath);
         if (wavPath) {
           audioBuffer = readFileSync(wavPath);

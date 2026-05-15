@@ -1,8 +1,8 @@
-// lib/auth.ts — OpenAI Codex OAuth device flow
+// providers/openai/auth.ts — OpenAI Codex OAuth device flow
 
 import { readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs';
-import { AUTH_PATH } from './paths.js';
-import { agentLogger } from './logger.js';
+import { AUTH_PATH } from '../../lib/paths.js';
+import { agentLogger } from '../../lib/logger.js';
 
 // Matches Codex CLI client ID
 const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';

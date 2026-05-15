@@ -1,4 +1,4 @@
-// lib/tgFormat.ts — Markdown to Telegram HTML
+// adapters/telegram/format.ts — Markdown to Telegram HTML
 
 import { marked } from 'marked';
 

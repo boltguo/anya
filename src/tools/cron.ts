@@ -12,7 +12,7 @@ import {
   runJob,
   tick,
   updateJob,
-} from '../lib/scheduler.js';
+} from '../services/scheduler.js';
 
 // Guards against prompt injection in unattended scheduled jobs.
 const THREAT_PATTERNS = [

@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { loadConfig } from '../config/loader.js';
 import { CONFIG_PATH, isInitialized } from '../lib/paths.js';
 import type { AnyaConfig } from '../config/defaults.js';
-import { hasCodexAuth } from '../lib/auth.js';
+import { hasCodexAuth } from '../providers/openai/auth.js';
 
 function maskKey(key: string): string {
   if (key.length <= 8) return '****';
@@ -284,7 +284,7 @@ async function configTelegram(config: AnyaConfig): Promise<void> {
 }
 
 async function configOpenAI(config: AnyaConfig): Promise<void> {
-  const { codexDeviceLogin, hasCodexAuth } = await import('../lib/auth.js');
+  const { codexDeviceLogin, hasCodexAuth } = await import('../providers/openai/auth.js');
   
   console.log();
   if (hasCodexAuth()) {

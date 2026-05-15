@@ -1,96 +1,82 @@
-// adapters/telegram/skillMenu.ts — data-driven inline menu pages
+// adapters/telegram/skillMenu.ts — hardcoded training-hub menu
 
 import { InlineKeyboard } from 'grammy';
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-import { SKILLS_DIR } from '../../lib/paths.js';
 
-interface MenuPage {
-  text: string;
-  buttons: string[][];
-}
-
-interface MenuDef {
-  [page: string]: MenuPage;
-}
-
-let pageIndex: Map<string, MenuPage> | null = null;
-let cacheTime = 0;
-const CACHE_TTL_MS = 60_000;
-
-function ensureLoaded(): void {
-  const now = Date.now();
-  if (pageIndex && now - cacheTime < CACHE_TTL_MS) return;
-
-  pageIndex = new Map();
-  scanDir(SKILLS_DIR);
-  cacheTime = now;
-}
-
-function scanDir(dir: string): void {
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return;
-  }
-
-  for (const name of entries) {
-    if (name.startsWith('.')) continue;
-
-    const fullPath = join(dir, name);
-    let isDir = false;
-    try {
-      isDir = statSync(fullPath).isDirectory();
-    } catch {
-      continue;
-    }
-
-    if (!isDir) continue;
-
-    const menuPath = join(fullPath, 'templates', 'menu.json');
-    if (existsSync(menuPath)) {
-      try {
-        const raw = readFileSync(menuPath, 'utf-8');
-        const menu: MenuDef = JSON.parse(raw);
-        for (const [pageName, page] of Object.entries(menu)) {
-          pageIndex!.set(pageName, page);
-        }
-      } catch {
-        // skip malformed JSON
-      }
-    }
-
-    scanDir(fullPath);
-  }
-}
+// Menu is fixed UX, not skill-defined behaviour. Loading it through the agent
+// would burn ~planner SKILL.md tokens on every /new.
+const MENU: Record<string, { text: string; buttons: string[][] }> = {
+  main: {
+    text: '🌟 你的英语小教练\n\n今天想从哪里开始？',
+    buttons: [
+      ['✨ 今日推荐|planner'],
+      ['🗣️ 口语实战|nav:speaking', '🎧 听力磨耳|nav:listening'],
+      ['📖 阅读理解|nav:reading', '✍️ 写作输出|nav:writing'],
+      ['📚 词汇网络|nav:vocab'],
+      ['📊 能力评估|learner-state', '🔍 错题答疑|error-clinic'],
+    ],
+  },
+  speaking: {
+    text: '🗣️ 口语训练\n\n开口说出来，慢慢练成自然对话。',
+    buttons: [
+      ['🎙️ 发音矫正|speaking-shadowing', '🔁 听后复述|speaking-repeat'],
+      ['💬 自由闲聊|speaking-freetalk', '🎭 情景对话|speaking-roleplay'],
+      ['← 返回|nav:main'],
+    ],
+  },
+  listening: {
+    text: '🎧 听力训练\n\n抓得到细节，跟得上意群。',
+    buttons: [
+      ['✏️ 句子精听|listening-dictation', '🎙️ 意群跟读|listening-shadowing'],
+      ['🔢 数字捕捉|listening-numberdrill', '📻 播客泛听|listening-podcast'],
+      ['← 返回|nav:main'],
+    ],
+  },
+  reading: {
+    text: '📖 阅读训练\n\n读得快，也读得透。',
+    buttons: [
+      ['🌅 今日阅读|daily-article', '🐢 外刊精读|reading-deepdive'],
+      ['📰 话题讨论|material-discussion', '⚡ 快速略读|reading-skim-drill'],
+      ['← 返回|nav:main'],
+    ],
+  },
+  writing: {
+    text: '✍️ 写作训练\n\n从句子打磨到成篇，把英文写得地道。',
+    buttons: [
+      ['🏋️ 句型搭建|writing-builder', '🔁 升级改写|writing-rewrite'],
+      ['📔 日记碎碎念|writing-journal', '📝 综合长文|writing-essay'],
+      ['← 返回|nav:main'],
+    ],
+  },
+  vocab: {
+    text: '📚 词汇网络\n\n在语境里学，靠重复内化。',
+    buttons: [
+      ['🔄 到期复习|vocab-review', '🎯 话题词汇|vocab-topic'],
+      ['🧠 抽查测验|vocab-testme'],
+      ['← 返回|nav:main'],
+    ],
+  },
+};
 
 function buildKeyboard(buttons: string[][]): InlineKeyboard {
   const kb = new InlineKeyboard();
   for (const row of buttons) {
     for (const item of row) {
       const pipeIdx = item.lastIndexOf('|');
-      if (pipeIdx === -1) {
-        const v = item.trim();
-        kb.text(v, v);
-      } else {
-        kb.text(item.substring(0, pipeIdx).trim(), item.substring(pipeIdx + 1).trim());
-      }
+      kb.text(item.substring(0, pipeIdx).trim(), item.substring(pipeIdx + 1).trim());
     }
     kb.row();
   }
   return kb;
 }
 
-export function isNavCallback(data: string): boolean {
-  return data.startsWith('nav:');
-}
-
-export function getMenuPage(pageName: string): { text: string; keyboard: InlineKeyboard } | null {
-  ensureLoaded();
-  const page = pageIndex!.get(pageName);
+function getMenuPage(pageName: string): { text: string; keyboard: InlineKeyboard } | null {
+  const page = MENU[pageName];
   if (!page) return null;
   return { text: page.text, keyboard: buildKeyboard(page.buttons) };
+}
+
+export function isNavCallback(data: string): boolean {
+  return data.startsWith('nav:');
 }
 
 export function getMainMenu(): { text: string; keyboard: InlineKeyboard } | null {

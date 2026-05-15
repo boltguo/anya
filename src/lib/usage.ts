@@ -1,6 +1,6 @@
 // lib/usage.ts — API usage tracking
 
-import { getDb } from '../storage/db.js';
+import { getDb } from '../storage/state/db.js';
 
 let _schemaReady = false;
 

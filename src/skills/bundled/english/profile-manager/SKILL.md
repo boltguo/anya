@@ -1,28 +1,26 @@
 ---
 name: profile-manager
-description: "Build or update the learner's USER.md profile; also the /profile-manager command and first-run onboarding dispatcher."
+description: "Build or update the learner's profile in study.db; also the /profile-manager command and first-run onboarding dispatcher."
 ---
 
 # Profile Manager
 
-Owner of `USER.md`. Builds or corrects a short natural-language user profile. On first-run (or `/profile-manager`), also dispatches the full onboarding: profile → `placement-quick` → `planner`.
+Owner of the `learner_profile` row in `study.db`. Builds or corrects a short structured user profile. On first-run (or `/profile-manager`), also dispatches the full onboarding: profile → `placement-quick` → `planner`.
 
 ## When to Use
 
 - `/profile-manager` command
-- `USER.md` still contains `initialized: false`
 - `建档 / 重新建档 / 改目标 / update profile / 我换工作了`
 - Another skill needs profile context that is still missing
-- `我的 USER 里是什么 / show my profile`
+- `我的档案是什么 / show my profile`
 
 ## Workflow
 
-0. **Bootstrap study.db** — call `persist` with `{"action":"coach_context","days":1,"limit":3}` to ensure the database and schema exist.
-1. Read `USER.md` + `MEMORY.md`.
-2. Decide mode:
-   - **First-run** (`initialized: false` or `/profile-manager` with an empty profile): Execute the **4-Step Onboarding Flow** below.
-   - **Targeted update**: Parse intent, ask at most one clarifying question, then rewrite the relevant natural-language section in `USER.md`.
-   - **Profile lookup**: Another skill reads USER via `memory`; provide the requested profile info.
+0. **Bootstrap study.db** — call `persist` with `{"action":"coach_context","days":1,"limit":3}`. The response returns the current `profile` row (or `null` if absent).
+1. Decide mode from the `profile` row:
+   - **First-run** (`profile` is null or `initialized=0`): Execute the **4-Step Onboarding Flow** below.
+   - **Targeted update** (`profile` exists and user wants to change something): Parse intent, ask at most one clarifying question, then write the changed fields via `persist action="profile_upsert"`. Do **not** re-run the 4 bundles.
+   - **Profile lookup**: Use the `profile` returned by `coach_context` and answer the user directly.
 
 ---
 
@@ -114,40 +112,37 @@ Boss！为了以后能给你派发最对味儿的间谍任务，我们先建个�
 
 ---
 
-## Final Transition & Write to USER.md
+## Final Transition & Write to study.db
 
-Once all 4 bundles are collected, you MUST rewrite the `USER.md` profile via `memory target=user action=replace`.
+Once all 4 bundles are collected, write the profile via **one** `persist action="profile_upsert"` call. Map bundles into the structured columns:
 
-Do NOT invent new markdown headers. You MUST map the collected intelligence into the existing standard `USER.md` structure:
+| Bundle                       | Persist field    | Notes                                                                       |
+| ---------------------------- | ---------------- | --------------------------------------------------------------------------- |
+| 1 — Profession context       | `daily_english`  | Concise sentence: industry / role + concrete English use cases.             |
+| 2 — Learning goal            | `target_level` + `target_exam` + `exam_date` + `notes` | Fill the structured fields when the user mentioned an exam / score / timeframe; otherwise put the goal sentence in `notes`. |
+| 3 — Personal interests       | `interests`      | JSON array of short tags (e.g. `["黑神话·悟空","艾尔登法环","硬核科幻"]`) or comma-separated text. |
+| 4 — Media consumption        | `notes`          | Append after the goal; one short paragraph the planner can use to pick material. |
 
-```md
-# User Profile
+Also set `initialized=1`. Example call shape:
 
-## Status
-- initialized: true
-
-## About the User
-
-**Professional context.** [Bundle 1 here. e.g., Frontend developer at a SaaS startup, occasional cross-stack and AI-tooling work. Uses English mainly for technical docs.]
-
-**Personal interests.** [Bundle 3 here — keep this as a separate paragraph so hobbies don't get steamrolled by the professional line. e.g., Sci-fi novels and films, Black Myth / Elden Ring, MOBA mobile games, weekend bouldering.]
-
-## Learning Goals
-[Put Bundle 2 here, including the timeframe and any concrete metric the user mentioned. e.g., 3 months → pass a fully English technical interview at a foreign-funded company; secondary goal: read React/Node docs without translation.]
-
-## Current Background
-[Leave a brief placeholder — `placement-quick` will fill in CEFR level, vocab estimate, and weak dimensions.]
-
-## Study Preferences & Habits
-[Put Bundle 4 (Media Consumption) here. Note both medium AND content type, so material recommendations can match. e.g., Prefers short-form tech videos (Fireship, 何同学); also listens to long-form history podcasts on commute.]
-
-## Personalization Notes
-[Any extra personality quirks gathered during the chat — e.g., self-described "lazy but competitive", responds well to game-like challenges.]
-
-**Topic rotation rule (always include this paragraph verbatim, adapted to the user's actual hobbies):** Practice content should rotate across both sides of the learner's world — roughly half work/professional-themed and half hobby-themed (films, games, anime, sports, music — whatever Bundle 3 captured). Do not default every example to the user's profession just because that's their day job; hobby topics are equally valid practice material.
+```
+persist action="profile_upsert"
+  initialized=1
+  daily_english="Frontend dev at a SaaS startup; daily reading of React/Node docs and reviewing PRs for overseas teammates."
+  target_level="B2"   // optional
+  target_exam="IELTS" // optional, default IELTS
+  exam_date="2026-08-01" // optional
+  interests='["黑神话·悟空","艾尔登法环","硬核科幻"]'
+  notes="Goal: pass an all-English technical interview in ~3 months.\nMedia: Fireship on YouTube, 何同学 on B站, Hardcore History podcast on commute.\nTopic rotation: half work-themed, half hobby-themed."
 ```
 
-After updating `USER.md`, sync to DB via `persist action="profile_upsert"`.
+After `profile_upsert`, mark onboarding step complete:
+
+```
+persist action="onboarding_done" step="profile"
+```
+
+This flips `config.onboarding.profile_done = true` so future `/new` skips the profile button.
 
 Then send the completion message and **immediately** chain into `placement-quick` — no confirmation button:
 
@@ -164,8 +159,10 @@ Boss 的喜好已经全部进入 Anya 加密档案库 🗂️
 
 ## Rules
 
-1. **Never ask for information that is already clearly present.**
+1. **Never ask for information that is already clearly present** in the existing `profile` row (returned by `coach_context`).
 2. **One question per turn.** Send one `tg_msg(type="text")`, then **stop and wait**.
 3. **No buttons in the 4 onboarding bundles.** All four are free-text — keep the format consistent.
 4. **Only first-run mode chains placement.** Update and lookup modes do not.
 5. **Use HTML inline tags sparingly** (`<b>`, `<i>`, `<code>`) — bullet lists and emoji markers are fine and render correctly via the framework's auto-conversion.
+6. **Never call the `memory` tool.** Profile state lives in `study.db` (via `persist`); onboarding flags live in `config.json` (written via `persist action="onboarding_done"`).
+7. **First-run vs update is decided purely from the `profile` row** returned by step 0's `coach_context`. Do not read `config.onboarding`.

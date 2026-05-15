@@ -2,7 +2,7 @@
 
 import { register } from './registry.js';
 import type { ToolContext } from '../agent/types.js';
-import { textToSpeech } from '../lib/tts.js';
+import { textToSpeech } from '../media/tts.js';
 
 register({
   name: 'tts',

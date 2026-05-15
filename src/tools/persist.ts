@@ -1,14 +1,26 @@
 // tools/persist.ts — study.db unified writer
 
 import { register } from './registry.js';
-import { getDatabase } from './db.js';
+import { getDatabase } from '../storage/study/db.js';
+import { getConfig, persistConfig } from '../config/loader.js';
 import type { ToolContext } from '../agent/types.js';
 
-import { logPractice, recentPractice, taskUpsert, dueTasks, taskComplete } from '../domain/practice.js';
-import { upsertWords, reviewWord, dueWords, wordLookup } from '../domain/vocabulary.js';
-import { studySummary, progressSnapshot, progressTrend } from '../domain/progress.js';
-import { sessionStart, sessionEnd } from '../domain/session.js';
-import { profileUpsert, coachContext } from '../domain/profile.js';
+import { logPractice, recentPractice, taskUpsert, dueTasks, taskComplete } from '../storage/study/practice.js';
+import { upsertWords, reviewWord, dueWords, wordLookup } from '../storage/study/vocabulary.js';
+import { studySummary, progressSnapshot, progressTrend } from '../storage/study/progress.js';
+import { sessionStart, sessionEnd } from '../storage/study/session.js';
+import { profileUpsert, coachContext } from '../storage/study/profile.js';
+
+function markOnboardingDone(step: string): unknown {
+  if (step !== 'profile' && step !== 'placement') {
+    return { error: `Unknown onboarding step: ${step}. Use "profile" or "placement".` };
+  }
+  const cfg = getConfig();
+  const field = step === 'profile' ? 'profile_done' : 'placement_done';
+  cfg.onboarding[field] = true;
+  persistConfig(cfg);
+  return { ok: true, step, [field]: true };
+}
 
 // coach_context aggregates 14-day data; cache cuts redundant queries within a session.
 // Invalidated on writes that change aggregated inputs (practice, word_*, task_*, profile_*).
@@ -17,14 +29,15 @@ const coachContextCache = new Map<string, { data: unknown; ts: number }>();
 
 register({
   name: 'persist',
-  description: 'Typed gateway for English study.db. Default action="practice" writes practice evidence. Other actions: word_upsert, word_review, due_words, word_lookup, study_summary, coach_context, recent_practice, profile_upsert, task_upsert, due_tasks, task_complete, session_start, session_end, progress_snapshot, progress_trend. Skills must use this instead of raw db calls for learner data.',
+  description: 'Typed gateway for English study.db. Default action="practice" writes practice evidence. Other actions: word_upsert, word_review, due_words, word_lookup, study_summary, coach_context, recent_practice, profile_upsert, task_upsert, due_tasks, task_complete, session_start, session_end, progress_snapshot, progress_trend, onboarding_done. Skills must use this instead of raw db calls for learner data.',
   parameters: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        description: 'practice (default) | word_upsert | word_review | due_words | word_lookup | study_summary | coach_context | recent_practice | profile_upsert | task_upsert | due_tasks | task_complete | session_start | session_end | progress_snapshot | progress_trend',
+        description: 'practice (default) | word_upsert | word_review | due_words | word_lookup | study_summary | coach_context | recent_practice | profile_upsert | task_upsert | due_tasks | task_complete | session_start | session_end | progress_snapshot | progress_trend | onboarding_done',
       },
+      step: { type: 'string', description: 'For onboarding_done: "profile" after profile-manager finishes, "placement" after placement-quick finishes.' },
       include_abandoned: { type: 'integer', description: 'For recent_practice: 1 (default) include completed=0 abandoned rows; 0 only completed=1.' },
       skill_type: { type: 'string', description: 'Practice skill identifier, e.g. listening.dictation, writing.essay, vocab.review.' },
       session_id: { type: 'string', description: 'Session key from the user input, e.g. tg:12345.' },
@@ -166,6 +179,7 @@ register({
         case 'session_end':       return JSON.stringify(sessionEnd(db, args));
         case 'progress_snapshot': return JSON.stringify(progressSnapshot(db, args));
         case 'progress_trend':    return JSON.stringify(progressTrend(db, args));
+        case 'onboarding_done':   return JSON.stringify(markOnboardingDone(String(args.step || '')));
         default:
           return JSON.stringify({ error: `Unknown persist action: ${action}` });
       }

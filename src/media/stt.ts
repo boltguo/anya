@@ -1,9 +1,9 @@
-// lib/stt.ts — Groq Whisper speech-to-text
+// media/stt.ts — Groq Whisper speech-to-text
 
 import fs from 'node:fs';
 import path from 'node:path';
 import Groq from 'groq-sdk';
-import { agentLogger } from './logger.js';
+import { agentLogger } from '../lib/logger.js';
 import type { AnyaConfig } from '../config/defaults.js';
 
 const DEFAULT_MODEL = 'whisper-large-v3-turbo';

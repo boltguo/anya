@@ -64,6 +64,11 @@ export interface AnyaConfig {
     show_tool_calls: boolean;
   };
 
+  onboarding: {
+    profile_done: boolean;
+    placement_done: boolean;
+  };
+
   advanced: {
     context_window: number;
     compress_threshold: number;  // 0.0–1.0
@@ -94,7 +99,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
     enabled: [
       'read_file', 'write_file', 'list_dir', 'web_search',
       'memory', 'skill_view', 'clarify',
-      'tg_msg', 'tts', 'pron_assess', 'db', 'persist', 'cron'
+      'tg_msg', 'tts', 'pron_assess', 'persist', 'cron'
     ],
     web_search: { backend: 'tavily', api_key: '', max_results: 5 },
   },
@@ -112,6 +117,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
   tts: { voice: 'en-US-AriaNeural', rate: '+0%' },
   azure: { speech_key: '', speech_region: 'eastasia' },
   ui: { show_tool_calls: true },
+  onboarding: { profile_done: false, placement_done: false },
 
   advanced: {
     context_window: 1000000,

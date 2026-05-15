@@ -1,9 +1,9 @@
-// storage/db.ts — singleton node:sqlite connection
+// storage/state/db.ts — state.db connection (agent sessions + messages)
 
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { DB_PATH } from '../lib/paths.js';
+import { DB_PATH } from '../../lib/paths.js';
 
 let _db: DatabaseSync | null = null;
 

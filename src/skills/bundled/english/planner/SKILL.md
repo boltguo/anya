@@ -1,32 +1,30 @@
 ---
 name: planner
-description: "Training hub for English practice: smart recommendations, menu, and free-form routing."
+description: "Smart recommendation: read the learner's recent signals and suggest what to focus on now."
 ---
 
 # English Planner
 
-Central hub. On `/new` or menu requests, show one screen with smart recommendations at the top and the manual menu underneath. For free-form text, pattern-match to the right skill.
+Personalised recommendation. Invoked when the user taps "✨ 今日推荐" or types a free-form practice intent. Outputs a short, conversational suggestion — the main menu itself is rendered by the Telegram adapter, NOT by this skill.
 
 ## When to Use
 
-- `练习 / 学习 / menu / 返回菜单 / practice`
-- Callback `menu` or any free-form "I want to practice X"
-- A sub-skill finishes and the learner is back with no specific intent
+- Callback `planner` (the 今日推荐 button on the main menu)
+- Free-form text like `练习什么 / 学什么好 / 给我个建议`
+- Cron-triggered proactive nudges (Workflow B below)
 
-If the learner names a specific mode (e.g. "听写"), jump straight to that skill — skip the menu.
+If the learner names a specific mode (e.g. "听写"), match against `references/routing-table.md` and jump straight to that skill — skip the recommendation.
 
 ## Workflow
 
-1. If `USER.md` still contains `initialized: false` → hand off to `profile-manager` (it chains placement + returns here).
-2. If the user named a specific mode, match against `references/routing-table.md`; if matched → `skill_view` + execute that skill.
-3. Otherwise render the training hub:
+1. If `USER.md` still contains `initialized: false` → hand off to `profile-manager`.
+2. If the user named a specific mode, route via `references/routing-table.md`.
+3. Otherwise:
    - Call `persist` with `{"action":"coach_context","days":14,"limit":8}`.
-   - If this invocation came from `/new`, call `persist` with `{"action":"session_start","session_key":"<current session id>","platform":"telegram","entrypoint":"new","plan":"<short string summary of what was recommended>"}` before sending the hub.
-   - Read `templates/menu.json` with `skill_view name="planner" file="templates/menu.json"`.
-   - Send **one** `tg_msg(type="keyboard")` message:
-     - **Text**: a short Chinese recommendation (2–4 lines max) explaining what the learner should focus on right now and why — derived from `coach_context` (see "Recommendation text" below).
-     - **Buttons**: `menu.json.main.buttons` **as-is**, unmodified. Do **not** generate extra recommendation buttons; the manual menu IS the entry point. The recommendation lives in the text above the buttons, not as duplicate buttons.
-4. The adapter handles `nav:*` sub-pages directly after the first screen. It does not compute recommendations.
+   - Call `persist` with `{"action":"session_start","session_key":"<current session id>","platform":"telegram","entrypoint":"planner","plan":"<short summary>"}`.
+   - Send **one** `tg_msg(type="keyboard")` with:
+     - **Text**: the recommendation (see "Recommendation text" below).
+     - **Buttons**: a single row — `[["🧭 主菜单|nav:main"]]`. The user picks the actual skill from the menu.
 
 ## Recommendation text
 
@@ -69,16 +67,13 @@ When triggered by cron (not user), evaluate nudge triggers. Most runs should pro
 
 ## Resources
 
-- `templates/menu.json` — all menu pages (the only menu data in the package)
 - `references/routing-table.md` — free-form text → skill map
 - `references/triggers.md` — proactive nudge trigger catalogue
 
 ## Rules
 
-1. **Do not gate on bands.** Show the menu whether MEMORY is full or empty.
+1. **Do not render the menu.** The Telegram adapter owns menu rendering. Recommendation text only, with a single `🧭 主菜单|nav:main` button.
 2. **`nav:*` is free** (adapter-handled); other callbacks cost one LLM turn.
-3. **One manual menu source**: `templates/menu.json`. Use `main.buttons` unchanged — never inject extra recommendation buttons. The recommendation lives only in the message text above the buttons.
-4. **Every sub-page has `← 返回|nav:main`.**
-5. **First-run onboarding belongs to `profile-manager`.** Don't collect profile here.
-6. **No raw DB access.** Recommendations read through `persist`, not `db`.
-7. **Learning session lifecycle starts here.** `/new` opens a `study_sessions` row through `persist action="session_start"`; later learner-state may close it with `session_end`.
+3. **First-run onboarding belongs to `profile-manager`.** Don't collect profile here.
+4. **No raw DB access.** Recommendations read through `persist`.
+5. **`session_start` lives here.** The planner invocation opens a `study_sessions` row; learner-state may close it with `session_end`.

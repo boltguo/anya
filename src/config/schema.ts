@@ -45,6 +45,10 @@ export const PartialAnyaConfigSchema = z.object({
     speech_key: z.string().optional(),
     speech_region: z.string().optional(),
   }).optional(),
+  onboarding: z.object({
+    profile_done: z.boolean().optional(),
+    placement_done: z.boolean().optional(),
+  }).optional(),
   advanced: z.object({
     context_window: z.number().optional(),
     compress_threshold: z.number().optional(),

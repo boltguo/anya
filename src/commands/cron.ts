@@ -14,7 +14,7 @@ import {
   updateJob,
   type CronJob,
   type SchedulerDelivery,
-} from '../lib/scheduler.js';
+} from '../services/scheduler.js';
 
 export function runCronStatus(): void {
   const config = loadConfig();

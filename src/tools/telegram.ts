@@ -4,7 +4,7 @@
 import { register } from './registry.js';
 import type { ToolContext } from '../agent/types.js';
 import { TelegramSessionAdapter } from '../adapters/telegram.js';
-import { markdownToTelegramHtml } from '../lib/tgFormat.js';
+import { markdownToTelegramHtml } from '../adapters/telegram/format.js';
 
 function renderText(text: string | undefined, parseMode: string | undefined): string {
   if (!text) return '';

@@ -1,8 +1,8 @@
-// lib/ffmpeg.ts — ffmpeg binary resolution and audio conversion
+// media/ffmpeg.ts — ffmpeg binary resolution and audio conversion
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
-import { agentLogger } from './logger.js';
+import { agentLogger } from '../lib/logger.js';
 
 // null = checked but not found; undefined = unchecked
 let _ffmpegPath: string | null | undefined;

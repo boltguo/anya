@@ -2,7 +2,7 @@
 
 import type { Message, LLMResponse, ToolParameterSchema, LLMProvider, ChatOptions } from '../agent/types.js';
 import type { AnyaConfig } from '../config/defaults.js';
-import { getCodexAccessToken } from '../lib/auth.js';
+import { getCodexAccessToken } from './openai/auth.js';
 import { classifyApiError } from '../agent/errorClassifier.js';
 import { agentLogger } from '../lib/logger.js';
 import { toResponsesInput, toResponsesTools } from './openai/transform.js';
@@ -95,7 +95,7 @@ export class CodexProvider implements LLMProvider {
         if (classified.reason === 'auth' && !authRefreshed) {
           authRefreshed = true;
           try {
-            const { forceRefreshCodexToken } = await import('../lib/auth.js');
+            const { forceRefreshCodexToken } = await import('./openai/auth.js');
             currentToken = await forceRefreshCodexToken();
             continue;
           } catch (err) {
