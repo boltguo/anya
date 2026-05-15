@@ -87,6 +87,22 @@ export class TelegramAdapter {
     });
   }
 
+  // Fire typing + post an initial status message the moment a message arrives —
+  // before any blocking pre-work (download/STT/vision) or queue wait. Returns a
+  // stopTyping handle (call in finally) and the status message id that the
+  // session adapter will later edit to "🧠 Thinking..." and beyond.
+  private async startTurn(ctx: Context, initialText = '🧠 Thinking...'): Promise<{
+    stopTyping: () => void;
+    statusMessageId?: number;
+  }> {
+    const typingInterval = startTypingIndicator(ctx);
+    const msg = await ctx.reply(initialText, { parse_mode: undefined }).catch(() => null);
+    return {
+      stopTyping: () => clearInterval(typingInterval),
+      statusMessageId: msg?.message_id,
+    };
+  }
+
   async sendProactiveMessage(chatId: number, text: string): Promise<void> {
     await this.bot.api.sendMessage(chatId, markdownToTelegramHtml(text), {
       parse_mode: 'HTML',
@@ -101,6 +117,7 @@ export class TelegramAdapter {
     input: string,
     cleanup?: () => void,
     files?: MessageFile[],
+    preStatusId?: number,
   ): Promise<void> {
     const userId = ctx.from?.id;
     const allowedUsers = this.config.telegram.allowed_user_ids;
@@ -112,7 +129,6 @@ export class TelegramAdapter {
     }
 
     const sessionKey = `tg:${ctx.chat!.id}`;
-    const typingInterval = startTypingIndicator(ctx);
 
     // Hint the LLM to run onboarding when user.md is missing or marked uninitialized
     if (!input.includes('/command: profile-manager')) {
@@ -129,6 +145,7 @@ export class TelegramAdapter {
     const sessionAdapter = new TelegramSessionAdapter(
       ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls, this.paginatedMessages,
     );
+    if (preStatusId) sessionAdapter.attachStatusMessage(preStatusId);
     const agent = new Agent(this.config, sessionAdapter);
 
     try {
@@ -152,7 +169,6 @@ export class TelegramAdapter {
       await ctx.reply(formatTgError(error), { link_preview_options: { is_disabled: true } });
     } finally {
       await sessionAdapter.cleanupStatus();
-      clearInterval(typingInterval);
       cleanup?.();
     }
   }
@@ -201,7 +217,10 @@ export class TelegramAdapter {
       await createSession(sessionKey);
       agentLogger.info({ msg: 'tg_new_session_trigger_planner', chatId: ctx.chat.id });
       const input = `[/command: planner] Run the "planner" skill now.`;
-      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
+      const { stopTyping, statusMessageId } = await this.startTurn(ctx);
+      this.enqueuePerChat(ctx.chat.id, () =>
+        this.handleIncoming(ctx, input, stopTyping, undefined, statusMessageId),
+      );
     });
 
     this.bot.command('kill', async (ctx) => {
@@ -349,7 +368,10 @@ export class TelegramAdapter {
         const sessionKey = `tg:${ctx.chat.id}`;
         await createSession(sessionKey);
         const input = `[/command: ${alias.skill}] Run the "${alias.skill}" skill now.`;
-        this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
+        const { stopTyping, statusMessageId } = await this.startTurn(ctx);
+        this.enqueuePerChat(ctx.chat.id, () =>
+          this.handleIncoming(ctx, input, stopTyping, undefined, statusMessageId),
+        );
       });
     }
 
@@ -359,7 +381,10 @@ export class TelegramAdapter {
         const sessionKey = `tg:${ctx.chat.id}`;
         await createSession(sessionKey);
         const input = `[/command: ${skillName}] Run the "${skillName}" skill now.`;
-        this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
+        const { stopTyping, statusMessageId } = await this.startTurn(ctx);
+        this.enqueuePerChat(ctx.chat.id, () =>
+          this.handleIncoming(ctx, input, stopTyping, undefined, statusMessageId),
+        );
       });
     }
 
@@ -367,101 +392,115 @@ export class TelegramAdapter {
       const input = ctx.message.text;
 
       agentLogger.info({ msg: 'tg_message', chatId: ctx.chat.id, userId: ctx.from?.id, text: input.substring(0, 100) });
-      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
+      const { stopTyping, statusMessageId } = await this.startTurn(ctx);
+      this.enqueuePerChat(ctx.chat.id, () =>
+        this.handleIncoming(ctx, input, stopTyping, undefined, statusMessageId),
+      );
     });
 
     this.bot.on('message:voice', async (ctx) => {
       agentLogger.info({ msg: 'tg_voice', chatId: ctx.chat.id, userId: ctx.from?.id, duration: ctx.message.voice.duration });
 
-      let audioPath: string;
-      try {
-        const file = await ctx.getFile();
-        const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.bot_token}/${file.file_path}`;
-        const response = await fetchWithRetry(fileUrl);
-        const buffer = Buffer.from(await response.arrayBuffer());
-        audioPath = path.join(VOICE_DIR, `voice_${Date.now()}.ogg`);
-        fs.mkdirSync(VOICE_DIR, { recursive: true });
-        fs.writeFileSync(audioPath, buffer);
-        agentLogger.info({ msg: 'tg_voice_cached', path: audioPath, bytes: buffer.length });
-      } catch (err) {
-        agentLogger.error({ msg: 'tg_voice_download_error', error: (err as Error).message });
-        await ctx.reply('❌ Voice download failed, please try again.');
-        return;
-      }
+      // Indicators FIRST — before download/STT (which can take 1–5s).
+      const { stopTyping, statusMessageId } = await this.startTurn(ctx, '🎤 Transcribing voice...');
 
-      const sttResult = await transcribeAudio(audioPath, this.config);
+      this.enqueuePerChat(ctx.chat.id, async () => {
+        let audioPath: string;
+        try {
+          const file = await ctx.getFile();
+          const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.bot_token}/${file.file_path}`;
+          const response = await fetchWithRetry(fileUrl);
+          const buffer = Buffer.from(await response.arrayBuffer());
+          audioPath = path.join(VOICE_DIR, `voice_${Date.now()}.ogg`);
+          fs.mkdirSync(VOICE_DIR, { recursive: true });
+          fs.writeFileSync(audioPath, buffer);
+          agentLogger.info({ msg: 'tg_voice_cached', path: audioPath, bytes: buffer.length });
+        } catch (err) {
+          agentLogger.error({ msg: 'tg_voice_download_error', error: (err as Error).message });
+          await ctx.reply('❌ Voice download failed, please try again.');
+          if (statusMessageId) await this.bot.api.deleteMessage(ctx.chat.id, statusMessageId).catch(() => {});
+          stopTyping();
+          return;
+        }
 
-      if (!sttResult.success || !sttResult.transcript) {
-        const errMsg = sttResult.error || 'Could not recognize speech';
-        agentLogger.warn({ msg: 'tg_stt_failed', error: errMsg });
-        await ctx.reply(`🎤 ${errMsg}`);
-        fs.unlink(audioPath, () => {});
-        return;
-      }
+        const sttResult = await transcribeAudio(audioPath, this.config);
 
-      // Include audio_path so tools (e.g. pron_assess) can reference the file
-      const input = `[Voice message | audio_path: ${audioPath}]\n"${sttResult.transcript}"`;
-      agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, text: sttResult.transcript.substring(0, 100) });
-      trackStt(ctx.message.voice.duration || 0);
+        if (!sttResult.success || !sttResult.transcript) {
+          const errMsg = sttResult.error || 'Could not recognize speech';
+          agentLogger.warn({ msg: 'tg_stt_failed', error: errMsg });
+          await ctx.reply(`🎤 ${errMsg}`);
+          if (statusMessageId) await this.bot.api.deleteMessage(ctx.chat.id, statusMessageId).catch(() => {});
+          stopTyping();
+          fs.unlink(audioPath, () => {});
+          return;
+        }
 
-      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
+        const input = `[Voice message | audio_path: ${audioPath}]\n"${sttResult.transcript}"`;
+        agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, text: sttResult.transcript.substring(0, 100) });
+        trackStt(ctx.message.voice.duration || 0);
+
+        await this.handleIncoming(ctx, input, stopTyping, undefined, statusMessageId);
+      });
     });
 
     this.bot.on('message:photo', async (ctx) => {
       const caption = ctx.message.caption || '';
       agentLogger.info({ msg: 'tg_photo', chatId: ctx.chat.id, userId: ctx.from?.id, caption: caption.substring(0, 100) });
 
+      // Indicators FIRST — before download/vision (which can take 1–5s).
+      const { stopTyping, statusMessageId } = await this.startTurn(ctx, '🖼️ Analyzing image...');
+
       // Always pick the largest photo (last element in the photo array)
       const photo = ctx.message.photo[ctx.message.photo.length - 1];
-      let imagePath = '';
 
-      try {
-        const file = await ctx.api.getFile(photo.file_id);
-        if (!file.file_path) {
-          await ctx.reply('❌ Failed to download image.');
+      this.enqueuePerChat(ctx.chat.id, async () => {
+        let imagePath = '';
+        try {
+          const file = await ctx.api.getFile(photo.file_id);
+          if (!file.file_path) {
+            await ctx.reply('❌ Failed to download image.');
+            if (statusMessageId) await this.bot.api.deleteMessage(ctx.chat.id, statusMessageId).catch(() => {});
+            stopTyping();
+            return;
+          }
+
+          const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.bot_token}/${file.file_path}`;
+          const response = await fetchWithRetry(fileUrl);
+
+          const buffer = Buffer.from(await response.arrayBuffer());
+          const ext = path.extname(file.file_path) || '.jpg';
+          imagePath = path.join(IMAGE_RECEIVED_DIR, `photo_${Date.now()}${ext}`);
+          fs.writeFileSync(imagePath, buffer);
+          agentLogger.info({ msg: 'tg_photo_cached', path: imagePath, bytes: buffer.length });
+        } catch (err) {
+          agentLogger.error({ msg: 'tg_photo_download_error', error: (err as Error).message });
+          await ctx.reply('❌ Image download failed, please try again.');
+          if (statusMessageId) await this.bot.api.deleteMessage(ctx.chat.id, statusMessageId).catch(() => {});
+          stopTyping();
           return;
         }
 
-        const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.bot_token}/${file.file_path}`;
-        const response = await fetchWithRetry(fileUrl);
+        // Dual-model: analyze via Gemini Vision, then pass description text to the main LLM
+        const { analyzeImage } = await import('../../lib/vision.js');
+        const visionResult = await analyzeImage(imagePath, this.config, caption || undefined);
 
-        const buffer = Buffer.from(await response.arrayBuffer());
-        const ext = path.extname(file.file_path) || '.jpg';
-        imagePath = path.join(IMAGE_RECEIVED_DIR, `photo_${Date.now()}${ext}`);
-        fs.writeFileSync(imagePath, buffer);
-        agentLogger.info({ msg: 'tg_photo_cached', path: imagePath, bytes: buffer.length });
-      } catch (err) {
-        agentLogger.error({ msg: 'tg_photo_download_error', error: (err as Error).message });
-        await ctx.reply('❌ Image download failed, please try again.');
-        return;
-      }
+        if (!visionResult.success || !visionResult.description) {
+          const errMsg = visionResult.error || 'Could not analyze image';
+          agentLogger.warn({ msg: 'tg_vision_failed', error: errMsg });
+          await ctx.reply(`🖼️ ${errMsg}`);
+          if (statusMessageId) await this.bot.api.deleteMessage(ctx.chat.id, statusMessageId).catch(() => {});
+          stopTyping();
+          return;
+        }
 
-      const ext = path.extname(imagePath).toLowerCase();
-      const mimeMap: Record<string, string> = {
-        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-        '.png': 'image/png', '.gif': 'image/gif',
-        '.webp': 'image/webp', '.bmp': 'image/bmp',
-      };
-      const mimeType = mimeMap[ext] || 'image/jpeg';
+        const input = caption
+          ? `[User sent a photo with caption: "${caption}"]\n[Vision analysis: ${visionResult.description}]`
+          : `[User sent a photo]\n[Vision analysis: ${visionResult.description}]`;
 
-      // Dual-model: analyze via Gemini Vision, then pass description text to the main LLM
-      const { analyzeImage } = await import('../../lib/vision.js');
-      const visionResult = await analyzeImage(imagePath, this.config, caption || undefined);
+        agentLogger.info({ msg: 'tg_vision_done', chatId: ctx.chat.id, descLength: visionResult.description.length });
 
-      if (!visionResult.success || !visionResult.description) {
-        const errMsg = visionResult.error || 'Could not analyze image';
-        agentLogger.warn({ msg: 'tg_vision_failed', error: errMsg });
-        await ctx.reply(`🖼️ ${errMsg}`);
-        return;
-      }
-
-      const input = caption
-        ? `[User sent a photo with caption: "${caption}"]\n[Vision analysis: ${visionResult.description}]`
-        : `[User sent a photo]\n[Vision analysis: ${visionResult.description}]`;
-
-      agentLogger.info({ msg: 'tg_vision_done', chatId: ctx.chat.id, descLength: visionResult.description.length });
-
-      this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
+        await this.handleIncoming(ctx, input, stopTyping, undefined, statusMessageId);
+      });
     });
 
     this.bot.on('callback_query:data', async (ctx) => {
@@ -615,8 +654,13 @@ export class TelegramAdapter {
           agentLogger.info({ msg: 'tg_callback', chatId, userId, data, label: selectedLabel, skillSwitch: isSkillSwitch });
           console.log(`[gateway] callback: ${selectedLabel} (${data})${isSkillSwitch ? ' [skill-switch]' : ''}`);
 
+          // Fire typing + thinking immediately so the click feels responsive
+          const typingInterval = startTypingIndicator(ctx as any);
+          const statusMsg = await this.bot.api.sendMessage(chatId, '🧠 Thinking...').catch(() => null);
+
           this.enqueuePerChat(chatId, async () => {
             const sessionAdapter = new TelegramSessionAdapter(ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls, this.paginatedMessages);
+            if (statusMsg) sessionAdapter.attachStatusMessage(statusMsg.message_id);
             const agent = new Agent(this.config, sessionAdapter);
 
             try {
@@ -640,6 +684,7 @@ export class TelegramAdapter {
               await this.bot.api.sendMessage(chatId, formatTgError(error), { link_preview_options: { is_disabled: true } }).catch(() => {});
             } finally {
               await sessionAdapter.cleanupStatus();
+              clearInterval(typingInterval);
             }
           });
         }

@@ -162,8 +162,21 @@ export class TelegramSessionAdapter implements Adapter {
 
   private statusText = '🧠 Thinking...';
 
+  // Allow the adapter (or any caller) to hand over a pre-existing status message
+  // so we don't spam multiple "thinking..." messages per turn.
+  attachStatusMessage(messageId: number): void {
+    this.statusMessageId = messageId;
+  }
+
   async sendThinking(): Promise<void> {
     this.statusText = '🧠 Thinking...';
+    if (this.statusMessageId) {
+      // already attached by caller — just rewrite contents
+      await this.bot.api
+        .editMessageText(this.chatId, this.statusMessageId, this.statusText)
+        .catch(() => {});
+      return;
+    }
     const msg = await this.ctx.reply(this.statusText, { parse_mode: undefined }).catch(() => null);
     if (msg) this.statusMessageId = msg.message_id;
   }
