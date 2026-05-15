@@ -64,7 +64,7 @@ function applyEnvOverrides(config: AnyaConfig): AnyaConfig {
     ANYA_TELEGRAM_BOT_TOKEN: (c, v) => { c.telegram.bot_token = v; },
     ANYA_LOG_LEVEL: (c, v) => { c.advanced.log_level = v; },
     ANYA_MODEL: (c, v) => { c.provider.model = v; },
-    ANYA_PROVIDER_BACKEND: (c, v) => { c.provider.backend = v as 'gemini' | 'codex'; },
+    ANYA_PROVIDER_BACKEND: (c, _v) => { c.provider.backend = 'codex'; },
   };
 
   for (const [envKey, setter] of Object.entries(envMap)) {
@@ -97,8 +97,8 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
   const provider = raw.provider;
   if (provider && (provider.gemini || provider.openai || provider.active)) {
     migrated.provider = {
-      backend: provider.openai ? 'codex' : (provider.gemini ? 'gemini' : 'codex'),
-      model: provider.openai?.model || provider.gemini?.model || 'gpt-5.4',
+      backend: 'codex',
+      model: provider.openai?.model || 'gpt-5.4',
       max_tokens: provider.max_tokens || 8192,
       temperature: provider.temperature ?? 0.7,
       max_retries: provider.max_retries || 3,
@@ -118,16 +118,13 @@ function migrateConfig(raw: Record<string, any>): Record<string, any> {
   delete migrated.agent;
   delete migrated.user;
 
-  // v0.4 → v0.5: add provider.backend if missing
-  if (migrated.provider && typeof migrated.provider === 'object' && !migrated.provider.backend) {
+  // Force backend to 'codex' (OpenAI only) and coerce legacy gemini model names.
+  if (migrated.provider && typeof migrated.provider === 'object') {
+    if (migrated.provider.backend !== 'codex') {
+      migrated.provider.backend = 'codex';
+    }
     const model = migrated.provider.model || '';
-    if (model.startsWith('gemini')) {
-      migrated.provider.backend = 'gemini';
-    } else if (model.startsWith('gpt') || model.startsWith('codex') || model.startsWith('o')) {
-      migrated.provider.backend = 'codex';
-    } else {
-      // Empty / unknown model — adopt new default (codex / gpt-5.4)
-      migrated.provider.backend = 'codex';
+    if (!model || model.startsWith('gemini')) {
       migrated.provider.model = 'gpt-5.4';
     }
   }

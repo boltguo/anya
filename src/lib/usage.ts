@@ -285,7 +285,7 @@ export function loadUsage(month?: string): MonthlyUsage {
  * @param inputTokens - Total input tokens.
  * @param outputTokens - Output tokens generated.
  * @param cachedTokens - Tokens served from cache.
- * @param provider - Provider name (e.g., 'gemini', 'codex').
+ * @param provider - Provider name (e.g., 'codex').
  */
 export function trackLlm(inputTokens: number, outputTokens: number, cachedTokens = 0, provider = ''): void {
   ensureSchema();

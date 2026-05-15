@@ -19,8 +19,8 @@ export interface AnyaConfig {
 
   /** Settings for the primary Large Language Model provider. */
   provider: {
-    /** The active provider backend ('gemini' or 'codex'). */
-    backend: 'gemini' | 'codex';
+    /** The active provider backend (always 'codex' — OpenAI/Codex). */
+    backend: 'codex';
     /** The identifier of the specific model to use. */
     model: string;
     /** The absolute maximum output tokens allowed in a single generation. */

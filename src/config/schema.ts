@@ -17,7 +17,7 @@ export const PartialAnyaConfigSchema = z.object({
   $schema: z.string().optional(),
   version: z.string().optional(),
   provider: z.object({
-    backend: z.enum(['gemini', 'codex']).optional(),
+    backend: z.literal('codex').optional(),
     model: z.string().optional(),
     max_tokens: z.number().optional(),
     temperature: z.number().optional(),

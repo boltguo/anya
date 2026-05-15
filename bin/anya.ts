@@ -4,11 +4,11 @@
  * @description The main Command Line Interface (CLI) entrypoint for the Anya agent.
  *
  * Provides a Commander.js based CLI to initialize the workspace, manage configuration,
- * start/stop the Telegram gateway, manage cron jobs, and view diagnostics/sessions.
+ * start/stop the Telegram gateway, manage cron jobs, and view diagnostics.
  */
 
 import { Command } from 'commander';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -38,11 +38,10 @@ import {
   runCronTick,
   runCronUpdate,
 } from '../src/commands/cron.js';
-import { isInitialized, CONFIG_PATH, ANYA_HOME, SKILLS_DIR } from '../src/lib/paths.js';
+import { isInitialized, CONFIG_PATH } from '../src/lib/paths.js';
 import { loadConfig } from '../src/config/loader.js';
-import { loadSkills, getSkill, listSkillFiles } from '../src/skills/loader.js';
+import { loadSkills } from '../src/skills/loader.js';
 import { isServiceRunning } from '../src/lib/pidfile.js';
-import { listSessions, searchMessages } from '../src/storage/sessionStore.js';
 
 // Resolve package.json for version
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -113,15 +112,11 @@ program
 
     const config = loadConfig();
 
-    // LLM Provider
-    const backend = config.provider.backend;
+    // LLM Provider (OpenAI / Codex only)
     const { hasCodexAuth } = await import('../src/lib/auth.js');
-    const hasCodex = hasCodexAuth();
-    const hasGeminiChat = !!config.gemini?.api_key;
-    const isCodex = backend === 'codex';
-    const providerReady = isCodex ? hasCodex : hasGeminiChat;
+    const codexReady = hasCodexAuth();
     console.log(
-      `  LLM:       ${providerReady ? '[ok]' : '[!!]'} ${backend} (${config.provider.model}) ${providerReady ? '✓' : isCodex ? 'not authenticated' : 'API key not set'}`,
+      `  LLM:       ${codexReady ? '[ok]' : '[!!]'} codex (${config.provider.model}) ${codexReady ? '✓' : 'not authenticated'}`,
     );
 
     // Vision — Gemini
@@ -152,105 +147,13 @@ program
     );
 
     const skills = loadSkills();
-    console.log(`  Skills:    [..] ${skills.length} installed`);
+    console.log(`  Skills:    [..] ${skills.length} loaded`);
 
     const gw = isServiceRunning('gateway');
     console.log(
       `  Gateway:   ${gw.running ? '[ok] running (PID ' + gw.pid + ')' : '[--] stopped'}`,
     );
     console.log();
-  });
-
-// --- Skills Command ---
-const skillsCmd = program
-  .command('skills')
-  .description('Manage installed skills');
-
-skillsCmd
-  .command('list')
-  .description('List all installed skills')
-  .action(() => {
-    const skills = loadSkills(true);
-
-    if (skills.length === 0) {
-      console.log('\n  No skills installed.');
-      console.log('  Skills are created by the agent during conversations, or you can create them manually.\n');
-      return;
-    }
-
-    console.log(`\n  ${chalk.bold('Installed Skills')} (${skills.length})\n`);
-
-    for (const s of skills) {
-      console.log(`    ${chalk.cyan(s.name)} - ${s.description}`);
-    }
-    console.log('');
-  });
-
-skillsCmd
-  .command('view <name>')
-  .description("View a skill's full content")
-  .action((name: string) => {
-    const skill = getSkill(name);
-    if (!skill) {
-      const all = loadSkills();
-      console.error(`\n  Error: Skill "${name}" not found.`);
-      if (all.length > 0) console.error(`  Available: ${all.map(s => s.name).join(', ')}`);
-      console.log('');
-      process.exit(1);
-    }
-
-    console.log(`\n  ${chalk.bold(skill.name)}`);
-    console.log(`  ${chalk.dim(skill.description)}`);
-    console.log(`  Path: ${chalk.dim(skill.filePath)}`);
-
-    const files = listSkillFiles(name);
-    if (files.length > 0) console.log(`  Attached: ${files.join(', ')}`);
-
-    console.log(`\n${skill.body}\n`);
-  });
-
-skillsCmd
-  .command('create <name>')
-  .description('Create a new empty skill template')
-  .option('-c, --category <category>', 'Category subdirectory', 'general')
-  .action((name: string, opts: { category: string }) => {
-    const skillDir = join(SKILLS_DIR, opts.category, name);
-    const skillPath = join(skillDir, 'SKILL.md');
-
-    if (existsSync(skillPath)) {
-      console.error(`\n  Error: Skill "${name}" already exists at ${skillPath}\n`);
-      process.exit(1);
-    }
-
-    const template = `---
-name: ${name}
-description: TODO - describe what this skill does
----
-
-# When to Use
-
-Describe the situations where this skill should be activated.
-
-# Procedure
-
-1. Step one
-2. Step two
-3. Step three
-
-# Pitfalls
-
-- Common mistake to avoid
-
-# Verification
-
-How to confirm the task was completed correctly.
-`;
-
-    mkdirSync(skillDir, { recursive: true });
-    writeFileSync(skillPath, template, 'utf-8');
-
-    console.log(`\n  [ok] Created skill template: ${skillPath}`);
-    console.log(`  Edit the SKILL.md to fill in the procedure.\n`);
   });
 
 // --- Gateway Command ---
@@ -402,127 +305,6 @@ cronCmd
   .option('--no-deliver', 'Do not send proactive Telegram output')
   .action(async (opts: { deliver: boolean }) => {
     await runCronTick(opts.deliver);
-  });
-
-// --- Sessions Command ---
-const sessionsCmd = program
-  .command('sessions')
-  .description('Manage chat sessions');
-
-sessionsCmd
-  .command('list')
-  .description('List recent sessions')
-  .option('-n, --limit <n>', 'Number of sessions to show', '20')
-  .action((opts: { limit: string }) => {
-    const sessions = listSessions(parseInt(opts.limit, 10));
-
-    if (sessions.length === 0) {
-      console.log('\n  No sessions found.\n');
-      return;
-    }
-
-    console.log(`\n  ${chalk.bold('Recent Sessions')}\n`);
-    for (const s of sessions) {
-      const title = s.title || chalk.dim('(untitled)');
-      const date = chalk.dim(s.updatedAt);
-      const msgs = chalk.dim(`${s.messageCount} msgs`);
-      console.log(`  ${chalk.cyan(s.id.substring(0, 8))} ${title} ${msgs} ${date}`);
-    }
-    console.log('');
-  });
-
-sessionsCmd
-  .command('search <query>')
-  .description('Search messages')
-  .action((query: string) => {
-    const results = searchMessages(query);
-
-    if (results.length === 0) {
-      console.log(`\n  No results found for "${query}".\n`);
-      return;
-    }
-
-    console.log(`\n  ${chalk.bold('Search Results')} (${results.length})\n`);
-    for (const r of results) {
-      const preview = r.content.substring(0, 100).replace(/\n/g, ' ');
-      console.log(`  ${chalk.cyan(r.sessionId.substring(0, 8))} ${preview}`);
-    }
-    console.log('');
-  });
-
-// --- Data Transfer Command ---
-program
-  .command('export <file>')
-  .description('Export ~/.anya/ data')
-  .action((file: string) => {
-    execFileSync('tar', ['-czf', file, '-C', ANYA_HOME, '.'], { stdio: 'inherit' });
-    console.log(`\n  [ok] Exported to ${file}\n`);
-  });
-
-// --- Model Command ---
-program
-  .command('model')
-  .description('Switch LLM provider (gemini / codex)')
-  .action(async () => {
-    if (!isInitialized()) {
-      console.log(chalk.yellow('~/.anya/ not initialized. Run "anya init" first.'));
-      return;
-    }
-
-    const { select } = await import('@inquirer/prompts');
-    const config = loadConfig();
-    const current = config.provider.backend;
-    const currentModel = config.provider.model;
-
-    console.log();
-    console.log(chalk.bold.cyan('  Model Settings'));
-    console.log(chalk.dim(`  Backend: ${current}`));
-    console.log(chalk.dim(`  Model:   ${currentModel}`));
-    console.log();
-
-    try {
-      const MODELS: Record<string, string> = {
-        gemini: 'gemini-3-flash-preview',
-        codex: 'gpt-5.4',
-      };
-
-      const backend = await select({
-        message: 'Select provider',
-        choices: [
-          {
-            name: `Gemini  ${current === 'gemini' ? chalk.green('← active') : ''}`,
-            value: 'gemini' as const,
-          },
-          {
-            name: `Codex (ChatGPT)  ${current === 'codex' ? chalk.green('← active') : ''}`,
-            value: 'codex' as const,
-          },
-        ],
-      });
-
-      config.provider.backend = backend;
-      config.provider.model = MODELS[backend] || config.provider.model;
-
-      const { saveConfig } = await import('../src/config/loader.js');
-      saveConfig(config);
-
-      console.log(chalk.green(`\n  [ok] Switched to ${backend} (${config.provider.model})`));
-
-      // Auto-restart gateway if running
-      try {
-        const gw = isServiceRunning('gateway');
-        if (gw.running) {
-          console.log(chalk.dim('  Restarting gateway...'));
-          await runGatewayRestart();
-        }
-      } catch { /* non-critical */ }
-    } catch (err) {
-      if ((err as Error)?.name === 'ExitPromptError') {
-        console.log(chalk.dim('\n  Cancelled.'));
-        return;
-      }
-      throw err;
-    }
   });
 
 // --- Usage Command ---

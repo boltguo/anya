@@ -304,36 +304,6 @@ export class TelegramAdapter {
       await ctx.reply(`💀 Stopped.${extra}\nSession cleared — send a message to start over.`);
       agentLogger.info({ msg: 'tg_kill', chatId: ctx.chat.id, cancelled });
     });
-    this.bot.command('model', async (ctx) => {
-      const current = this.config.provider.backend;
-      const currentModel = this.config.provider.model;
-
-      const buttons = [
-        [
-          {
-            text: `${current === 'gemini' ? '✅ ' : ''}Gemini`,
-            callback_data: 'model:gemini',
-          },
-          {
-            text: `${current === 'codex' ? '✅ ' : ''}Codex (ChatGPT)`,
-            callback_data: 'model:codex',
-          },
-        ],
-      ];
-
-      await ctx.reply(
-        `🤖 <b>Model Settings</b>\n\n` +
-        `├ Backend: <code>${current}</code>\n` +
-        `└ Model: <code>${currentModel}</code>\n\n` +
-        `Select a provider:`,
-        {
-          parse_mode: 'HTML',
-          reply_markup: { inline_keyboard: buttons },
-        },
-      );
-      agentLogger.info({ msg: 'tg_model_command', chatId: ctx.chat.id });
-    });
-
     this.bot.command('usage', async (ctx) => {
       const { loadUsage } = await import('../../lib/usage.js');
       const usage = loadUsage();
@@ -725,29 +695,6 @@ export class TelegramAdapter {
             reply_markup: menu.keyboard,
           }).catch(() => {});
         }
-      }
-      // ── Model switch (from /model inline keyboard) ──
-      else if (data.startsWith('model:')) {
-        const backend = data.replace('model:', '') as 'gemini' | 'codex';
-        const MODELS: Record<string, string> = {
-          gemini: 'gemini-3-flash-preview',
-          codex: 'gpt-5.4',
-        };
-        this.config.provider.backend = backend;
-        this.config.provider.model = MODELS[backend] || this.config.provider.model;
-
-        const { persistConfig } = await import('../../config/loader.js');
-        persistConfig(this.config);
-
-        await ctx.editMessageText(
-          `🤖 <b>Model Updated</b>\n\n` +
-          `├ Backend: <code>${backend}</code>\n` +
-          `└ Model: <code>${this.config.provider.model}</code>\n\n` +
-          `✅ Changes saved. New conversations will use ${backend}.`,
-          { parse_mode: 'HTML' },
-        ).catch(() => {});
-
-        agentLogger.info({ msg: 'model_switch', backend, model: this.config.provider.model });
       }
       // ── Generic callback (from tg_msg keyboard) ──
       // Route unmatched button clicks back into the Agent as a new user input.
