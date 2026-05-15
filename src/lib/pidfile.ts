@@ -1,8 +1,13 @@
 // lib/pidfile.ts — service PID file management
 
 import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { RUN_DIR } from './paths.js';
 import { join } from 'node:path';
+
+const SERVICE_CMD_MATCHERS: Record<string, (cmd: string) => boolean> = {
+  gateway: (cmd) => cmd.includes('anya') && cmd.includes('gateway') && cmd.includes('start'),
+};
 
 function pidPath(service: string): string {
   return join(RUN_DIR, `${service}.pid`);
@@ -43,17 +48,86 @@ export function isProcessRunning(pid: number): boolean {
   }
 }
 
+function getProcessCommand(pid: number): string | null {
+  try {
+    return execFileSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf-8' }).trim();
+  } catch {
+    return null;
+  }
+}
+
+// PID-reuse guard: confirm the live PID actually belongs to this service.
+function isServiceProcess(service: string, pid: number): boolean {
+  const matcher = SERVICE_CMD_MATCHERS[service];
+  if (!matcher) return true;
+  const cmd = getProcessCommand(pid);
+  return cmd !== null && matcher(cmd);
+}
+
 export function isServiceRunning(service: string): { running: boolean; pid: number | null } {
   const pid = readPid(service);
   if (pid === null) return { running: false, pid: null };
 
-  if (isProcessRunning(pid)) {
+  if (isProcessRunning(pid) && isServiceProcess(service, pid)) {
     return { running: true, pid };
   }
 
-  // Stale PID file (process died externally) — clean up
+  // Stale or PID-reused — clean up
   removePid(service);
   return { running: false, pid: null };
+}
+
+// Scan the process table for live instances of a service (excluding self).
+export function findServiceProcesses(service: string, excludePid: number = process.pid): number[] {
+  const matcher = SERVICE_CMD_MATCHERS[service];
+  if (!matcher) return [];
+
+  let raw: string;
+  try {
+    raw = execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf-8' });
+  } catch {
+    return [];
+  }
+
+  const pids: number[] = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const sep = trimmed.indexOf(' ');
+    if (sep === -1) continue;
+    const pid = parseInt(trimmed.slice(0, sep), 10);
+    if (isNaN(pid) || pid === excludePid) continue;
+    const cmd = trimmed.slice(sep + 1);
+    if (matcher(cmd)) pids.push(pid);
+  }
+  return pids;
+}
+
+// SIGTERM then SIGKILL any stray service processes; wait until the table is clean.
+export async function killStrayServiceProcesses(
+  service: string,
+  excludePid: number = process.pid,
+  timeoutMs = 3000,
+): Promise<number[]> {
+  const initial = findServiceProcesses(service, excludePid);
+  if (initial.length === 0) return [];
+
+  for (const pid of initial) {
+    try { process.kill(pid, 'SIGTERM'); } catch { /* already dead */ }
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (findServiceProcesses(service, excludePid).length === 0) return initial;
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  // Escalate
+  for (const pid of findServiceProcesses(service, excludePid)) {
+    try { process.kill(pid, 'SIGKILL'); } catch { /* ignore */ }
+  }
+  await new Promise(r => setTimeout(r, 200));
+  return initial;
 }
 
 export async function stopService(service: string, timeoutMs = 3000): Promise<boolean> {

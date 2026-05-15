@@ -4,7 +4,7 @@ import { createReadStream, existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import chalk from 'chalk';
-import { isServiceRunning, stopService, writePid, removePid } from '../lib/pidfile.js';
+import { isServiceRunning, stopService, writePid, removePid, killStrayServiceProcesses } from '../lib/pidfile.js';
 import { LOGS_DIR, ensureDirectories } from '../lib/paths.js';
 import { loadConfig } from '../config/loader.js';
 
@@ -13,7 +13,7 @@ const LOG_PATH = join(LOGS_DIR, 'gateway.log');
 
 export async function runGatewayStart(_bgChild = false): Promise<void> {
   const { running, pid } = isServiceRunning(SERVICE);
-  if (running) {
+  if (running && !_bgChild) {
     console.log(`\n  Gateway is already running (PID ${pid}).`);
     console.log(`  Run "anya gateway restart" to restart.\n`);
     return;
@@ -29,6 +29,13 @@ export async function runGatewayStart(_bgChild = false): Promise<void> {
   ensureDirectories();
 
   if (_bgChild) {
+    // Reap any prior gateway (orphaned pid file, /restart predecessor, or stale daemon)
+    // before we claim the pid file. Wait until they're dead so writePid is the last writer.
+    const killed = await killStrayServiceProcesses(SERVICE);
+    if (killed.length > 0) {
+      console.log(`  [gateway] Reaped ${killed.length} stray process(es): ${killed.join(', ')}`);
+    }
+
     writePid(SERVICE);
 
     process.on('SIGINT', () => {
@@ -44,6 +51,9 @@ export async function runGatewayStart(_bgChild = false): Promise<void> {
     const adapter = new TelegramAdapter(config);
     await adapter.start();
   } else {
+    // Defensive: kill orphans whose pid file was lost/corrupted before we spawn the child.
+    await killStrayServiceProcesses(SERVICE);
+
     const { spawn } = await import('node:child_process');
     const { openSync } = await import('node:fs');
 
