@@ -1,7 +1,4 @@
-/**
- * @module domain/session
- * @description Learning session lifecycle: start and end.
- */
+// domain/session.ts — study session lifecycle
 
 import type { DatabaseSync } from 'node:sqlite';
 import { optionalNumber, normalizeJsonString, normalizeRowId } from './helpers.js';

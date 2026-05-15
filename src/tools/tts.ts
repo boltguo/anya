@@ -1,14 +1,4 @@
-/**
- * @module tools/tts
- * @description Text-to-Speech synthesis interface exposing Azure TTS capabilities.
- *
- * Exposes two primary operational paradigms to the model:
- *   1. Simple Mode: `{ text, voice, rate }` -> Resolves to single continuous audio.
- *   2. Dialogue Mode: `{ segments: [...] }` -> Constructs complex multi-voice 
- *      SSML dialog trees supporting precise structural pauses (`<break>`).
- *
- * Transcoded artifacts are typically piped subsequently through `tg_msg(type="voice")`.
- */
+// tools/tts.ts — Azure TTS agent tool
 
 import { register } from './registry.js';
 import type { ToolContext } from '../agent/types.js';
@@ -38,7 +28,6 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<string> {
     const segmentsRaw = args.segments as string | undefined;
 
-    // ── Dialogue mode: segments array → build multi-voice SSML ──
     if (segmentsRaw) {
       let segments: Array<{ voice?: string; text?: string; rate?: string; break?: string }>;
       try {
@@ -50,14 +39,13 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
         return JSON.stringify({ success: false, error: 'Invalid segments JSON' });
       }
 
-      // Build multi-voice SSML — breaks must be inside <voice> tags for Azure
+      // Azure requires <break> tags inside a <voice>; buffer pauses and emit them with the next speech segment.
       const ssmlParts: string[] = [];
       const textParts: string[] = [];
       let pendingBreak: string | null = null;
 
       for (const seg of segments) {
         if (seg.break) {
-          // Buffer the break — it will be prepended to the next voice segment
           pendingBreak = seg.break;
         } else if (seg.text) {
           const v = seg.voice || 'en-US-AriaNeural';
@@ -88,7 +76,6 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
       }));
     }
 
-    // ── Simple mode: text + voice + rate ──
     const text = String(args.text || '').trim();
     if (!text) {
       return JSON.stringify({ success: false, error: 'text or segments is required' });
@@ -102,7 +89,6 @@ Each segment is either a speech segment (voice+text) or a pause (break only, e.g
   },
 });
 
-/** Format a TTS result as JSON for the LLM. */
 function ttsResult(result: { success: boolean; filePath?: string; error?: string; durationSec?: number }): string {
   if (!result.success || !result.filePath) {
     return JSON.stringify({ success: false, error: result.error });

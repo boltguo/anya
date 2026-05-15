@@ -1,46 +1,11 @@
-/**
- * @module agent/contextCompressor
- * @description State-aware contextual compression utility.
- *
- * Implements a segmented compression architecture for the conversation memory:
- * 1. **Protection Zones**: Strictly preserves the system configuration (head)
- *    and the most recent user dialogue (tail).
- * 2. **Summarization**: Isolates the middle historical payload and proxies it
- *    to an LLM instruction model to generate a structured semantic summary.
- * 3. **Tool Pre-trimming**: Proactively truncates oversized tool outputs prior
- *    to summarization to maximize the extraction density for the LLM call.
- *
- * Operates on a synchronous threshold combined with asynchronous execution:
- * The Agent runs a cheap validation check synchronously on each loop; if exceeded,
- * the costly summarization routine is invoked over the wire.
- */
+// agent/contextCompressor.ts — context window compression
 
 import type { Message, LLMProvider } from './types.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { agentLogger } from '../lib/logger.js';
 
-/**
- * Defines the contract for an autonomous context engine capable of measuring
- * and compressing runtime messages based on specific threshold parameters.
- */
 export interface ContextEngine {
-  /**
-   * Assesses if the context has surpassed optimal operational boundaries.
-   *
-   * @param messages - The complete conversation sequence.
-   * @param estimatedTokens - Currently projected active token sum.
-   * @param contextLimit - The total theoretical bounds provided by the model limit.
-   * @returns True if compression should be forcefully invoked.
-   */
   shouldCompress(messages: Message[], estimatedTokens: number, contextLimit: number): boolean;
-
-  /**
-   * Transforms the extended context sequence into a dense summarized equivalent.
-   *
-   * @param messages - The original conversation sequence.
-   * @param contextLimit - The boundaries guiding summarization logic.
-   * @returns A promise yielding the newly compacted message array.
-   */
   compress(messages: Message[], contextLimit: number): Promise<Message[]>;
 }
 
@@ -58,49 +23,25 @@ const SUMMARY_SYSTEM_PROMPT = `You are a conversation summariser. Given a sectio
 
 Be concise. Preserve technical details (exact paths, commands, error messages) that would be needed to continue the work. Omit pleasantries and filler.`;
 
-/**
- * Standard implementation of the ContextEngine leveraging the primary LLM provider
- * to formulate structural summaries of the historical payload.
- */
 export class ContextCompressor implements ContextEngine {
   private config: AnyaConfig;
   private provider: LLMProvider;
   private thresholdRatio: number;
 
-  /**
-   * Initializes the context compression service.
-   *
-   * @param config - The application configuration.
-   * @param provider - An LLM interface for dispatching the summarization prompt.
-   */
   constructor(config: AnyaConfig, provider: LLMProvider) {
     this.config = config;
     this.provider = provider;
     this.thresholdRatio = config.advanced.compress_threshold || 0.75;
   }
 
-  /**
-   * Determines whether the current context should be compressed.
-   *
-   * Triggers compression in two scenarios:
-   * 1. **Context limit**: Approaching the model's maximum context window (e.g., 75% of 400K).
-   * 2. **Economic threshold**: Token count exceeds a practical ceiling (30K) with enough
-   *    messages to indicate accumulated stale history. This prevents unbounded token
-   *    growth in models with very large context windows where the limit would never fire.
-   */
   shouldCompress(messages: Message[], estimatedTokens: number, contextLimit: number): boolean {
     const hasEnoughMessages = messages.length > PROTECT_HEAD + PROTECT_TAIL + 2;
     if (!hasEnoughMessages) return false;
 
-    // Original: approaching model context limit
     const threshold = contextLimit * this.thresholdRatio;
     if (estimatedTokens > threshold) return true;
 
-    // Economic: cap token spend within a single skill session.
-    // Since skill switches create new sessions (shedding old history), a session
-    // reaching 25K tokens / 20 messages indicates accumulated practice turns
-    // worth compressing. Each trigger costs 1 summarizer call, but compression
-    // reduces message count to ~12, preventing re-triggers for several more turns.
+    // Economic cap: large-context models would otherwise never hit the ratio trigger.
     const ECONOMIC_TOKEN_CEILING = 25_000;
     const ECONOMIC_MESSAGE_FLOOR = 20;
     if (estimatedTokens > ECONOMIC_TOKEN_CEILING && messages.length > ECONOMIC_MESSAGE_FLOOR) return true;
@@ -108,9 +49,6 @@ export class ContextCompressor implements ContextEngine {
     return false;
   }
 
-  /**
-   * @inheritdoc
-   */
   async compress(messages: Message[], _contextLimit: number): Promise<Message[]> {
     if (messages.length <= PROTECT_HEAD + PROTECT_TAIL) return messages;
 
@@ -120,7 +58,6 @@ export class ContextCompressor implements ContextEngine {
 
     if (middle.length === 0) return messages;
 
-    // Constrain extraneous output from historical tools before submitting for summarization.
     const trimmed = middle.map(m => {
       if (m.role === 'tool' && m.content && m.content.length > MAX_TOOL_RESULT_CHARS) {
         return {
@@ -149,12 +86,6 @@ export class ContextCompressor implements ContextEngine {
     return compressed;
   }
 
-  /**
-   * Formulates a comprehensive semantic summary via the primary LLM interface.
-   *
-   * @param messages - The trimmed segment of conversation isolated for summarization.
-   * @returns The structural summary as generated by the provider.
-   */
   private async generateSummary(messages: Message[]): Promise<string> {
     const conversationText = messages
       .map(m => {
@@ -181,13 +112,6 @@ export class ContextCompressor implements ContextEngine {
     }
   }
 
-  /**
-   * Synchronous, localized summarization bypass triggered if the primary LLM
-   * encounters network instability.
-   *
-   * @param messages - The trimmed conversation sequence.
-   * @returns A rudimentary line-based summary of core topics.
-   */
   private fallbackSummary(messages: Message[]): string {
     const userMessages = messages
       .filter(m => m.role === 'user' && m.content)
@@ -217,17 +141,7 @@ export class ContextCompressor implements ContextEngine {
 const CJK_RANGE = /[\u2E80-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F]/g;
 const TOOL_SCHEMA_OVERHEAD_TOKENS = 200;
 
-/**
- * Executes a high-performance heuristic calculation identifying the total expected
- * tokenizer sum necessary for context ingestion.
- *
- * Utilizes character mappings and accounts intrinsically for CJK language densities.
- * Strictly deployed for thresholds, not suitable for direct billing analytics.
- *
- * @param messages - The entire message chain to evaluate.
- * @param toolCount - The count of tool schema JSONs exposed in this request.
- * @returns The estimated token summation limit.
- */
+// Heuristic only — not suitable for billing.
 export function estimateTokens(messages: Message[], toolCount: number = 0): number {
   let tokens = 0;
   for (const m of messages) {
@@ -238,12 +152,6 @@ export function estimateTokens(messages: Message[], toolCount: number = 0): numb
   return Math.ceil(tokens);
 }
 
-/**
- * Calculates raw token projections for isolated string primitives based on encoding formats.
- *
- * @param text - The raw text literal to process.
- * @returns Projected integer mapping.
- */
 function estimateStringTokens(text: string): number {
   const cjkMatches = text.match(CJK_RANGE);
   const cjkCount = cjkMatches ? cjkMatches.length : 0;

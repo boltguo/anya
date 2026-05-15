@@ -1,11 +1,4 @@
-/**
- * @module tools/cron
- * @description Exposes the internal temporal scheduler to the LLM agent.
- *
- * Empowers the agent to dynamically register, monitor, and manipulate 
- * unattended scheduled tasks (e.g., daily digests, repetitive practice prompts,
- * or background API sweeps). Interacts directly with `lib/scheduler`.
- */
+// tools/cron.ts — scheduled-job agent interface
 
 import { register } from './registry.js';
 import type { ToolContext } from '../agent/types.js';
@@ -21,7 +14,7 @@ import {
   updateJob,
 } from '../lib/scheduler.js';
 
-/** Static regex heuristics guarding against common prompt injection in automated jobs */
+// Guards against prompt injection in unattended scheduled jobs.
 const THREAT_PATTERNS = [
   /ignore\s+(?:previous|all|above|prior)\s+instructions/i,
   /system\s+prompt\s+override/i,

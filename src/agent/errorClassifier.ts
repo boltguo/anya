@@ -1,24 +1,5 @@
-/**
- * @module agent/errorClassifier
- * @description Structured classification for external API provider errors.
- *
- * Translates raw, ambiguous provider exceptions into actionable {@link ClassifiedError}
- * structures. These detailed hints manage retry strategies and context responses:
- *
- * - **Provider Layer:** Consumes `retryable`, `backoffMs`, and `shouldRotate` to
- *   facilitate internal API retry operations.
- * - **Agent Layer:** Consumes `shouldCompress` to intercept prompt-overflow issues
- *   and dynamically minimize tokens prior to an additional attempt.
- *
- * The classifier assesses state iteratively based on:
- * 1. Documented SDK properties (e.g. `.status`).
- * 2. Conventional response properties (e.g. `.statusCode`).
- * 3. Fallback heuristic matching directly on exception message text.
- */
+// agent/errorClassifier.ts — provider error classification
 
-/**
- * Represents the fundamental categorical reason for a provider failure.
- */
 export type FailoverReason =
   | 'auth'              // 401/403 — Token requires refresh or rotation.
   | 'auth_permanent'    // Irrecoverable authentication failure.
@@ -32,23 +13,13 @@ export type FailoverReason =
   | 'format_error'      // 400 — Structural violation in the outbound payload.
   | 'unknown';          // Uncategorized failure; standard retry mechanics apply.
 
-/**
- * Defines the structured outcome of classifying an error.
- */
 export interface ClassifiedError {
-  /** High-level reason indicating the nature of the failure. */
   reason: FailoverReason;
-  /** True if the operation can be safely reattempted. */
   retryable: boolean;
-  /** True if the system should automatically shrink the prompt context and retry. */
   shouldCompress: boolean;
-  /** True if multi-key deployment systems should switch their active credential. */
   shouldRotate: boolean;
-  /** True if the application should fallback to an alternative provider globally. */
   shouldFallback: boolean;
-  /** Recommended delay in milliseconds before dispatching a subsequent retry. */
   backoffMs: number;
-  /** The originating error instance. */
   original: Error;
 }
 
@@ -99,22 +70,12 @@ const TIMEOUT_PATTERNS = [
   'aborted',
 ];
 
-/**
- * Classifies a raw provider exception into a highly actionable control object.
- *
- * Priority follows HTTP status codes first, falling back onto regex matching on
- * known provider error substrings if the status is obscured.
- *
- * @param error - The raw error thrown by the provider integration.
- * @returns The structured {@link ClassifiedError} dictating next steps.
- */
 export function classifyApiError(error: unknown): ClassifiedError {
   const err = error instanceof Error ? error : new Error(String(error));
   const msg = err.message.toLowerCase();
 
   const status = extractStatus(err);
 
-  // Status-driven exact classification
   if (status === 401 || status === 403) {
     return make('auth', err, { retryable: true, shouldRotate: true, backoffMs: 0 });
   }
@@ -150,7 +111,6 @@ export function classifyApiError(error: unknown): ClassifiedError {
     return make('overloaded', err, { retryable: true, backoffMs: 5_000 });
   }
 
-  // Heuristic string pattern classification
   if (CONTEXT_OVERFLOW_PATTERNS.some(p => msg.includes(p))) {
     return make('context_overflow', err, { retryable: true, shouldCompress: true, backoffMs: 0 });
   }
@@ -167,16 +127,9 @@ export function classifyApiError(error: unknown): ClassifiedError {
     return make('timeout', err, { retryable: true, backoffMs: 2_000 });
   }
 
-  // Fallback scenario
   return make('unknown', err, { retryable: true, backoffMs: 3_000 });
 }
 
-/**
- * Intelligently extracts the HTTP status code from polymorphic error payloads.
- *
- * @param err - The Error object to inspect.
- * @returns The integer status code, or null if no mapping exists.
- */
 function extractStatus(err: Error): number | null {
   const anyErr = err as unknown as Record<string, unknown>;
   if (typeof anyErr.status === 'number') return anyErr.status;
@@ -196,9 +149,6 @@ interface MakeOpts {
   backoffMs?: number;
 }
 
-/**
- * Helper to standardise the construction of the ClassifiedError object.
- */
 function make(reason: FailoverReason, original: Error, opts: MakeOpts = {}): ClassifiedError {
   return {
     reason,

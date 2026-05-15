@@ -1,19 +1,4 @@
-/**
- * @module commands/config
- * @description `anya config` — Interactive configuration manager.
- *
- * Provides a series of wizard-style prompts to configure external API integrations
- * and system behaviors. Changes are serialized to the `config.json` file.
- *
- * ## Wizards Available
- * - **OpenAI**: Codex OAuth device login.
- * - **Gemini**: API key and model selection for Vision operations.
- * - **Azure**: Speech Services key for TTS and Pronunciation Assessment.
- * - **STT**: Groq Whisper API key for voice message transcription.
- * - **Tavily**: API key for web search capabilities.
- * - **Telegram**: Bot token and allowed user IDs.
- * - **Cron**: Background job scheduler settings.
- */
+// commands/config.ts — interactive config wizards
 
 import { select, input, confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
@@ -23,25 +8,11 @@ import { CONFIG_PATH, isInitialized } from '../lib/paths.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { hasCodexAuth } from '../lib/auth.js';
 
-/**
- * Masks a sensitive API key for safe console output.
- * Only displays the first 4 and last 4 characters if the key is sufficiently long.
- *
- * @param key - The raw API key string.
- * @returns The masked API key string.
- */
 function maskKey(key: string): string {
   if (key.length <= 8) return '****';
   return key.substring(0, 4) + '****' + key.substring(key.length - 4);
 }
 
-/**
- * Automatically restarts the background gateway process if it is currently running.
- * Used after configuration changes to ensure the new settings take immediate effect.
- * Fails silently if the gateway is not running or encounters an error.
- *
- * @returns A Promise resolving when the restart attempt completes.
- */
 async function autoRestartGateway(): Promise<void> {
   try {
     const { isServiceRunning } = await import('../lib/pidfile.js');
@@ -52,16 +23,10 @@ async function autoRestartGateway(): Promise<void> {
       await runGatewayRestart();
     }
   } catch {
-    // Non-critical
+    // non-critical
   }
 }
 
-/**
- * Executes the main interactive `anya config` menu.
- * Presents a selectable list of configuration wizards for various services.
- *
- * @returns A Promise resolving when the configuration flow completes.
- */
 export async function runConfigMenu(): Promise<void> {
   if (!isInitialized()) {
     console.log(chalk.yellow('~/.anya/ not initialized. Run "anya init" first.'));
@@ -128,10 +93,6 @@ export async function runConfigMenu(): Promise<void> {
   }
 }
 
-/**
- * Executes `anya config show`.
- * Prints the current configuration state to the console with sensitive keys safely masked.
- */
 export function runConfigShow(): void {
   if (!isInitialized()) {
     console.log(chalk.yellow('~/.anya/ not initialized. Run "anya init" first.'));
@@ -153,12 +114,6 @@ export function runConfigShow(): void {
   console.log();
 }
 
-/**
- * Interactive wizard for configuring Google Gemini (Vision API).
- *
- * @param config - The active Anya configuration object to update.
- * @returns A Promise resolving when the configuration is saved.
- */
 async function configGemini(config: AnyaConfig): Promise<void> {
   const currentKey = config.gemini?.api_key;
   
@@ -191,12 +146,6 @@ async function configGemini(config: AnyaConfig): Promise<void> {
   await autoRestartGateway();
 }
 
-/**
- * Interactive wizard for configuring Azure Speech Services (TTS and Pronunciation).
- *
- * @param config - The active Anya configuration object to update.
- * @returns A Promise resolving when the configuration is saved.
- */
 async function configAzure(config: AnyaConfig): Promise<void> {
   const currentKey = config.azure?.speech_key || '';
   const currentRegion = config.azure?.speech_region || 'eastasia';
@@ -232,12 +181,6 @@ async function configAzure(config: AnyaConfig): Promise<void> {
   await autoRestartGateway();
 }
 
-/**
- * Interactive wizard for configuring Groq Whisper (Speech-to-Text).
- *
- * @param config - The active Anya configuration object to update.
- * @returns A Promise resolving when the configuration is saved.
- */
 async function configSTT(config: AnyaConfig): Promise<void> {
   const currentKey = config.stt?.groq_api_key;
   
@@ -265,12 +208,6 @@ async function configSTT(config: AnyaConfig): Promise<void> {
   await autoRestartGateway();
 }
 
-/**
- * Interactive wizard for configuring Tavily (Web Search).
- *
- * @param config - The active Anya configuration object to update.
- * @returns A Promise resolving when the configuration is saved.
- */
 async function configTavily(config: AnyaConfig): Promise<void> {
   const currentKey = config.tools?.web_search?.api_key;
   
@@ -298,13 +235,6 @@ async function configTavily(config: AnyaConfig): Promise<void> {
   await autoRestartGateway();
 }
 
-/**
- * Interactive wizard for configuring the Telegram Bot integration.
- * Includes options for the bot token and restricting access to specific user IDs.
- *
- * @param config - The active Anya configuration object to update.
- * @returns A Promise resolving when the configuration is saved.
- */
 async function configTelegram(config: AnyaConfig): Promise<void> {
   const currentToken = config.telegram?.bot_token;
   const currentUsers = config.telegram?.allowed_user_ids || [];
@@ -353,12 +283,6 @@ async function configTelegram(config: AnyaConfig): Promise<void> {
   await autoRestartGateway();
 }
 
-/**
- * Interactive wizard for configuring OpenAI Codex via OAuth device flow.
- *
- * @param config - The active Anya configuration object to update.
- * @returns A Promise resolving when the configuration is saved.
- */
 async function configOpenAI(config: AnyaConfig): Promise<void> {
   const { codexDeviceLogin, hasCodexAuth } = await import('../lib/auth.js');
   
@@ -377,12 +301,6 @@ async function configOpenAI(config: AnyaConfig): Promise<void> {
   await autoRestartGateway();
 }
 
-/**
- * Interactive wizard for configuring the background Cron scheduler.
- *
- * @param config - The active Anya configuration object to update.
- * @returns A Promise resolving when the configuration is saved.
- */
 async function configCron(config: AnyaConfig): Promise<void> {
   console.log();
   console.log(chalk.dim('  Cron runs scheduled jobs while the Telegram gateway is running.'));

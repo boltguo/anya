@@ -1,24 +1,10 @@
-/**
- * @module tools/pronAssess
- * @description Speech evaluation adapter leveraging Azure Cognitive Services.
- *
- * Submits raw inbound OGG/Opus or WAV voice binaries directly to the Azure
- * Pronunciation Assessment API. Resolves detailed telemetry including overall
- * heuristic accuracy, fluency constraints, prosodic alignment, and mapped per-word
- * error typing (omissions, insertions, mispronunciations).
- *
- * Architecture explicitly supports dual-mode context:
- * - Scripted   : Validates discrete phoneme precision against a rigid reference string.
- * - Unscripted : Analyzes broad intelligibility and fluent cadence of freestyle inputs.
- */
+// tools/pronAssess.ts — Azure pronunciation scoring
 
 import { readFileSync } from 'node:fs';
 import { register } from './registry.js';
 import { agentLogger } from '../lib/logger.js';
 import { trackPronAssess } from '../lib/usage.js';
 import type { ToolContext } from '../agent/types.js';
-
-// ── Pronunciation Assessment Tool ────────────────────────────────────────────
 
 register({
   name: 'pron_assess',
@@ -61,7 +47,7 @@ register({
     agentLogger.info({ msg: 'pron_assess_start', audioPath, language, hasRef: !!referenceText });
 
     try {
-      // Read audio file — convert OGG to WAV if needed (Azure pron assessment works best with WAV)
+      // Azure pron assessment scores significantly better with WAV than raw OGG/Opus.
       const isOgg = audioPath.endsWith('.ogg') || audioPath.endsWith('.oga');
       let audioBuffer: Buffer;
       let contentType: string;
@@ -74,7 +60,7 @@ register({
           contentType = 'audio/wav';
           agentLogger.info({ msg: 'pron_assess_converted', from: 'ogg', to: 'wav', bytes: audioBuffer.length });
         } else {
-          // ffmpeg not available, try sending OGG directly
+          // Fallback: when ffmpeg is missing, send raw OGG and accept lower scoring quality.
           audioBuffer = readFileSync(audioPath);
           contentType = 'audio/ogg; codecs=opus';
           agentLogger.info({ msg: 'pron_assess_no_ffmpeg', fallback: 'ogg' });
@@ -84,7 +70,6 @@ register({
         contentType = 'audio/wav';
       }
 
-      // Build pronunciation assessment config
       const assessConfig: Record<string, unknown> = {
         GradingSystem: 'HundredMark',
         Granularity: 'Word',
@@ -96,10 +81,9 @@ register({
         assessConfig.ReferenceText = referenceText;
       }
 
-      // Base64 encode the assessment config for the header
+      // Azure requires the assessment config base64-encoded in a header.
       const assessHeader = Buffer.from(JSON.stringify(assessConfig)).toString('base64');
 
-      // Call Azure Speech REST API with pronunciation assessment
       const url = `https://${speechRegion}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=${language}&format=detailed`;
 
       const response = await fetch(url, {
@@ -126,20 +110,18 @@ register({
         return `Pronunciation assessment failed: ${result.RecognitionStatus}. Make sure the audio contains clear speech.`;
       }
 
-      // Extract the best result
       const nbest = result.NBest?.[0];
       if (!nbest) {
         return 'No assessment results returned. The audio may be too short or unclear.';
       }
 
-      // Azure REST v1 puts scores directly on NBest, not under PronunciationAssessment
+      // Azure REST v1 places scores directly on NBest, not under PronunciationAssessment.
       const pronAssessment = nbest.PronunciationAssessment || nbest;
       const hasScores = pronAssessment.AccuracyScore !== undefined || pronAssessment.PronScore !== undefined;
       if (!hasScores) {
         return `Pronunciation assessment data not available. Raw: ${JSON.stringify(nbest).substring(0, 500)}`;
       }
 
-      // Format per-word results
       const words = (nbest.Words || []).map((w: any) => {
         const wa = w.PronunciationAssessment || w;
         const wordResult: Record<string, unknown> = {
@@ -152,8 +134,7 @@ register({
         return wordResult;
       });
 
-      // Build structured result
-      const audioDurationSec = (result.Duration || 0) / 10_000_000; // Azure returns in 100ns ticks
+      const audioDurationSec = (result.Duration || 0) / 10_000_000; // Azure returns 100ns ticks
       const output = {
         recognized_text: nbest.Display || nbest.Lexical,
         scores: {

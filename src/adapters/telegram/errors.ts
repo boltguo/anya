@@ -1,16 +1,7 @@
-/**
- * @module adapters/telegram/errors
- * @description Translates raw error messages into user-friendly Telegram replies.
- */
+// adapters/telegram/errors.ts — error formatting and typing indicator
 
 import type { Context } from 'grammy';
 
-/**
- * Formats an error into a user-friendly message suitable for Telegram output.
- *
- * @param error - The original Error object caught during execution.
- * @returns A string containing the formatted, user-facing error message.
- */
 export function formatTgError(error: Error): string {
   const msg = error.message || '';
 
@@ -30,15 +21,7 @@ export function formatTgError(error: Error): string {
   return `⚠️ ${clean}`;
 }
 
-/**
- * Starts a recurring typing indicator in the provided Telegram context.
- *
- * Note: Telegram's "typing..." status naturally expires after approximately 5 seconds.
- * This function ensures it repeats every 4 seconds to maintain the indicator.
- *
- * @param ctx - The Telegram context object.
- * @returns An interval ID that can be used to clear the typing indicator.
- */
+// Telegram's typing status expires after ~5s; refresh every 4s to keep it active
 export function startTypingIndicator(ctx: Context): ReturnType<typeof setInterval> {
   const send = () => ctx.replyWithChatAction('typing').catch(() => {});
   send();

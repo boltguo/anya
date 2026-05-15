@@ -1,19 +1,4 @@
-/**
- * @module tools/dbTool
- * @description Direct SQLite database tool for the agent.
- *
- * Provides direct SQLite access through a constrained tool call. The agent
- * specifies a database name and raw SQL.
- *
- * Databases live under ~/.anya/data/store/<name>.db.
- * Schema is defined in skill SKILL.md files, and the agent creates
- * tables as needed via CREATE TABLE IF NOT EXISTS.
- *
- * Security:
- *  - Only databases under STORE_DIR are accessible.
- *  - The agent cannot access arbitrary file paths.
- *  - DROP DATABASE is not possible (SQLite doesn't support it).
- */
+// tools/db.ts — sandboxed SQLite agent tool
 
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
@@ -22,10 +7,8 @@ import { register } from './registry.js';
 import { STORE_DIR, SKILLS_DIR } from '../lib/paths.js';
 import type { ToolContext } from '../agent/types.js';
 
-/** Cache of open database connections. */
 const dbCache = new Map<string, DatabaseSync>();
 
-/** SQL statement prefixes allowed for execution. */
 const ALLOWED_SQL_PREFIXES = [
   'SELECT', 'INSERT', 'UPDATE', 'DELETE',
   'CREATE TABLE', 'CREATE INDEX', 'CREATE UNIQUE INDEX',
@@ -33,7 +16,6 @@ const ALLOWED_SQL_PREFIXES = [
   'WITH',  // CTEs that lead to SELECT/INSERT/UPDATE/DELETE
 ];
 
-/** SQL statements explicitly blocked for safety. */
 const BLOCKED_SQL_PATTERNS = [
   /\bDROP\s+(TABLE|INDEX|TRIGGER|VIEW)\b/i,
   /\bTRUNCATE\b/i,
@@ -41,24 +23,16 @@ const BLOCKED_SQL_PATTERNS = [
   /\bDETACH\b/i,
 ];
 
-/**
- * Validates a raw SQL string against a security heuristics whitelist and blacklist.
- * Ensures the agent cannot execute fundamentally destructive or out-of-bounds commands.
- *
- * @param sql - The raw SQL string intended for execution.
- * @returns A string containing the error message if the query is blocked, or null if permitted.
- */
 function validateSql(sql: string): string | null {
   const trimmedUpper = sql.trimStart().toUpperCase();
 
-  // Check blocklist first (catches e.g. DROP inside a CTE)
+  // Blocklist checked first so DROP inside a CTE is caught.
   for (const pattern of BLOCKED_SQL_PATTERNS) {
     if (pattern.test(sql)) {
       return `Blocked: destructive SQL statement detected (${pattern.source})`;
     }
   }
 
-  // Check if statement starts with an allowed prefix
   const isAllowed = ALLOWED_SQL_PREFIXES.some(prefix =>
     trimmedUpper.startsWith(prefix)
   );
@@ -77,12 +51,7 @@ function isReadOnlySql(sql: string): boolean {
     || trimmedUpper.startsWith('EXPLAIN');
 }
 
-/**
- * Find and execute a schema .sql file for a given database name.
- * Scans all skills directories for schema/<name>.sql files.
- */
 function autoInitSchema(db: DatabaseSync, dbName: string): void {
-  // Scan skills directories for schema files matching this db name
   const schemaFileName = `${dbName}.sql`;
 
   function scanDir(dir: string): string | null {
@@ -109,11 +78,7 @@ function autoInitSchema(db: DatabaseSync, dbName: string): void {
   }
 }
 
-/**
- * Get or create a database connection by name.
- * Name is sanitized to prevent path traversal.
- * Auto-initializes schema from skills/<category>/data/schema/<name>.sql on first open.
- */
+// Sanitizes name to prevent path traversal; auto-applies skill-owned schema on open.
 export function getDatabase(name: string): DatabaseSync {
   const safeName = basename(name).replace(/[^a-zA-Z0-9_-]/g, '');
   if (!safeName) throw new Error('Invalid database name');
@@ -144,7 +109,6 @@ export function getDatabase(name: string): DatabaseSync {
   return db;
 }
 
-/** Close all cached database connections. Called on process exit. */
 function closeAllDatabases(): void {
   for (const [, db] of dbCache) {
     try { db.close(); } catch { /* ignore close errors */ }
@@ -152,18 +116,11 @@ function closeAllDatabases(): void {
   dbCache.clear();
 }
 
-// Ensure connections are closed on process exit to avoid WAL corruption
+// Close connections on exit to avoid WAL corruption.
 process.on('exit', closeAllDatabases);
 process.on('SIGINT', () => { closeAllDatabases(); process.exit(0); });
 process.on('SIGTERM', () => { closeAllDatabases(); process.exit(0); });
 
-// ── db tool ──────────────────────────────────────────────────────────────────
-
-/**
- * Return a compact schema dump for an entire database.
- * One entry per table with columns and indexes — used for zero-shot discovery
- * and for augmenting failed-query errors with relevant context.
- */
 function dumpSchema(db: DatabaseSync, onlyTables?: string[]): unknown {
   const tables = db.prepare(
     "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
@@ -192,7 +149,6 @@ function dumpSchema(db: DatabaseSync, onlyTables?: string[]): unknown {
     });
 }
 
-/** Extract bare table identifiers from a SQL string (best-effort regex). */
 function extractTableNames(sql: string): string[] {
   const found = new Set<string>();
   const re = /\b(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+([A-Za-z_][A-Za-z0-9_]*)/gi;
@@ -235,7 +191,6 @@ register({
 
     if (!dbName) return JSON.stringify({ error: 'Missing database name' });
 
-    // ── Batch mode: queries parameter ──
     if (queriesRaw) {
       let queries: Array<{ sql: string; params?: unknown[] | string }>;
       try {
@@ -245,13 +200,14 @@ register({
         return JSON.stringify({ error: 'Invalid queries JSON — must be a JSON array of {sql, params?} objects' });
       }
 
-      // Validate all statements before executing any
+      // Validate every statement before any execute — keeps batch atomic on rejection.
       for (const q of queries) {
         if (!q.sql || typeof q.sql !== 'string') {
           return JSON.stringify({ error: 'Each query must have a "sql" string property' });
         }
         const err = validateSql(q.sql);
         if (err) return JSON.stringify({ error: `Query "${q.sql.substring(0, 60)}...": ${err}` });
+        // study.db writes must go through the typed persist tool to enforce schema.
         if (dbName === 'study' && !isReadOnlySql(q.sql)) {
           return JSON.stringify({ error: 'study.db writes are blocked in db tool. Use persist action=practice, word_upsert, word_review, profile_upsert, task_upsert, task_complete, or another typed persist action.' });
         }
@@ -311,7 +267,6 @@ register({
       }
     }
 
-    // ── Schema-discovery mode: no SQL → return the full schema for this db. ──
     if (!sql) {
       try {
         const db = getDatabase(dbName);
@@ -321,9 +276,9 @@ register({
       }
     }
 
-    // ── Single-statement mode ──
     const sqlError = validateSql(sql);
     if (sqlError) return JSON.stringify({ error: sqlError });
+    // study.db writes must go through the typed persist tool to enforce schema.
     if (dbName === 'study' && !isReadOnlySql(sql)) {
       return JSON.stringify({ error: 'study.db writes are blocked in db tool. Use persist action=practice, word_upsert, word_review, profile_upsert, task_upsert, task_complete, or another typed persist action.' });
     }

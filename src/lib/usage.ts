@@ -1,24 +1,6 @@
-/**
- * @module lib/usage
- * @description Centralized analytics and cost-tracking engine for third-party API dependencies.
- *
- * Persists high-resolution usage metrics directly to SQLite (`state.db → usage_events`),
- * capturing granular invocation and throughput data:
- * - LLM: Network calls, discrete input/output, and cache token distributions.
- * - TTS (Azure): Synthesis requests, billable SSML character volume, output duration.
- * - STT (Groq): Transcription requests, inbound audio duration.
- * - Pronunciation Assessment (Azure): Evaluation requests, processed duration.
- * - Web Search (Tavily) & Vision (Gemini): Discrete API invocations.
- *
- * Implements strict append-only telemetry via single atomic `INSERT` operations,
- * guaranteeing zero concurrency collisions across disparate application services
- * (e.g., UI vs Gateway daemons). Metrics are deterministically rolled up via 
- * `SUM/GROUP BY` read projections.
- */
+// lib/usage.ts — API usage tracking
 
 import { getDb } from '../storage/db.js';
-
-// ── Schema Initialization ────────────────────────────────────────────────────
 
 let _schemaReady = false;
 
@@ -42,12 +24,10 @@ function ensureSchema(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_usage_month ON usage_events(month, service);
   `);
-  // Migration: add provider column to existing tables
+  // Migration: add provider column for tables created before it existed
   try { db.exec(`ALTER TABLE usage_events ADD COLUMN provider TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
   _schemaReady = true;
 }
-
-// ── Types ────────────────────────────────────────────────────────────────────
 
 export interface DailySttUsage {
   calls: number;
@@ -55,7 +35,7 @@ export interface DailySttUsage {
 }
 
 export interface MonthlyUsage {
-  month: string; // YYYY-MM
+  month: string;
 
   llm: {
     calls: number;
@@ -64,7 +44,6 @@ export interface MonthlyUsage {
     cached_tokens: number;
   };
 
-  /** LLM stats broken down by provider (gemini, codex) */
   llm_by_provider: Record<string, {
     calls: number;
     input_tokens: number;
@@ -74,18 +53,18 @@ export interface MonthlyUsage {
 
   tts: {
     calls: number;
-    chars: number;         // billable characters (text only, no SSML tags)
-    duration_sec: number;  // total audio duration
+    chars: number;
+    duration_sec: number;
   };
 
   stt: {
     calls: number;
-    duration_sec: number;  // total audio duration transcribed
+    duration_sec: number;
   };
 
   pron_assess: {
     calls: number;
-    duration_sec: number;  // total audio duration assessed
+    duration_sec: number;
   };
 
   web_search: {
@@ -96,11 +75,8 @@ export interface MonthlyUsage {
     calls: number;
   };
 
-  /** Per-day STT breakdown, keyed by DD (01-31) */
   stt_daily: Record<string, DailySttUsage>;
 }
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function currentMonth(): string {
   const now = new Date();
@@ -111,38 +87,24 @@ function currentDay(): string {
   return String(new Date().getDate()).padStart(2, '0');
 }
 
-// ── SSML Character Counting ──────────────────────────────────────────────────
-
-/**
- * Count billable characters for Azure TTS.
- *
- * Azure billing rules:
- *  - Everything inside the SSML is counted (text + tags + attributes)
- *  - EXCEPT: <speak> and <voice> tags (and their attributes) are excluded
- *  - CJK characters (Chinese, Japanese Kanji, Korean Hanja) count as 2 each
- *
- * If input is plain text (no SSML wrapper yet), we count the text that will
- * be wrapped by buildSsml — the <speak> and <voice> tags are free, but
- * <prosody rate="..."> and the text itself are billable.
- */
+// Azure billing rules:
+//  - All SSML content is billable EXCEPT <speak>/<voice> tags (and their attrs)
+//  - CJK characters count as 2 each
 export function countBillableChars(text: string, ssml?: string): number {
   const source = ssml || text;
 
-  // Strip only <speak> and <voice> tags (the two exceptions Azure doesn't charge)
   const billable = source
     .replace(/<\/?speak[^>]*>/gi, '')
     .replace(/<\/?voice[^>]*>/gi, '');
 
-  // CJK chars count as 2 (Unicode ranges for CJK Unified Ideographs)
   let count = 0;
   for (const char of billable) {
     const code = char.codePointAt(0)!;
-    // CJK Unified Ideographs + extensions
     if (
-      (code >= 0x4E00 && code <= 0x9FFF) ||   // CJK Unified
-      (code >= 0x3400 && code <= 0x4DBF) ||   // CJK Extension A
-      (code >= 0x20000 && code <= 0x2A6DF) || // CJK Extension B
-      (code >= 0xF900 && code <= 0xFAFF)      // CJK Compatibility
+      (code >= 0x4E00 && code <= 0x9FFF) ||
+      (code >= 0x3400 && code <= 0x4DBF) ||
+      (code >= 0x20000 && code <= 0x2A6DF) ||
+      (code >= 0xF900 && code <= 0xFAFF)
     ) {
       count += 2;
     } else {
@@ -152,8 +114,6 @@ export function countBillableChars(text: string, ssml?: string): number {
 
   return count;
 }
-
-// ── Load (Aggregated Read) ───────────────────────────────────────────────────
 
 function emptyUsage(month: string): MonthlyUsage {
   return {
@@ -176,7 +136,6 @@ export function loadUsage(month?: string): MonthlyUsage {
 
   const usage = emptyUsage(m);
 
-  // Aggregate all events for the month in one query
   const rows = db.prepare(`
     SELECT service,
            SUM(calls) AS total_calls,
@@ -234,7 +193,6 @@ export function loadUsage(month?: string): MonthlyUsage {
     }
   }
 
-  // STT daily breakdown
   const dailyRows = db.prepare(`
     SELECT day, SUM(calls) AS total_calls, SUM(duration_sec) AS total_duration
     FROM usage_events
@@ -249,7 +207,6 @@ export function loadUsage(month?: string): MonthlyUsage {
     };
   }
 
-  // LLM per-provider breakdown
   const providerRows = db.prepare(`
     SELECT provider,
            SUM(calls) AS total_calls,
@@ -278,15 +235,6 @@ export function loadUsage(month?: string): MonthlyUsage {
   return usage;
 }
 
-// ── Track Functions (Atomic INSERT) ──────────────────────────────────────────
-
-/**
- * Track LLM API call with token counts.
- * @param inputTokens - Total input tokens.
- * @param outputTokens - Output tokens generated.
- * @param cachedTokens - Tokens served from cache.
- * @param provider - Provider name (e.g., 'codex').
- */
 export function trackLlm(inputTokens: number, outputTokens: number, cachedTokens = 0, provider = ''): void {
   ensureSchema();
   getDb().prepare(`
@@ -295,11 +243,6 @@ export function trackLlm(inputTokens: number, outputTokens: number, cachedTokens
   `).run(currentMonth(), currentDay(), provider, inputTokens, outputTokens, cachedTokens);
 }
 
-/**
- * Track a TTS call.
- * @param chars - Number of billable characters
- * @param durationSec - Audio duration in seconds
- */
 export function trackTts(chars: number, durationSec: number): void {
   ensureSchema();
   getDb().prepare(`
@@ -308,10 +251,6 @@ export function trackTts(chars: number, durationSec: number): void {
   `).run(currentMonth(), currentDay(), chars, durationSec);
 }
 
-/**
- * Track a pronunciation assessment call.
- * @param durationSec - Audio duration assessed in seconds
- */
 export function trackPronAssess(durationSec: number): void {
   ensureSchema();
   getDb().prepare(`
@@ -320,10 +259,6 @@ export function trackPronAssess(durationSec: number): void {
   `).run(currentMonth(), currentDay(), durationSec);
 }
 
-/**
- * Track an STT (speech-to-text) call.
- * @param durationSec - Audio duration transcribed in seconds
- */
 export function trackStt(durationSec: number): void {
   ensureSchema();
   getDb().prepare(`
@@ -332,9 +267,6 @@ export function trackStt(durationSec: number): void {
   `).run(currentMonth(), currentDay(), durationSec);
 }
 
-/**
- * Track a web search call.
- */
 export function trackWebSearch(): void {
   ensureSchema();
   getDb().prepare(`
@@ -343,9 +275,6 @@ export function trackWebSearch(): void {
   `).run(currentMonth(), currentDay());
 }
 
-/**
- * Track a Vision (Gemini) call.
- */
 export function trackVision(): void {
   ensureSchema();
   getDb().prepare(`

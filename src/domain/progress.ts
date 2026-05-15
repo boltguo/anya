@@ -1,12 +1,7 @@
-/**
- * @module domain/progress
- * @description Progress snapshots, trends, and study summaries.
- */
+// domain/progress.ts — progress snapshots and study summaries
 
 import type { DatabaseSync } from 'node:sqlite';
 import { optionalNumber, normalizeJsonString, clampInt } from './helpers.js';
-
-// ── ISO Week Helpers ────────────────────────────────────────────────────────
 
 function isoWeekRange(input: Date): { week: string; start: string; end: string } {
   const date = new Date(Date.UTC(input.getUTCFullYear(), input.getUTCMonth(), input.getUTCDate()));
@@ -50,8 +45,6 @@ function progressPeriod(args: Record<string, unknown>): { week: string; start: s
   const { week, start, end } = isoWeekRange(target);
   return { week: explicitWeek || week, start, end };
 }
-
-// ── Actions ─────────────────────────────────────────────────────────────────
 
 export function studySummary(db: DatabaseSync, args: Record<string, unknown>): unknown {
   const days = clampInt(Number(args.days ?? 14), 1, 180);

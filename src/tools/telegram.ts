@@ -1,44 +1,20 @@
-/**
- * @module tools/telegram
- * @description Unified Telegram messaging interaction controller.
- *
- * Consolidates all Telegram Bot API outbound endpoints into a single polymorphic `tg_msg` tool.
- * This architectural choice significantly reduces LLM function declaration overhead, 
- * saving ~1300 prompt tokens per inference call relative to discrete tool schemas.
- *
- * Supported multimodal payloads:
- * - `text`, `audio`, `voice`, `document`, `keyboard`, `quiz`
- * - `edit`, `delete`, `react`, `action`, `countdown`, `paginate`
- */
+// tools/telegram.ts — single-entry Telegram tool (tg_msg)
+// Consolidated into one polymorphic tool to save ~1300 prompt tokens per call.
 
 import { register } from './registry.js';
 import type { ToolContext } from '../agent/types.js';
 import { TelegramSessionAdapter } from '../adapters/telegram.js';
 import { markdownToTelegramHtml } from '../lib/tgFormat.js';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * If parse_mode is HTML (the default) and the text contains markdown syntax,
- * convert markdown → Telegram-flavored HTML so headings/bold/lists render properly.
- * Pure HTML or empty input is left unchanged.
- */
 function renderText(text: string | undefined, parseMode: string | undefined): string {
   if (!text) return '';
   const mode = parseMode || 'HTML';
   if (mode !== 'HTML') return text;
-  // Cheap detection of common markdown markers (# headings, **bold**, list bullets, ``` code).
+  // Detect common markdown markers so pure-HTML input is left untouched.
   const looksLikeMarkdown = /(^|\n)\s{0,3}#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s+|`{3}/m.test(text);
   return looksLikeMarkdown ? markdownToTelegramHtml(text) : text;
 }
 
-/**
- * Extracts and validates the TelegramSessionAdapter from the generic tool context.
- *
- * @param {ToolContext} context - The active dependency container.
- * @returns {TelegramSessionAdapter} The typed adapter instance.
- * @throws {Error} If invoked outside a Telegram-backed session.
- */
 function getTgAdapter(context: ToolContext): TelegramSessionAdapter {
   if (!(context.adapter instanceof TelegramSessionAdapter)) {
     throw new Error('This tool is only available when running via Telegram.');
@@ -46,10 +22,6 @@ function getTgAdapter(context: ToolContext): TelegramSessionAdapter {
   return context.adapter;
 }
 
-/**
- * Parse a raw argument into a 2D string array (for button grids).
- * Accepts JSON strings or pre-parsed arrays.
- */
 function parseArray(raw: unknown): string[][] {
   if (!raw) return [];
   if (typeof raw === 'string') {
@@ -58,10 +30,6 @@ function parseArray(raw: unknown): string[][] {
   return raw as string[][];
 }
 
-/**
- * Parse a raw argument into a 1D string array (for quiz options).
- * Accepts JSON strings or pre-parsed arrays.
- */
 function parseStringArray(raw: unknown): string[] {
   if (!raw) return [];
   if (typeof raw === 'string') {
@@ -70,41 +38,17 @@ function parseStringArray(raw: unknown): string[] {
   return raw as string[];
 }
 
-/**
- * Resolve the reply_to argument: maps 'user' to the incoming message ID.
- */
+// 'user' is a sentinel meaning "reply to the inbound message in this turn".
 function resolveReplyTo(raw: unknown, tg: TelegramSessionAdapter): number | string | undefined {
   if (!raw) return undefined;
   const val = String(raw);
   return val === 'user' ? tg.getUserMessageId() : val;
 }
 
-/**
- * Unifies `text` and `caption` arguments.
- * The LLM sometimes uses `caption` instead of `text` for media messages.
- * Priority: text > caption > undefined.
- */
+// LLM occasionally emits `caption` instead of `text`; accept either, preferring `text`.
 function getCaption(args: Record<string, unknown>): string | undefined {
   return (args.text as string) || (args.caption as string) || undefined;
 }
-
-// ── Single unified Telegram tool ─────────────────────────────────────────────
-//
-// All Telegram interactions go through this one tool.
-// The `type` field determines the message format:
-//
-//   text           → Plain text message
-//   audio          → Audio file with optional caption
-//   voice          → Voice-bubble audio from a local OGG/Opus path
-//   document       → Send a file (PDF, ZIP, etc.) with optional caption
-//   keyboard       → Message with inline buttons (callback-based)
-//   quiz           → Native poll with auto-scoring
-//   edit           → Edit an existing message's text/buttons
-//   delete         → Delete a message by id or tag
-//   react          → Add emoji reaction to a message
-//   action         → Show typing/recording indicator
-//   countdown      → Auto-editing countdown timer
-//   paginate       → Multi-page message with client-side ⬅️/➡️ flipping (no LLM call per page)
 
 register({
   name: 'tg_msg',
@@ -135,7 +79,7 @@ register({
     const tg = getTgAdapter(context);
     const type = String(args.type);
 
-    // Normalize literal \n sequences the LLM sometimes emits in JSON args
+    // LLMs sometimes emit literal "\n" in JSON args; normalize to a real newline.
     for (const field of ['text', 'caption'] as const) {
       if (typeof args[field] === 'string') {
         args[field] = (args[field] as string).replace(/\\n/g, '\n');
@@ -181,9 +125,7 @@ register({
         const buttons = parseArray(args.buttons);
         const replyTo = resolveReplyTo(args.reply_to, tg);
         const parseMode = (args.parse_mode as string) || 'HTML';
-        // Defense: LLM sometimes bundles a voice/audio URL into a keyboard call.
-        // The keyboard endpoint has no media slot, so the audio would be silently dropped.
-        // Dispatch the voice first, then send the keyboard message.
+        // Keyboard endpoint has no media slot; dispatch any bundled voice URL first to avoid silent drop.
         if (args.url) {
           await tg.sendVoice(String(args.url), undefined, {});
         }

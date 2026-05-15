@@ -1,11 +1,4 @@
-/**
- * @module commands/usage
- * @description `anya usage` — Interactive CLI command to show API usage statistics.
- *
- * Displays all metered service usage for the current month:
- * LLM tokens, TTS characters and duration, STT metrics, pronunciation assessment,
- * and web search operations. Formats output with progress bars and color-coded statuses.
- */
+// commands/usage.ts — monthly API usage report
 
 import chalk from 'chalk';
 import { loadUsage } from '../lib/usage.js';
@@ -13,25 +6,13 @@ import { loadUsage } from '../lib/usage.js';
 // Azure Free Tier (F0) limits
 const AZURE_FREE = {
   tts_chars: 500_000,
-  speech_hours: 5,     // STT + Pronunciation Assessment combined
+  speech_hours: 5,     // STT + pron assessment combined
 };
 
-/**
- * Formats a number with locale-specific thousands separators.
- *
- * @param n - The number to format.
- * @returns The formatted number string.
- */
 function fmtNum(n: number): string {
   return n.toLocaleString();
 }
 
-/**
- * Formats a duration in seconds into a human-readable string (e.g., "1h 30m" or "45s").
- *
- * @param sec - The duration in seconds.
- * @returns The formatted duration string.
- */
 function fmtDuration(sec: number): string {
   if (sec < 60) return `${Math.round(sec)}s`;
   if (sec < 3600) return `${Math.floor(sec / 60)}m ${Math.round(sec % 60)}s`;
@@ -40,14 +21,6 @@ function fmtDuration(sec: number): string {
   return `${h}h ${m}m`;
 }
 
-/**
- * Renders a visual progress bar for quota usage.
- *
- * @param used - The amount of quota currently consumed.
- * @param total - The total quota available.
- * @param width - The visual width of the progress bar in characters (default: 20).
- * @returns A color-coded string representing the progress bar.
- */
 function bar(used: number, total: number, width = 20): string {
   const pct = Math.min(used / total, 1);
   const filled = Math.round(pct * width);
@@ -56,12 +29,6 @@ function bar(used: number, total: number, width = 20): string {
   return color('█'.repeat(filled)) + chalk.dim('░'.repeat(empty)) + chalk.dim(` ${Math.round(pct * 100)}%`);
 }
 
-/**
- * Executes the `anya usage` command.
- * Fetches and displays the current month's API usage metrics across all configured services.
- *
- * @param month - Optional. A specific month string (e.g., '2023-10') to retrieve usage for. Defaults to the current month.
- */
 export function runUsage(month?: string): void {
   const usage = loadUsage(month);
 
@@ -69,7 +36,6 @@ export function runUsage(month?: string): void {
   console.log(chalk.bold.cyan(`Anya Usage — ${usage.month}`));
   console.log();
 
-  // ── LLM ──
   console.log(chalk.bold('  🧠 LLM'));
   console.log(`     Calls:         ${chalk.white(fmtNum(usage.llm.calls))}`);
   console.log(`     Input tokens:  ${chalk.white(fmtNum(usage.llm.input_tokens))}`);
@@ -79,7 +45,6 @@ export function runUsage(month?: string): void {
     : 0;
   console.log(`     Cached tokens: ${chalk.white(fmtNum(usage.llm.cached_tokens))} ${chalk.dim(`(${cacheHitPct}% hit)`)}`);
 
-  // Per-provider breakdown
   const providers = Object.entries(usage.llm_by_provider);
   if (providers.length > 0) {
     for (const [name, stats] of providers) {
@@ -88,7 +53,6 @@ export function runUsage(month?: string): void {
   }
   console.log();
 
-  // ── TTS (Azure) ──
   console.log(chalk.bold('  📢 TTS (Azure Speech)'));
   console.log(`     Calls:    ${chalk.white(fmtNum(usage.tts.calls))}`);
   console.log(`     Chars:    ${chalk.white(fmtNum(usage.tts.chars))} / ${fmtNum(AZURE_FREE.tts_chars)}`);
@@ -96,7 +60,6 @@ export function runUsage(month?: string): void {
   console.log(`     Quota:    ${bar(usage.tts.chars, AZURE_FREE.tts_chars)}`);
   console.log();
 
-  // ── Pronunciation Assessment (Azure, 5h free tier) ──
   const speechSec = usage.pron_assess.duration_sec;
   const speechLimitSec = AZURE_FREE.speech_hours * 3600;
   console.log(chalk.bold('  🗣️  Pronunciation (Azure Speech)'));
@@ -105,7 +68,6 @@ export function runUsage(month?: string): void {
   console.log(`     Quota:    ${bar(speechSec, speechLimitSec)}`);
   console.log();
 
-  // ── STT (Groq) ──
   console.log(chalk.bold('  🎤 STT (Groq Whisper)'));
   console.log(`     Calls:    ${chalk.white(fmtNum(usage.stt.calls))}`);
   console.log(`     Duration: ${chalk.white(fmtDuration(usage.stt.duration_sec))}`);
@@ -116,12 +78,10 @@ export function runUsage(month?: string): void {
   }
   console.log();
 
-  // ── Web Search (Tavily) ──
   console.log(chalk.bold('  🔍 Web Search (Tavily)'));
   console.log(`     Calls:    ${chalk.white(fmtNum(usage.web_search.calls))}`);
   console.log();
 
-  // ── Vision (Gemini) ──
   console.log(chalk.bold('  👀 Vision (Gemini)'));
   console.log(`     Calls:    ${chalk.white(fmtNum(usage.vision.calls))}`);
   console.log();

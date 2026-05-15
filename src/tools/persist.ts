@@ -1,29 +1,17 @@
-/**
- * @module tools/persist
- * @description Thin routing gateway orchestrating type-safe SQL persistence operations.
- *
- * Decouples raw SQLite data mutation boundaries (`tools/db`) from structured 
- * English learning domain logic contexts. Prevents arbitrary skills from executing
- * malformed or unauthorized DML schemas against the critical `study.db` state.
- *
- * Invokes deeply isolated logic functions mapped from `src/domain/*`.
- */
+// tools/persist.ts — study.db unified writer
 
 import { register } from './registry.js';
 import { getDatabase } from './db.js';
 import type { ToolContext } from '../agent/types.js';
 
-// ── Domain imports ──────────────────────────────────────────────────────────
 import { logPractice, recentPractice, taskUpsert, dueTasks, taskComplete } from '../domain/practice.js';
 import { upsertWords, reviewWord, dueWords, wordLookup } from '../domain/vocabulary.js';
 import { studySummary, progressSnapshot, progressTrend } from '../domain/progress.js';
 import { sessionStart, sessionEnd } from '../domain/session.js';
 import { profileUpsert, coachContext } from '../domain/profile.js';
 
-// ── coach_context in-memory cache ───────────────────────────────────────────
-// coach_context aggregates 14-day data and rarely changes within a session.
-// Cache hits avoid redundant DB queries when skills read it multiple times.
-// Invalidated on write operations (practice, word_review, word_upsert, task_complete).
+// coach_context aggregates 14-day data; cache cuts redundant queries within a session.
+// Invalidated on writes that change aggregated inputs (practice, word_*, task_*, profile_*).
 const COACH_CONTEXT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const coachContextCache = new Map<string, { data: unknown; ts: number }>();
 
@@ -138,15 +126,13 @@ register({
     const action = String(args.action || 'practice');
     const db = getDatabase('study');
 
-    // Auto-inject session_id from the real session key (e.g., 'tg:5496437870')
-    // to prevent LLM from filling garbage like 'tg:unknown' or 'tg:user'.
+    // Server-side override prevents the LLM from supplying a bogus session id.
     if (context.sessionKey) {
       args.session_id = context.sessionKey;
     }
 
     try {
-      // Invalidate coach_context cache on write operations that change aggregated data.
-      // coach_context reads: profile, study_summary, due_words, due_tasks, personal_error_cards
+      // Writes that affect aggregated inputs must invalidate the cache to keep reads correct.
       if (['practice', 'word_review', 'word_upsert', 'task_complete', 'profile_upsert', 'task_upsert'].includes(action)) {
         coachContextCache.clear();
       }

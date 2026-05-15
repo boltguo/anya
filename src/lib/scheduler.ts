@@ -1,14 +1,4 @@
-/**
- * @module lib/scheduler
- * @description JSON-backed cron execution engine for unattended background jobs.
- *
- * Persists job definitions statefully within `~/.anya/cron/jobs.json`.
- * The execution ticker can be driven by a continuous daemon background loop 
- * (e.g., via the Telegram gateway) or invoked on-demand via the CLI (`anya cron tick`).
- *
- * Implements filesystem-based mutual exclusion locking (`.tick.lock`) to prevent
- * concurrent ticks and race conditions across disparate runtime processes.
- */
+// lib/scheduler.ts — cron job scheduler
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -21,17 +11,11 @@ import { ensureDirectories, CRON_DIR, CRON_JOBS_PATH, CRON_OUTPUT_DIR } from './
 import { agentLogger } from './logger.js';
 import { registerAllTools } from '../tools/registry.js';
 
-/**
- * Union type representing supported scheduling variants.
- */
 export type CronSchedule =
   | { kind: 'once'; run_at: string; display: string }
   | { kind: 'interval'; minutes: number; display: string }
   | { kind: 'cron'; expr: string; display: string };
 
-/**
- * Persisted state representation for a single automated job.
- */
 export interface CronJob {
   id: string;
   name: string;
@@ -414,6 +398,7 @@ function saveOutput(job: CronJob, output: string): void {
   writeFileSync(join(jobDir, `${stamp}.md`), output + '\n', 'utf-8');
 }
 
+// Filesystem mkdir is atomic — used as cross-process mutex for tick.
 async function withTickLock<T>(fn: () => Promise<T>): Promise<T> {
   mkdirSync(CRON_DIR, { recursive: true });
   try {

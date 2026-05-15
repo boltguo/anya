@@ -1,7 +1,4 @@
-/**
- * @module domain/vocabulary
- * @description Vocabulary management: word upsert, SRS review, due words, lookup.
- */
+// domain/vocabulary.ts — vocabulary SRS state and actions
 
 import type { DatabaseSync } from 'node:sqlite';
 import {
@@ -10,12 +7,7 @@ import {
   nowSql, clampInt, parseJsonList, upsertActivity,
 } from './helpers.js';
 
-// ── SRS Algorithm (SM-2 variant) ────────────────────────────────────────────
-
-/**
- * Compute the next SRS interval and ease factor.
- * Pure function — safe to unit test independently.
- */
+// SM-2 variant: EF' = EF + (0.1 - (5-q)*(0.08 + (5-q)*0.02)), floor 1.3
 export function nextSrsState(reviewCount: number, oldInterval: number, oldEase: number, rating: number): [number, number] {
   const safeRating = clampInt(rating, 0, 5);
   const ease = Math.max(1.3, oldEase + (0.1 - (5 - safeRating) * (0.08 + (5 - safeRating) * 0.02)));
@@ -26,15 +18,11 @@ export function nextSrsState(reviewCount: number, oldInterval: number, oldEase: 
   return [Math.min(90, Math.max(1, Math.round(oldInterval * ease))), ease];
 }
 
-// ── Word Parsing ────────────────────────────────────────────────────────────
-
 function parseWordEntries(args: Record<string, unknown>): WordEntry[] {
   if (args.words) return parseJsonList<WordEntry>(args.words, 'words');
   if (args.word) return [args as WordEntry];
   return [];
 }
-
-// ── Actions ─────────────────────────────────────────────────────────────────
 
 export function upsertWords(db: DatabaseSync, args: Record<string, unknown>): unknown {
   const entries = parseWordEntries(args);

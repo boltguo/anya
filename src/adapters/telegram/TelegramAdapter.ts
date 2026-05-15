@@ -1,17 +1,4 @@
-/**
- * @module adapters/telegram/TelegramAdapter
- * @description Top-level Telegram bot manager and lifecycle controller.
- *
- * Owns the Grammy {@link Bot} instance and orchestrates long-polling. It registers
- * global commands and event handlers, routing incoming messages, voice notes, photos,
- * and callbacks. For each incoming turn, it spawns a transient {@link TelegramSessionAdapter}.
- *
- * ## Callback Routing Architecture
- * Callback queries are routed across three tiers:
- *   1. `approval_*`: Resolves a pending `requestApproval()` promise.
- *   2. `choice_*`: Resolves a pending `requestChoice()` promise.
- *   3. Other: Fed into `Agent.run()` as a new turn via the `[callback] <data>` format.
- */
+// adapters/telegram/TelegramAdapter.ts — Telegram bot gateway and router
 
 import { Bot, type Context } from 'grammy';
 import { Agent, type RunResult } from '../../agent/Agent.js';
@@ -34,16 +21,6 @@ import { isNavCallback, getNavPage, getMainMenu } from './skillMenu.js';
 import { startScheduler, stopScheduler } from '../../lib/scheduler.js';
 import { markdownToTelegramHtml } from '../../lib/tgFormat.js';
 
-/**
- * Fetches a URL with exponential backoff retry and a timeout.
- * Used primarily for downloading user-sent files (audio, images) from Telegram.
- *
- * @param url - The target URL to fetch.
- * @param maxAttempts - Maximum number of fetch attempts.
- * @param timeoutMs - Timeout per attempt in milliseconds.
- * @returns A Promise resolving to the successful Response object.
- * @throws If all attempts fail.
- */
 async function fetchWithRetry(url: string, maxAttempts = 3, timeoutMs = 15_000): Promise<Response> {
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -60,37 +37,16 @@ async function fetchWithRetry(url: string, maxAttempts = 3, timeoutMs = 15_000):
   throw lastError ?? new Error(`Download failed after ${maxAttempts} attempts`);
 }
 
-/**
- * `TelegramAdapter` is the top-level singleton manager for the Telegram bot.
- *
- * It encapsulates the Grammy Bot instance, registers command and event handlers,
- * manages the serial processing queue per chat, and coordinates the long-polling lifecycle.
- * It spawns a fresh `TelegramSessionAdapter` for each conversation turn.
- */
 export class TelegramAdapter {
   private bot: Bot;
   private config: AnyaConfig;
-  /** Pending approval dialogs, keyed by approval ID. Resolved by callback_query handler. */
   private pendingApprovals = new Map<string, PendingApproval>();
-  /** Pending choice dialogs, keyed by choice ID. Resolved by callback_query handler. */
   private pendingChoices = new Map<string, PendingChoice>();
-  /**
-   * Per-chat serial execution queue.
-   * Guarantees that multiple concurrent messages in the same chat are processed sequentially
-   * to avoid race conditions on the shared chat history (`tg:<chatId>`) and status messages.
-   */
+  // Per-chat serial queue — prevents races on shared chat history (`tg:<chatId>`) and status messages
   private chatQueue = new Map<number, Promise<void>>();
-  /**
-   * Tracks active Telegram quizzes/polls to correlate delayed `poll_answer` events.
-   * Keys are `poll_id`, Values map to chat context and correct answer data.
-   */
+  // Tracks active quizzes/polls to correlate delayed `poll_answer` events (keyed by poll_id)
   activePolls = new Map<string, { chatId: number; options: string[]; correctIndex: number }>();
-  /**
-   * In-memory store for paginated messages.
-   * Keyed by Telegram message_id, stores an array of HTML page strings + the
-   * trailing buttons that stay constant across pages. When a `page:<msgId>:<n>`
-   * callback fires, the adapter edits the message to show page N — no LLM call.
-   */
+  // Paginated message store: keyed by message_id; `page:<msgId>:<n>` callbacks flip pages without an LLM call
   paginatedMessages = new Map<number, { pages: string[]; buttons: string; chatId: number }>();
 
   constructor(config: AnyaConfig) {
@@ -102,12 +58,6 @@ export class TelegramAdapter {
     this.bot = new Bot(config.telegram.bot_token);
   }
 
-  /**
-   * Cancels all pending user dialogs (approvals and choices).
-   * Approvals are forcibly resolved to 'deny', and choices to an empty string.
-   *
-   * @returns The number of cancelled dialogs.
-   */
   private cancelPending(): number {
     let count = 0;
     for (const [, pending] of this.pendingApprovals) {
@@ -124,13 +74,6 @@ export class TelegramAdapter {
   }
 
 
-  /**
-   * Appends an async task onto the serial execution queue for a specific chat.
-   * Execution happens sequentially; errors are caught and logged without breaking the queue.
-   *
-   * @param chatId - The Telegram chat ID.
-   * @param task - The async function to execute.
-   */
   private enqueuePerChat(chatId: number, task: () => Promise<void>): void {
     const prev = this.chatQueue.get(chatId) ?? Promise.resolve();
     const next = prev.then(task).catch((err) => {
@@ -144,13 +87,6 @@ export class TelegramAdapter {
     });
   }
 
-  /**
-   * Dispatches a proactive message to a chat outside of the normal user-triggered request/reply flow.
-   * Commonly used for Cron jobs or delayed system alerts.
-   *
-   * @param chatId - The destination chat ID.
-   * @param text - The Markdown formatted text to send.
-   */
   async sendProactiveMessage(chatId: number, text: string): Promise<void> {
     await this.bot.api.sendMessage(chatId, markdownToTelegramHtml(text), {
       parse_mode: 'HTML',
@@ -160,16 +96,6 @@ export class TelegramAdapter {
     }));
   }
 
-  /**
-   * Core message-handling pipeline utilized by text, voice, and photo events.
-   * Orchestrates authorization, typing indicators, adapter instantiation, agent invocation,
-   * error handling, and cleanup.
-   *
-   * @param ctx - The Grammy context for the incoming event.
-   * @param input - The extracted text or augmented prompt derived from the event.
-   * @param cleanup - An optional callback fired after processing (e.g., deleting temporary files).
-   * @param files - Optional array of file attachments passed to the Agent.
-   */
   private async handleIncoming(
     ctx: Context,
     input: string,
@@ -188,7 +114,7 @@ export class TelegramAdapter {
     const sessionKey = `tg:${ctx.chat!.id}`;
     const typingInterval = startTypingIndicator(ctx);
 
-    // Auto-detect uninitialized user and hint the LLM to run onboarding
+    // Hint the LLM to run onboarding when user.md is missing or marked uninitialized
     if (!input.includes('/command: profile-manager')) {
       try {
         const userMd = fs.existsSync(USER_MD_PATH) ? fs.readFileSync(USER_MD_PATH, 'utf-8') : '';
@@ -209,9 +135,7 @@ export class TelegramAdapter {
       await sessionAdapter.sendThinking();
       const result: RunResult = await agent.run(input, { sessionKey, files });
       if (!result.tgSent && result.content) {
-        // Warn if the agent used tools during the run but ended without sending
-        // via tg_msg — likely the LLM forgot to call tg_msg for its final reply,
-        // which causes the user to miss the response (the "口语扫描器卡了" pattern).
+        // Warn when agent ran tools but ended without tg_msg — likely the LLM forgot to send final reply
         if (result.toolCallCount > 0) {
           agentLogger.warn({
             msg: 'tg_bare_text_fallback',
@@ -233,42 +157,26 @@ export class TelegramAdapter {
     }
   }
 
-  /**
-   * Initializes bot handlers and initiates the long-polling loop.
-   *
-   * Command registration order is strict:
-   * 1. Global system commands (`/start`, `/kill`) and dynamic skill aliases.
-   * 2. Text message handler.
-   * 3. Voice note handler (incorporating STT).
-   * 4. Photo handler (incorporating Vision API).
-   * 5. Callback query dispatcher.
-   */
   async start(): Promise<void> {
     await registerAllTools();
 
-    // ── Build command list from installed skills ──
     const skills = loadSkills();
     const botCommands: Array<{ command: string; description: string }> = [
       { command: 'new', description: '🔄 New practice session' },
     ];
 
-    // Map skill names to short command names — only for skills with command: true
     const skillCommandMap = new Map<string, string>();
     for (const skill of skills) {
-      if (!skill.command) continue; // skip internal skills
+      if (!skill.command) continue;
       const cmd = skill.name.replace(/[^a-z0-9_]/g, '_').substring(0, 32);
       const desc = (skill.description || skill.name).substring(0, 256);
       botCommands.push({ command: cmd, description: desc });
       skillCommandMap.set(cmd, skill.name);
     }
 
-    // ── Command aliases: short Telegram commands → existing skills ──
-    // No separate SKILL.md needed — just a mapping table.
     const commandAliases: Array<{ cmd: string; description: string; skill: string }> = [
       { cmd: 'init',     description: '🎯 Initialize study profile', skill: 'profile-manager' },
     ];
-
-    // ── Bot commands ──
 
     this.bot.command('start', async (ctx) => {
       const name = 'Anya';
@@ -313,11 +221,10 @@ export class TelegramAdapter {
         if (sec < 3600) return `${Math.floor(sec / 60)}m ${Math.round(sec % 60)}s`;
         return `${Math.floor(sec / 3600)}h ${Math.round((sec % 3600) / 60)}m`;
       };
-      
+
       const AZURE_FREE_CHARS = 500_000;
       const AZURE_FREE_SPEECH_HOURS = 5;
-      
-      // Build per-provider LLM breakdown
+
       const cacheHitPct = usage.llm.input_tokens > 0
         ? Math.round((usage.llm.cached_tokens / usage.llm.input_tokens) * 100)
         : 0;
@@ -334,7 +241,7 @@ export class TelegramAdapter {
           llmSection += `\n  📌 <i>${name}</i>: ${fmtNum(stats.calls)} calls, ${fmtNum(stats.input_tokens)}/${fmtNum(stats.output_tokens)} tok`;
         }
       }
-      
+
       const text = `📊 <b>Anya Usage — ${usage.month}</b>\n\n` +
         llmSection + `\n\n` +
         `📢 <b>TTS (Azure)</b>\n` +
@@ -368,12 +275,10 @@ export class TelegramAdapter {
       agentLogger.info({ msg: 'tg_restart_command', chatId: ctx.chat.id, userId, updateId });
       const statusMsg = await ctx.reply('🔄 Restarting gateway...');
 
-      // CRITICAL: stop polling and explicitly ACK this /restart update past
-      // Telegram's queue BEFORE we exit. Otherwise the new child will re-read
-      // the same /restart update on its first getUpdates call (offset never
-      // advanced because we exited before grammy's next poll) and we loop
-      // forever. bot.stop() halts the in-flight long-poll so the explicit
-      // getUpdates call below doesn't 409 against ourselves.
+      // CRITICAL: stop polling and explicitly ACK this /restart update past Telegram's queue BEFORE
+      // we exit. Otherwise the new child re-reads the same /restart update on its first getUpdates
+      // (offset never advanced) and we loop forever. bot.stop() halts the in-flight long-poll so the
+      // explicit getUpdates below doesn't 409 against ourselves.
       try {
         await this.bot.stop();
         await this.bot.api.getUpdates({ offset: updateId + 1, limit: 1, timeout: 0 });
@@ -381,11 +286,10 @@ export class TelegramAdapter {
         agentLogger.error({ msg: 'tg_restart_ack_failed', error: (err as Error).message });
       }
 
-      // Clean up PID file so the new process doesn't detect "already running"
+      // Remove PID file so the new process doesn't detect "already running"
       const { removePid } = await import('../../lib/pidfile.js');
       removePid('gateway');
 
-      // Spawn a detached child process using the same entry point
       const { spawn } = await import('node:child_process');
       const { openSync } = await import('node:fs');
       const { LOGS_DIR } = await import('../../lib/paths.js');
@@ -407,7 +311,6 @@ export class TelegramAdapter {
 
       agentLogger.info({ msg: 'tg_restart_spawned', newPid: child.pid, updateId });
 
-      // Edit the status message to confirm restart (best-effort), then exit
       try {
         await this.bot.api.editMessageText(
           ctx.chat.id,
@@ -420,8 +323,7 @@ export class TelegramAdapter {
     });
 
     for (const alias of commandAliases) {
-      // Remove from skillCommandMap if the target skill has command: true
-      // and the alias command is the same command, to avoid duplicate registration.
+      // Drop dup from skillCommandMap if alias targets the same command+skill (avoid duplicate registration)
       for (const [existingCmd, existingSkill] of skillCommandMap) {
         if (existingSkill === alias.skill && existingCmd === alias.cmd) {
           skillCommandMap.delete(existingCmd);
@@ -431,7 +333,7 @@ export class TelegramAdapter {
       botCommands.push({ command: alias.cmd, description: alias.description });
     }
 
-    // Append system commands last so they appear at the bottom of the menu
+    // System commands appended last so they appear at the bottom of the Telegram menu
     botCommands.push(
       { command: 'model', description: '🤖 Switch LLM provider' },
       { command: 'usage', description: '📊 Check API usage' },
@@ -439,10 +341,8 @@ export class TelegramAdapter {
       { command: 'kill', description: '💀 Force stop & clear' },
     );
 
-    // Register commands with Telegram (shows menu when user types '/')
     await this.bot.api.setMyCommands(botCommands);
 
-    // Register alias handlers
     for (const alias of commandAliases) {
       this.bot.command(alias.cmd, async (ctx) => {
         agentLogger.info({ msg: 'tg_alias_command', chatId: ctx.chat.id, cmd: alias.cmd, skill: alias.skill });
@@ -453,7 +353,6 @@ export class TelegramAdapter {
       });
     }
 
-    // Dynamic skill commands — route to agent as "Run skill: <name>"
     for (const [cmd, skillName] of skillCommandMap) {
       this.bot.command(cmd, async (ctx) => {
         agentLogger.info({ msg: 'tg_skill_command', chatId: ctx.chat.id, skill: skillName });
@@ -464,8 +363,6 @@ export class TelegramAdapter {
       });
     }
 
-    // ── Message handler ──
-
     this.bot.on('message:text', async (ctx) => {
       const input = ctx.message.text;
 
@@ -473,12 +370,9 @@ export class TelegramAdapter {
       this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
     });
 
-    // ── Voice message handler (download → Groq Whisper STT → agent) ──
-
     this.bot.on('message:voice', async (ctx) => {
       agentLogger.info({ msg: 'tg_voice', chatId: ctx.chat.id, userId: ctx.from?.id, duration: ctx.message.voice.duration });
 
-      // Step 1: Download the voice file from Telegram servers
       let audioPath: string;
       try {
         const file = await ctx.getFile();
@@ -495,7 +389,6 @@ export class TelegramAdapter {
         return;
       }
 
-      // Step 2: Transcribe via Groq Whisper SDK
       const sttResult = await transcribeAudio(audioPath, this.config);
 
       if (!sttResult.success || !sttResult.transcript) {
@@ -506,7 +399,6 @@ export class TelegramAdapter {
         return;
       }
 
-      // Step 3: Wrap transcript and feed into the agent
       // Include audio_path so tools (e.g. pron_assess) can reference the file
       const input = `[Voice message | audio_path: ${audioPath}]\n"${sttResult.transcript}"`;
       agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, text: sttResult.transcript.substring(0, 100) });
@@ -514,8 +406,6 @@ export class TelegramAdapter {
 
       this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
     });
-
-    // ── Photo message handler (download → pass natively to agent) ──
 
     this.bot.on('message:photo', async (ctx) => {
       const caption = ctx.message.caption || '';
@@ -546,7 +436,6 @@ export class TelegramAdapter {
         return;
       }
 
-      // Determine MIME type from extension
       const ext = path.extname(imagePath).toLowerCase();
       const mimeMap: Record<string, string> = {
         '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
@@ -555,7 +444,7 @@ export class TelegramAdapter {
       };
       const mimeType = mimeMap[ext] || 'image/jpeg';
 
-      // Dual-model architecture: Analyze image via Gemini Vision SDK, then pass text to Codex/OpenAI
+      // Dual-model: analyze via Gemini Vision, then pass description text to the main LLM
       const { analyzeImage } = await import('../../lib/vision.js');
       const visionResult = await analyzeImage(imagePath, this.config, caption || undefined);
 
@@ -575,11 +464,10 @@ export class TelegramAdapter {
       this.enqueuePerChat(ctx.chat.id, () => this.handleIncoming(ctx, input));
     });
 
-    // ── Callback query dispatcher (approvals + choices + custom) ──
     this.bot.on('callback_query:data', async (ctx) => {
       const data = ctx.callbackQuery.data;
 
-      // Always answer callback query FIRST to dismiss Telegram loading spinner
+      // ACK callback FIRST to dismiss Telegram loading spinner
       await ctx.answerCallbackQuery().catch(() => {});
 
       if (data.startsWith('choice_')) {
@@ -607,9 +495,7 @@ export class TelegramAdapter {
           ).catch(() => {});
         }
       }
-      // ── Client-side pagination (no agent call) ──
-      // Callback format: `page:<messageId>:<pageIndex>`
-      // Edits the message in-place to show the requested page.
+      // Client-side pagination — `page:<messageId>:<pageIndex>` edits in-place, no agent call
       else if (data.startsWith('page:')) {
         const parts = data.split(':');
         const msgId = Number(parts[1]);
@@ -621,7 +507,6 @@ export class TelegramAdapter {
           if (pageIdx > 0) navRow.push({ text: `⬅️ ${pageIdx}/${pageCount}`, cb: `page:${msgId}:${pageIdx - 1}` });
           if (pageIdx < pageCount - 1) navRow.push({ text: `➡️ ${pageIdx + 2}/${pageCount}`, cb: `page:${msgId}:${pageIdx + 1}` });
 
-          // Parse the trailing buttons JSON and build full keyboard
           let trailingRows: Array<Array<{ text: string; callback_data: string }>> = [];
           try {
             const parsed = JSON.parse(entry.buttons) as string[][];
@@ -652,11 +537,7 @@ export class TelegramAdapter {
           agentLogger.warn({ msg: 'page_unknown', data, hasMsgId: !!entry });
         }
       }
-      // ── Practice menu navigation (client-side, no agent) ──
-      // If the source message is itself a menu page (every button is nav:* / menu / a known
-      // skill slug), edit it in-place so navigation feels like a single drill-down screen.
-      // Otherwise (source is a practice report with practice-action buttons like dict_next),
-      // send as a NEW message so the original report stays in chat history.
+      // If source is a menu page, edit-in-place (drill-down feel); otherwise send NEW so the original report stays in history
       else if (isNavCallback(data)) {
         const page = getNavPage(data);
         if (page) {
@@ -668,7 +549,7 @@ export class TelegramAdapter {
                 if (!('callback_data' in btn) || !btn.callback_data) return false;
                 const cd = btn.callback_data;
                 if (cd === 'menu' || cd.startsWith('nav:')) return true;
-                if (!/[_:]/.test(cd) && getSkill(cd)) return true; // skill slug like "listening-dictation"
+                if (!/[_:]/.test(cd) && getSkill(cd)) return true;
                 return false;
               }),
             );
@@ -687,7 +568,6 @@ export class TelegramAdapter {
           agentLogger.warn({ msg: 'tg_nav_unknown_page', data });
         }
       }
-      // ── Show main menu (from menu callback) ──
       else if (data === 'menu') {
         const menu = getMainMenu();
         if (menu) {
@@ -696,8 +576,7 @@ export class TelegramAdapter {
           }).catch(() => {});
         }
       }
-      // ── Generic callback (from tg_msg keyboard) ──
-      // Route unmatched button clicks back into the Agent as a new user input.
+      // Unmatched button clicks route back into the Agent as a new user input
       else {
         const userId = ctx.from?.id;
         const allowedUsers = this.config.telegram.allowed_user_ids;
@@ -718,12 +597,10 @@ export class TelegramAdapter {
           }
         }
 
-        // Detect skill slug callbacks early so we can skip editing the original message
         const matchedSkill = getSkill(data);
         const isSkillSwitch = !!matchedSkill;
 
-        // For skill-switch callbacks, don't edit the original message — it may contain
-        // menu content or evaluation results that should be preserved.
+        // Skill-switch must not edit the original message — it may hold menu/evaluation content that needs preserving
         if (!isSkillSwitch) {
           await ctx.editMessageText(
             ctx.callbackQuery.message?.text + `\n\n→ ${selectedLabel}`
@@ -769,20 +646,18 @@ export class TelegramAdapter {
       }
     });
 
-    // ── Poll answer handler (quiz feedback) ──
-
     this.bot.on('poll_answer', async (ctx) => {
       const answer = ctx.pollAnswer;
       const pollId = answer.poll_id;
       const poll = this.activePolls.get(pollId);
-      if (!poll) return; // Unknown poll (expired or not tracked)
+      if (!poll) return;
 
       const userId = answer.user?.id;
       const allowedUsers = this.config.telegram.allowed_user_ids;
       if (allowedUsers.length > 0 && userId && !allowedUsers.includes(userId)) return;
 
       const selectedIdx = answer.option_ids?.[0];
-      if (selectedIdx === undefined) return; // User retracted answer
+      if (selectedIdx === undefined) return; // user retracted answer
 
       const selectedOption = poll.options[selectedIdx] || `Option ${selectedIdx}`;
       const isCorrect = selectedIdx === poll.correctIndex;
@@ -795,13 +670,11 @@ export class TelegramAdapter {
       agentLogger.info({ msg: 'tg_poll_answer', chatId: poll.chatId, userId, pollId, selectedIdx, isCorrect });
 
       this.enqueuePerChat(poll.chatId, async () => {
-        // Create a minimal context-like object — poll_answer has no message context,
-        // so we send directly via bot.api
+        // poll_answer ctx has no chat — override chatId on the adapter and send via bot.api
         const sessionKey = `tg:${poll.chatId}`;
         const sessionAdapter = new TelegramSessionAdapter(
           ctx as any, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls, this.paginatedMessages,
         );
-        // Override chatId since poll_answer ctx doesn't have ctx.chat
         sessionAdapter.setChatIdOverride(poll.chatId);
         const agent = new Agent(this.config, sessionAdapter);
 
@@ -815,7 +688,6 @@ export class TelegramAdapter {
         }
       });
 
-      // Clean up after processing
       this.activePolls.delete(pollId);
     });
 
@@ -836,9 +708,6 @@ export class TelegramAdapter {
     });
   }
 
-  /**
-   * Gracefully terminates the Telegram bot's long-polling loop and halts scheduled jobs.
-   */
   stop(): void {
     stopScheduler();
     this.bot.stop();

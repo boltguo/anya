@@ -1,18 +1,8 @@
-/**
- * @module config/schema
- * @description Provides the Zod validation schema representing the expected shape
- * of the configuration object. Primarily used to validate user input and file persistence
- * integrity while mapping cleanly to the `AnyaConfig` interface.
- */
+// config/schema.ts — Zod schema for AnyaConfig
 
 import { z } from 'zod';
 
-/**
- * A partial Zod schema mapping to the `AnyaConfig` structure.
- * Every field is marked as `.optional()` to allow merging with the defaults object
- * safely, meaning the user file only needs to declare overrides.
- * @constant
- */
+// all fields optional so user file only declares overrides
 export const PartialAnyaConfigSchema = z.object({
   $schema: z.string().optional(),
   version: z.string().optional(),

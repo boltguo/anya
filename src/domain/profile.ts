@@ -1,7 +1,4 @@
-/**
- * @module domain/profile
- * @description Learner profile management and coaching context aggregation.
- */
+// domain/profile.ts — learner profile and coach context
 
 import type { DatabaseSync } from 'node:sqlite';
 import { withTransaction, parseJsonObject, stringifyMaybe, clampInt, optionalNumber } from './helpers.js';

@@ -1,12 +1,4 @@
-/**
- * @module tools/skill
- * @description Inspection interface exposing dynamic skill definitions to the LLM agent.
- *
- * Implements a restricted read-only pipeline granting the model awareness of installed
- * procedural skills (e.g., instructional steps encoded in `SKILL.md` or auxiliary files).
- * 
- * Required for contextual awareness prior to executing complex multi-step routines.
- */
+// tools/skill.ts — read-only skill inspector
 
 import { register } from './registry.js';
 import { getSkill, loadSkills, listSkillFiles, readSkillFile } from '../skills/loader.js';

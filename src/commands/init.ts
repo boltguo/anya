@@ -1,14 +1,4 @@
-/**
- * @module commands/init
- * @description `anya init` — First-run initialization and scaffolding command.
- *
- * Scaffolds the `~/.anya/` directory structure, writing default configuration
- * files and operational templates. Safe to run multiple times as it gracefully
- * skips creating files that already exist.
- *
- * Operates non-interactively. API keys and granular settings must be managed
- * via the `anya config` interactive wizard.
- */
+// commands/init.ts — first-run scaffolding of ~/.anya/
 
 import { writeFileSync, copyFileSync, existsSync, cpSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -27,20 +17,12 @@ import {
 } from '../lib/paths.js';
 import { DEFAULT_CONFIG } from '../config/defaults.js';
 
-/**
- * Resolves the absolute path of an asset bundled with the CLI.
- * It checks multiple potential layout locations to support both production
- * distributions (`dist/`) and development execution (`src/` via tsx).
- *
- * @param __dirname - The current directory path of the executing module.
- * @param rel - The relative path of the target asset.
- * @returns The resolved absolute path if found, otherwise null.
- */
+// supports both dist/ and src/ (tsx) layouts
 function resolveAsset(__dirname: string, rel: string): string | null {
   const candidates = [
-    join(__dirname, '..', rel),           // dist/<rel> relative to dist/bin/
-    join(__dirname, '..', 'src', rel),    // src/<rel> relative to dist/bin/ (dev layout)
-    join(__dirname, '..', '..', rel),     // src/<rel> relative to src/commands/ (tsx dev)
+    join(__dirname, '..', rel),
+    join(__dirname, '..', 'src', rel),
+    join(__dirname, '..', '..', rel),
   ];
   for (const p of candidates) {
     if (existsSync(p)) return p;
@@ -48,14 +30,6 @@ function resolveAsset(__dirname: string, rel: string): string | null {
   return null;
 }
 
-/**
- * Executes the `anya init` command to perform non-interactive system setup.
- *
- * Creates the necessary `~/.anya/` directory structure, copies bundled
- * templates (e.g., config, soul, rules, memory), and migrates default skills.
- *
- * @returns A Promise resolving when initialization is complete.
- */
 export async function runInit(): Promise<void> {
   console.log();
   console.log(chalk.bold.cyan('Anya Init'));
@@ -66,11 +40,9 @@ export async function runInit(): Promise<void> {
 
   const __dirname = dirname(fileURLToPath(import.meta.url));
 
-  // 1. Create directory structure
   ensureDirectories();
   console.log(chalk.dim('  [ok] directories'));
 
-  // 2. Write default config (only if missing)
   if (!existsSync(CONFIG_PATH)) {
     writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2) + '\n', 'utf-8');
     console.log(chalk.dim('  [ok] config.json (default)'));
@@ -78,7 +50,6 @@ export async function runInit(): Promise<void> {
     console.log(chalk.dim('  [ok] config.json (exists)'));
   }
 
-  // 3. Copy config schema
   const schemaSrc = resolveAsset(__dirname, 'config/schema.json');
   if (schemaSrc) {
     copyFileSync(schemaSrc, CONFIG_SCHEMA_PATH);
@@ -87,10 +58,8 @@ export async function runInit(): Promise<void> {
     console.log(chalk.yellow('  [warn] config.schema.json template not found'));
   }
 
-  // 4. Prompt-layer templates:
-  //    SOUL.md = Anya identity, RULES.md = operating contract,
-  //    USER.md = user profile/behavior, MEMORY.md = learner level state.
-  //    The English onboarding skill fills USER/MEMORY; it does not own SOUL/RULES.
+  // SOUL=identity, RULES=operating contract, USER=user profile, MEMORY=learner state.
+  // Onboarding skill fills USER/MEMORY only; SOUL/RULES are owned by init.
   for (const { label, dest, template } of [
     { label: 'SOUL.md',   dest: SOUL_PATH,      template: 'SOUL.template.md' },
     { label: 'RULES.md',  dest: RULES_PATH,     template: 'RULES.template.md' },
@@ -111,10 +80,8 @@ export async function runInit(): Promise<void> {
   console.log(chalk.dim('  [ok] memories/'));
 
 
-  // 5. Bundled skills
   let skillsSrc = resolveAsset(__dirname, 'skills');
   if (skillsSrc && existsSync(join(skillsSrc, 'bundled'))) {
-    // Development mode (src/skills) -> copy from src/skills/bundled
     skillsSrc = join(skillsSrc, 'bundled');
   }
   
@@ -134,7 +101,6 @@ export async function runInit(): Promise<void> {
     console.log(chalk.yellow('  [warn] bundled skills not found'));
   }
 
-  // Done
   console.log();
   console.log(chalk.bold.green('✓ Init complete'));
   console.log();

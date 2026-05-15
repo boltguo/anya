@@ -1,40 +1,19 @@
-/**
- * @module lib/ffmpeg
- * @description Centralized FFmpeg process execution and audio formatting utilities.
- *
- * Facilitates audio conversions, primarily:
- * - OGG/Opus → WAV (Azure Speech Pronunciation Assessment performs best with uncompressed WAV)
- *
- * Implements fallback strategies to automatically resolve the FFmpeg binary
- * across different operating systems and system PATH configurations.
- */
+// lib/ffmpeg.ts — ffmpeg binary resolution and audio conversion
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { agentLogger } from './logger.js';
 
-// ── FFmpeg Path Resolution ───────────────────────────────────────────────────
-
-/** 
- * Internal cache for the resolved FFmpeg binary path.
- * - `null`: Checked, but not found.
- * - `undefined`: Unchecked.
- */
+// null = checked but not found; undefined = unchecked
 let _ffmpegPath: string | null | undefined;
 
-/**
- * Locates the FFmpeg binary by probing common filesystem locations and inspecting the system PATH.
- *
- * @returns {string | null} The absolute path to the FFmpeg executable, or null if not discovered.
- */
 export function getFFmpegPath(): string | null {
   if (_ffmpegPath !== undefined) return _ffmpegPath;
 
-  // Primary inspection locations across diverse environments
   const candidates = [
-    '/opt/homebrew/bin/ffmpeg',   // macOS Apple Silicon (Homebrew)
-    '/usr/local/bin/ffmpeg',      // macOS Intel (Homebrew) / standard Linux
-    '/usr/bin/ffmpeg',            // Native Linux package manager installs
+    '/opt/homebrew/bin/ffmpeg',
+    '/usr/local/bin/ffmpeg',
+    '/usr/bin/ffmpeg',
   ];
 
   for (const p of candidates) {
@@ -45,12 +24,11 @@ export function getFFmpegPath(): string | null {
     }
   }
 
-  // Secondary fallback: probe utilizing the system 'which' utility
   try {
     const result = execFileSync('which', ['ffmpeg'], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
-      // Synthesize an enriched PATH accommodating environments where PATH isn't globally exposed
+      // Augment PATH for environments where it's not globally exposed
       env: { ...process.env, PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH}` },
     }).trim();
     if (result) {
@@ -59,7 +37,7 @@ export function getFFmpegPath(): string | null {
       return result;
     }
   } catch {
-    // Binary resolution via 'which' failed
+    // which failed
   }
 
   _ffmpegPath = null;
@@ -67,16 +45,7 @@ export function getFFmpegPath(): string | null {
   return null;
 }
 
-// ── Conversion Functions ─────────────────────────────────────────────────────
-
-/**
- * Transcodes an OGG/Opus audio file into a WAV format.
- * Target format is specifically strictly constrained to 16kHz mono 16-bit PCM WAV,
- * satisfying requirements for downstream processing via Azure Speech assessment tools.
- *
- * @param {string} inputPath - The absolute filesystem path to the source audio file.
- * @returns {string | null} The absolute path to the resulting WAV file, or null upon failure.
- */
+// Target: 16kHz mono 16-bit PCM WAV — required by Azure Speech assessment.
 export function convertToWav(inputPath: string): string | null {
   const ffmpeg = getFFmpegPath();
   if (!ffmpeg) return null;
@@ -85,7 +54,6 @@ export function convertToWav(inputPath: string): string | null {
   if (inputPath === wavPath) return inputPath;
 
   try {
-    // Block thread execution synchronously as files are small and conversion is fast
     execFileSync(ffmpeg, [
       '-y',
       '-i', inputPath,

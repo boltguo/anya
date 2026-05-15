@@ -1,13 +1,7 @@
-/**
- * @module providers/openai/transform
- * @description Message ↔ Codex Responses API translation helpers.
- */
+// providers/openai/transform.ts — Message ↔ Codex Responses translation
 
 import type { Message, ToolParameterSchema } from '../../agent/types.js';
 
-/**
- * Convert our Message[] to Codex Responses input items.
- */
 export function toResponsesInput(messages: Message[]): {
   instructions: string;
   input: Array<Record<string, unknown>>;
@@ -53,13 +47,6 @@ export function toResponsesInput(messages: Message[]): {
   return { instructions, input };
 }
 
-/**
- * Transforms internal tool definitions into the schema format required by the Codex Responses API.
- * Maps the internal tool representations to the structured JSON schema expected for function calling.
- *
- * @param tools - An array of internal tool definitions including name, description, and JSON schema parameters.
- * @returns An array of transformed tool specification objects configured for the Codex endpoint.
- */
 export function toResponsesTools(
   tools: Array<{ name: string; description: string; parameters: ToolParameterSchema }>,
 ): Array<Record<string, unknown>> {

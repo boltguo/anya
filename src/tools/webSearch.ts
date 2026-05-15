@@ -1,11 +1,4 @@
-/**
- * @module tools/webSearch
- * @description Open-web exploration tool bridging the Tavily inference API.
- *
- * Mitigates redundant remote API invocation via a deterministic local JSON caching layer 
- * stored within `~/.anya/data/search/`. Enforces a standard 24-hour freshness TTL on 
- * duplicate query strings.
- */
+// tools/webSearch.ts — Tavily-backed web search with 24h cache
 
 import { register } from './registry.js';
 import type { ToolContext } from '../agent/types.js';
@@ -17,29 +10,16 @@ import { tavily, type TavilyClient } from '@tavily/core';
 import { agentLogger } from '../lib/logger.js';
 import { trackWebSearch } from '../lib/usage.js';
 
-/** In-memory cached API client, prevents rapid connection re-initialization overhead. */
 let _tavilyClient: TavilyClient | null = null;
 let _tavilyApiKey: string | null = null;
 
-// ── Cache Helpers ────────────────────────────────────────────────────────────
-
-/**
- * Computes a filesystem-safe deterministic cache lookup key from the raw query parameter.
- * Integrates SHA-256 digesting to prevent injection constraints and path length violations.
- *
- * @param {string} query - The raw textual search request.
- * @returns {string} The normalized cache filename prefix.
- */
+// Hash suffix keeps the key collision-resistant; slug prefix keeps cache files greppable.
 function cacheKey(query: string): string {
   const hash = createHash('sha256').update(query.toLowerCase().trim()).digest('hex').slice(0, 12);
   const slug = query.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40);
   return `${slug}_${hash}`;
 }
 
-/**
- * Read cached search result if it exists and is fresh (< 24 hours).
- * @returns Cached result string, or null if expired/missing.
- */
 function readCache(query: string): string | null {
   const filePath = join(SEARCH_CACHE_DIR, `${cacheKey(query)}.json`);
   if (!existsSync(filePath)) return null;
@@ -47,20 +27,17 @@ function readCache(query: string): string | null {
   try {
     const raw = JSON.parse(readFileSync(filePath, 'utf-8'));
     const ageMs = Date.now() - new Date(raw.timestamp).getTime();
-    const maxAgeMs = 24 * 60 * 60 * 1000; // 24 hours
+    const maxAgeMs = 24 * 60 * 60 * 1000;
 
     if (ageMs < maxAgeMs) {
       return raw.result;
     }
   } catch {
-    // Corrupted cache file, ignore
+    // Corrupted cache file — fall through to refetch.
   }
   return null;
 }
 
-/**
- * Write search result to cache.
- */
 function writeCache(query: string, result: string, rawData: unknown): void {
   if (!existsSync(SEARCH_CACHE_DIR)) {
     mkdirSync(SEARCH_CACHE_DIR, { recursive: true });
@@ -73,8 +50,6 @@ function writeCache(query: string, result: string, rawData: unknown): void {
     raw: rawData,
   }, null, 2));
 }
-
-// ── Tool Registration ────────────────────────────────────────────────────────
 
 register({
   name: 'web_search',
@@ -119,7 +94,7 @@ register({
     agentLogger.info({ msg: 'web_search_start', query: query.substring(0, 80), maxResults });
     const t0 = Date.now();
 
-    // Reuse Tavily client across calls (recreate only if API key changes)
+    // Reuse client across calls; rebuild only when the API key rotates.
     if (!_tavilyClient || _tavilyApiKey !== apiKey) {
       _tavilyClient = tavily({ apiKey });
       _tavilyApiKey = apiKey;
@@ -131,7 +106,6 @@ register({
       includeRawContent: false,
     });
 
-    // Format results as clean markdown
     const lines: string[] = [];
 
     if (data.answer) {

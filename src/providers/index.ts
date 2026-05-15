@@ -1,7 +1,4 @@
-/**
- * @module providers/index
- * @description Provider factory. Currently OpenAI/Codex only.
- */
+// providers/index.ts — LLM provider factory (codex-only)
 
 import type { LLMProvider } from '../agent/types.js';
 import type { AnyaConfig } from '../config/defaults.js';

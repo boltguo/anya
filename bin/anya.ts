@@ -1,11 +1,5 @@
 #!/usr/bin/env node
-/**
- * @module bin/anya
- * @description The main Command Line Interface (CLI) entrypoint for the Anya agent.
- *
- * Provides a Commander.js based CLI to initialize the workspace, manage configuration,
- * start/stop the Telegram gateway, manage cron jobs, and view diagnostics.
- */
+// bin/anya.ts — Commander CLI entrypoint for Anya agent
 
 import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
@@ -43,7 +37,6 @@ import { loadConfig } from '../src/config/loader.js';
 import { loadSkills } from '../src/skills/loader.js';
 import { isServiceRunning } from '../src/lib/pidfile.js';
 
-// Resolve package.json for version
 const __dirname = dirname(fileURLToPath(import.meta.url));
 let version = '0.1.0';
 try {
@@ -62,7 +55,7 @@ program
   .name('anya')
   .description('Anya — Personal AI agent')
   .version(version, '-v, --version')
-  .addHelpCommand(false)  // remove implicit "help [command]" subcommand
+  .addHelpCommand(false)
   .action(() => {
     program.outputHelp();
   });
@@ -74,7 +67,6 @@ program
     await runInit();
   });
 
-// --- Config Command ---
 const configCmd = program
   .command('config')
   .description('Manage configuration')
@@ -97,7 +89,6 @@ configCmd
     execFileSync(editor, [CONFIG_PATH], { stdio: 'inherit' });
   });
 
-// --- Doctor Command ---
 program
   .command('doctor')
   .description('Check environment and configuration')
@@ -112,20 +103,17 @@ program
 
     const config = loadConfig();
 
-    // LLM Provider (OpenAI / Codex only)
     const { hasCodexAuth } = await import('../src/lib/auth.js');
     const codexReady = hasCodexAuth();
     console.log(
       `  LLM:       ${codexReady ? '[ok]' : '[!!]'} codex (${config.provider.model}) ${codexReady ? '✓' : 'not authenticated'}`,
     );
 
-    // Vision — Gemini
     const hasGeminiKey = !!config.gemini?.api_key;
     console.log(
       `  Gemini:    ${hasGeminiKey ? '[ok]' : '[!!]'} Vision (${config.gemini?.vision_model}) ${hasGeminiKey ? '✓' : 'API key not set'}`,
     );
 
-    // Azure — TTS + pron assessment
     const hasAzure = !!config.azure?.speech_key;
     console.log(
       `  Azure:     ${hasAzure ? '[ok]' : '[--]'} ${hasAzure ? `Speech (${config.azure.speech_region})` : 'not configured (TTS + pron unavailable)'}`,
@@ -156,7 +144,6 @@ program
     console.log();
   });
 
-// --- Gateway Command ---
 const gatewayCmd = program
   .command('gateway')
   .description('Manage Telegram bot gateway');
@@ -198,7 +185,6 @@ gatewayCmd
     runGatewayLogs(parseInt(opts.lines, 10));
   });
 
-// --- Cron Command ---
 const cronCmd = program
   .command('cron')
   .description('Manage scheduled jobs');
@@ -307,7 +293,6 @@ cronCmd
     await runCronTick(opts.deliver);
   });
 
-// --- Usage Command ---
 program
   .command('usage')
   .description('Show monthly API usage statistics')

@@ -1,141 +1,78 @@
-/**
- * @module config/defaults
- * @description Provides the type definitions and default fallback values for the application configuration.
- *
- * This configuration dictates core agent behavior, provider connections, allowed tools,
- * security limits, and various advanced orchestration parameters. Agent identity instructions
- * (like SOUL) are separate from this structural configuration.
- */
+// config/defaults.ts — AnyaConfig shape and defaults
 
-/**
- * Defines the complete shape of the application configuration.
- * @interface AnyaConfig
- */
 export interface AnyaConfig {
-  /** Optional JSON schema reference for editor validation. */
   $schema?: string;
-  /** The configuration format version. */
   version: string;
 
-  /** Settings for the primary Large Language Model provider. */
   provider: {
-    /** The active provider backend (always 'codex' — OpenAI/Codex). */
     backend: 'codex';
-    /** The identifier of the specific model to use. */
     model: string;
-    /** The absolute maximum output tokens allowed in a single generation. */
     max_tokens: number;
-    /** The sampling temperature controlling generation randomness. */
-    temperature: number;
-    /** The maximum number of retries permitted for transient API errors. */
+    temperature: number;  // 0.0–1.0
     max_retries: number;
   };
 
-  /** Specific settings for Google's Gemini AI Studio provider. */
   gemini: {
-    /** The API key used to authenticate requests to Gemini. */
     api_key: string;
-    /** The model to employ specifically for multi-modal vision tasks. */
     vision_model: string;
   };
 
-  /** Configuration detailing which tools are accessible to the agent and their specific parameters. */
   tools: {
-    /** An array of tool name identifiers that the agent is permitted to invoke. */
     enabled: string[];
-    /** Settings specific to the web search tool integration. */
     web_search: {
-      /** The backend service to utilize (e.g., 'tavily'). */
       backend: string;
-      /** The API key for the chosen web search backend. */
       api_key: string;
-      /** The maximum number of search results to process. */
       max_results: number;
     };
   };
 
-  /** Security and execution boundary configurations. */
   security: {
-    /** A list of directory paths the agent is permitted to read or modify. */
     allowed_paths: string[];
-    /** The strictness level for critical operations ('ask', 'deny', or 'allow'). */
     fence_mode: 'ask' | 'deny' | 'allow';
   };
 
-  /** Telegram integration parameters. */
   telegram: {
-    /** Toggles the activation of the Telegram bot listener. */
     enabled: boolean;
-    /** The token assigned by the Telegram BotFather. */
     bot_token: string;
-    /** An array of Telegram numeric User IDs allowed to interact with the bot. */
     allowed_user_ids: number[];
   };
 
-  /** Scheduled execution and automated task settings. */
   cron: {
-    /** Toggles the internal cron scheduler. */
     enabled: boolean;
-    /** The interval in seconds at which the cron evaluator ticks. */
-    tick_seconds: number;
-    /** The time zone used for resolving time-based cron triggers. */
+    tick_seconds: number;  // in seconds
     timezone: string;
-    /** The default platform to use for asynchronous notifications. */
     default_platform: string;
-    /** The default chat/user ID to target for automated messages. */
     default_chat_id: string;
   };
 
-  /** Speech-to-Text configuration settings. */
   stt: {
-    /** API key for the Groq platform processing audio transcription. */
     groq_api_key: string;
-    /** The identifier of the whisper model to employ. */
     model: string;
   };
 
-  /** Text-to-Speech synthesis parameters. */
   tts: {
-    /** The string identifier representing the voice characteristics. */
     voice: string;
-    /** The desired prosody rate (e.g., '+0%'). */
     rate: string;
   };
 
-  /** Azure Cognitive Services configuration (used for TTS and Pronunciation Assessment). */
   azure: {
-    /** The subscription key for Azure Speech Services. */
     speech_key: string;
-    /** The Azure region identifier where the resource is hosted. */
     speech_region: string;
   };
 
-  /** User interface and terminal display preferences. */
   ui: {
-    /** Toggles whether raw tool invocations and results are echoed to the console. */
     show_tool_calls: boolean;
   };
 
-  /** Low-level orchestration, state management, and debugging parameters. */
   advanced: {
-    /** The context window token limit before forced compression is engaged. */
     context_window: number;
-    /** The ratio (0.0 to 1.0) of context window usage at which compression triggers. */
-    compress_threshold: number;
-    /** The maximum absolute number of messages kept in active memory. */
+    compress_threshold: number;  // 0.0–1.0
     max_history_messages: number;
-    /** The logging verbosity level ('debug', 'info', 'warn', 'error'). */
     log_level: string;
-    /** The maximum number of autonomous tool iterations allowed per single user query. */
     max_react_loops: number;
   };
 }
 
-/**
- * The default configuration object providing sensible fallback values.
- * Deeply merged with user-defined JSON and environment variables at runtime.
- * @constant {AnyaConfig}
- */
 export const DEFAULT_CONFIG: AnyaConfig = {
   $schema: './config.schema.json',
   version: '0.4.0',

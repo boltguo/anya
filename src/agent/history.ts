@@ -1,31 +1,12 @@
-/**
- * @module agent/history
- * @description Conversation history utilities for the ReAct loop.
- *
- * Provides operations to sanitize and truncate message sequences:
- * - **Truncation**: Restricts message counts strictly without severing tool
- *   results from their associated assistant invocation.
- * - **Sanitization**: Enforces LLM provider turn-ordering rules ensuring
- *   invalid patterns are safely dropped instead of triggering exceptions.
- */
+// agent/history.ts — history truncation and sanitization
 
 import type { Message } from './types.js';
 import { agentLogger } from '../lib/logger.js';
 
-/**
- * Truncates the message history to the specified maximum length while preserving
- * tool message continuity.
- *
- * Backtracks over leading tool responses to guarantee that tool results are
- * never retained without their originating assistant tool-call message.
- *
- * @param history - The current array of conversation messages.
- * @param maxHistory - The maximum allowed number of messages.
- * @returns A securely truncated array of messages.
- */
 export function truncateHistory(history: Message[], maxHistory: number): Message[] {
   if (history.length <= maxHistory) return history;
 
+  // Back off over leading tool messages so results stay paired with their assistant call.
   let sliceIndex = history.length - maxHistory;
   while (sliceIndex > 0 && history[sliceIndex].role === 'tool') {
     sliceIndex--;
@@ -35,25 +16,11 @@ export function truncateHistory(history: Message[], maxHistory: number): Message
   return truncated;
 }
 
-/**
- * Sanitizes conversation history to adhere strictly to expected turn ordering.
- *
- * Enforces the following validations:
- * 1. The first relevant message must originate from a 'user'.
- * 2. An assistant message containing `toolCalls` must be immediately followed
- *    by corresponding 'tool' responses.
- * 3. Orphaned 'tool' messages without preceding tool calls are discarded.
- * 4. Invalid sequences are skipped and logged as warnings instead of crashing.
- *
- * @param history - The complete array of raw conversation messages.
- * @returns A fully sanitized message array suitable for LLM consumption.
- */
 export function sanitizeHistory(history: Message[]): Message[] {
   if (history.length === 0) return history;
 
   const result: Message[] = [];
 
-  // Exclude leading non-user messages to ensure appropriate initialization.
   let startIdx = 0;
   while (startIdx < history.length && history[startIdx].role !== 'user') {
     agentLogger.warn({ msg: 'history_sanitize_skip_leading', role: history[startIdx].role });
@@ -71,7 +38,6 @@ export function sanitizeHistory(history: Message[]): Message[] {
         agentLogger.warn({ msg: 'history_sanitize_drop_orphan_tool', toolName: msg.toolName });
       }
     } else if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
-      // Aggregate subsequent tool results corresponding to the active tool calls.
       let j = i + 1;
       const toolResults: Message[] = [];
       while (j < history.length && history[j].role === 'tool') {

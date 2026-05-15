@@ -1,12 +1,4 @@
-/**
- * @module lib/vision
- * @description Image structural and semantic analysis adapter utilizing the Google Gemini REST API.
- *
- * Translates multi-format image blob paths into robust descriptive plain-text scenarios
- * compatible with the central LLM agent context window. Implements MIME mapping, byte
- * size constraint validation, and base64 injection logic targeting `gemini-*-flash`
- * multimodal model endpoint parameters.
- */
+// lib/vision.ts — Gemini image analysis
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';

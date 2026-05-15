@@ -1,12 +1,4 @@
-/**
- * @module tools/file
- * @description File system utilities (read, write, list) available to the agent.
- *
- * Implements a restricted filesystem capability. Interactions are rigidly gated
- * via {@link isPathAllowed}, securing execution within the `~/.anya` workspace
- * bounds unless an explicit UI-based user override triggers an ephemeral or 
- * durable exception.
- */
+// tools/file.ts — sandboxed filesystem agent tool
 
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
@@ -15,15 +7,7 @@ import { isPathAllowed } from '../lib/approval.js';
 import { persistConfig } from '../config/loader.js';
 import type { ToolContext } from '../agent/types.js';
 
-/**
- * Evaluates sandbox bounds targeting a specific path, triggering interactive
- * user-authorization flows when attempting to escape primary isolation contexts.
- *
- * @param {string} filePath - Target node (file or directory).
- * @param {string} operation - Action context (e.g., 'read', 'write').
- * @param {ToolContext} context - Dependency container carrying config and adapter hooks.
- * @returns {Promise<boolean>} True if the operation is permitted.
- */
+// Security fence: paths outside the allowed set require explicit user approval per fence_mode.
 async function checkFileAccess(
   filePath: string,
   operation: string,
@@ -41,13 +25,12 @@ async function checkFileAccess(
     return true;
   }
 
-  // fence_mode === 'ask'
   const result = await context.adapter.requestApproval(
     `Agent wants to ${operation} a file outside the security fence:\n   ${filePath}`
   );
 
   if (result === 'always') {
-    // Add directory to allowed_paths and persist so the decision survives restarts.
+    // Persist 'always' decisions to allowed_paths so they survive restarts.
     const dir = dirname(resolve(filePath)) + '/';
     if (!context.config.security.allowed_paths.includes(dir)) {
       context.config.security.allowed_paths.push(dir);
@@ -58,7 +41,6 @@ async function checkFileAccess(
   return result !== 'deny';
 }
 
-// --- read_file ---
 register({
   name: 'read_file',
   description: 'Read a file and return its text content.',
@@ -91,7 +73,6 @@ register({
         return `Error: ${filePath} is a directory. Use list_dir instead.`;
       }
 
-      // Limit large files
       if (stat.size > 1024 * 1024) {
         return `Error: File too large (${(stat.size / 1024 / 1024).toFixed(1)}MB). Max 1MB.`;
       }
@@ -104,7 +85,6 @@ register({
   },
 });
 
-// --- write_file ---
 register({
   name: 'write_file',
   description: 'Write content to a file. Creates the file (and parent dirs) if it does not exist. Overwrites if it does.',
@@ -146,7 +126,6 @@ register({
   },
 });
 
-// --- list_dir ---
 register({
   name: 'list_dir',
   description: 'List directory contents, returning files and subdirectories with their sizes.',

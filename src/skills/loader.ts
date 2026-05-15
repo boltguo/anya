@@ -1,17 +1,4 @@
-/**
- * @module skills/loader
- * @description Skill discovery and loading from ~/.anya/skills/.
- *
- * Three-level loading strategy:
- * 1. **Index** — Scan directory names + parse frontmatter for fast skill listing
- * 2. **Full** — Load complete SKILL.md body for a specific skill
- * 3. **Files** — List and read auxiliary files in a skill's directory
- *
- * The cache is invalidated automatically when any SKILL.md mtime changes
- * (or when the skills directory itself changes), so live edits get picked
- * up without restarting the bot. `invalidateCache()` is also exposed for
- * explicit refresh after create/delete.
- */
+// skills/loader.ts — load SKILL.md from disk with mtime cache
 
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join, basename, dirname, resolve, relative, sep } from 'node:path';
@@ -20,23 +7,12 @@ import { parseSkill, type Skill } from './parser.js';
 
 interface SkillCache {
   skills: Skill[];
-  /** Map of SKILL.md path → mtimeMs at load time. */
+  // SKILL.md path → mtimeMs at load time
   mtimes: Map<string, number>;
 }
 
 let _cache: SkillCache | null = null;
 
-/**
- * Scan ~/.anya/skills/ recursively and load all SKILL.md files.
- *
- * Directory structure:
- *   skills/
- *     category/
- *       skill-name/
- *         SKILL.md
- *         templates/   (optional)
- *         scripts/     (optional)
- */
 export function loadSkills(forceReload = false): Skill[] {
   if (!forceReload && _cache && isCacheFresh(_cache)) {
     return _cache.skills;
@@ -55,11 +31,7 @@ export function loadSkills(forceReload = false): Skill[] {
   return skills;
 }
 
-/**
- * Cheap freshness check: re-stat each tracked SKILL.md and bail out if any
- * mtime moved. Adds/deletes are caught because the new file won't be in the
- * map (or a deleted file's stat will throw).
- */
+// Adds/deletes are caught because new files aren't in the map and deleted-file stat throws.
 function isCacheFresh(cache: SkillCache): boolean {
   for (const [path, mtime] of cache.mtimes) {
     try {
@@ -80,7 +52,6 @@ function scanDirectory(dir: string, results: Skill[], mtimes: Map<string, number
   }
 
   for (const entry of entries) {
-    // Skip hidden files/dirs
     if (entry.startsWith('.')) continue;
 
     const fullPath = join(dir, entry);
@@ -100,7 +71,7 @@ function scanDirectory(dir: string, results: Skill[], mtimes: Map<string, number
           results.push(skill);
           mtimes.set(skillPath, statSync(skillPath).mtimeMs);
         } catch {
-          // Skip unparseable skills
+          // skip unparseable skills
         }
       } else {
         scanDirectory(fullPath, results, mtimes);
@@ -109,30 +80,19 @@ function scanDirectory(dir: string, results: Skill[], mtimes: Map<string, number
   }
 }
 
-/**
- * Get a single skill by name.
- */
 export function getSkill(name: string): Skill | undefined {
   const skills = loadSkills();
   return skills.find(s => s.name === name);
 }
 
-/**
- * Build the Level 0 skill index for system prompt injection.
- *
- * Groups skills by their directory category (e.g., `english`, `support`)
- * and emits a compact category-level summary instead of listing every skill
- * with its full description. This reduces system prompt tokens by ~500
- * while preserving the LLM's ability to discover and route to skills.
- */
+// Category-level summary cuts ~500 system-prompt tokens vs listing every skill description.
 export function buildSkillIndex(): string {
   const skills = loadSkills();
   if (skills.length === 0) return '';
 
-  // Group skills by category derived from directory path
   const categories = new Map<string, string[]>();
   for (const skill of skills) {
-    // Extract category from filePath: .../skills/<category>/<name>/SKILL.md
+    // filePath shape: .../skills/<category>/<name>/SKILL.md
     const parts = skill.filePath.split('/');
     const nameIdx = parts.lastIndexOf('SKILL.md');
     const category = nameIdx >= 3 ? parts[nameIdx - 2] : 'other';
@@ -150,9 +110,6 @@ export function buildSkillIndex(): string {
   return lines.join('\n');
 }
 
-/**
- * List files in a skill directory (for Level 2 access).
- */
 export function listSkillFiles(name: string): string[] {
   const skill = getSkill(name);
   if (!skill) return [];
@@ -182,9 +139,6 @@ export function listSkillFiles(name: string): string[] {
   return files;
 }
 
-/**
- * Read an attached file from a skill directory.
- */
 export function readSkillFile(name: string, filePath: string): string | null {
   const skill = getSkill(name);
   if (!skill) return null;
@@ -192,7 +146,7 @@ export function readSkillFile(name: string, filePath: string): string | null {
   const skillDir = dirname(skill.filePath);
   const fullPath = resolve(skillDir, filePath);
 
-  // Security: ensure the resolved path is within the skill directory
+  // Security: refuse paths escaping the skill directory.
   const rel = relative(skillDir, fullPath);
   if (rel.startsWith('..') || rel.startsWith('..' + sep)) return null;
 
@@ -203,9 +157,6 @@ export function readSkillFile(name: string, filePath: string): string | null {
   }
 }
 
-/**
- * Clear the skills cache (call after create/delete).
- */
 export function invalidateCache(): void {
   _cache = null;
 }

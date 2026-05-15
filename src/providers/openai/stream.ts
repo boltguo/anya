@@ -1,24 +1,7 @@
-/**
- * @module providers/openai/stream
- * @description Server-Sent Events (SSE) consumption logic for Codex streams.
- *
- * Natively parses the raw byte stream emitted by the Codex chunked API without
- * relying on bloated third-party SSE parser libraries.
- */
+// providers/openai/stream.ts — Codex SSE stream consumer
 
 import type { LLMResponse } from '../../agent/types.js';
 
-/**
- * Aggregates a chunked `fetch` Response stream into a unified `LLMResponse`.
- *
- * Core event processing:
- * - `response.output_item.done` -> Accumulates discrete message blocks or isolated function calls.
- * - `response.completed` -> Finalizes execution, capturing token consumption metrics.
- *
- * @param {Response} response - The active HTTP response object with an open readable body.
- * @param {number} startTime - The exact monotonic timestamp when the request fired (for telemetry).
- * @returns {Promise<LLMResponse>} The fully constructed result object.
- */
 export async function consumeStream(response: Response, startTime: number): Promise<LLMResponse> {
   if (!response.body) {
     return { content: '', durationMs: Date.now() - startTime };
@@ -39,15 +22,13 @@ export async function consumeStream(response: Response, startTime: number): Prom
 
       buffer += decoder.decode(value, { stream: true });
 
-      // Process complete SSE events (separated by double newlines)
+      // SSE events are separated by double newlines; tail may be partial
       const events = buffer.split('\n\n');
-      // Keep the last potentially incomplete chunk in buffer
       buffer = events.pop() || '';
 
       for (const eventBlock of events) {
         if (!eventBlock.trim()) continue;
 
-        // Extract data lines from the SSE event
         let data = '';
         for (const line of eventBlock.split('\n')) {
           if (line.startsWith('data: ')) {
@@ -82,7 +63,7 @@ export async function consumeStream(response: Response, startTime: number): Prom
             let args: Record<string, unknown> = {};
             try {
               args = JSON.parse((item.arguments as string) || '{}');
-            } catch { /* malformed arguments — fall back to empty */ }
+            } catch { /* malformed → empty args */ }
             toolCalls.push({
               id: (item.call_id as string) || '',
               name: (item.name as string) || '',
