@@ -117,35 +117,25 @@ function registerUsage(rt: TelegramRuntime): void {
     const AZURE_FREE_CHARS = 500_000;
     const AZURE_FREE_SPEECH_HOURS = 5;
 
-    let llmSection = `🧠 <b>LLM</b> (${rt.config.provider.backend})\n` +
+    const text = `📊 <b>Anya Usage — ${usage.month}</b>\n\n` +
+      `🧠 <b>LLM (OpenAI)</b>\n` +
       `├ Calls:  ${pair(fmtNum(usage.llm.calls), fmtNum(today.llm.calls))}\n` +
       `├ Input:  ${pair(fmtNum(usage.llm.input_tokens), fmtNum(today.llm.input_tokens))}\n` +
       `├ Output: ${pair(fmtNum(usage.llm.output_tokens), fmtNum(today.llm.output_tokens))}\n` +
-      `└ Cached: ${pair(fmtNum(usage.llm.cached_tokens), fmtNum(today.llm.cached_tokens))}`;
-
-    const providers = Object.entries(usage.llm_by_provider);
-    if (providers.length > 1) {
-      llmSection += '\n';
-      for (const [name, stats] of providers) {
-        llmSection += `\n  📌 <i>${name}</i>: ${fmtNum(stats.calls)} calls, ${fmtNum(stats.input_tokens)}/${fmtNum(stats.output_tokens)} tok`;
-      }
-    }
-
-    const text = `📊 <b>Anya Usage — ${usage.month}</b>\n\n` +
-      llmSection + `\n\n` +
-      `📢 <b>TTS (Azure)</b>\n` +
+      `└ Cached: ${pair(fmtNum(usage.llm.cached_tokens), fmtNum(today.llm.cached_tokens))}\n\n` +
+      `📢 <b>TTS (Azure Speech)</b>\n` +
       `├ Calls: ${pair(fmtNum(usage.tts.calls), fmtNum(today.tts.calls))}\n` +
       `├ Chars: ${pair(`${fmtNum(usage.tts.chars)} / ${fmtNum(AZURE_FREE_CHARS)}`, fmtNum(today.tts.chars))}\n` +
       `└ Dur:   ${pair(fmtDuration(usage.tts.duration_sec), fmtDuration(today.tts.duration_sec))}\n\n` +
-      `🗣️ <b>Pronunciation (Azure)</b>\n` +
+      `🗣️ <b>Pronunciation (Azure Speech)</b>\n` +
       `├ Calls: ${pair(fmtNum(usage.pron_assess.calls), fmtNum(today.pron_assess.calls))}\n` +
       `└ Dur:   ${pair(`${fmtDuration(usage.pron_assess.duration_sec)} / ${AZURE_FREE_SPEECH_HOURS}h`, fmtDuration(today.pron_assess.duration_sec))}\n\n` +
       `🎤 <b>STT (Groq Whisper)</b>\n` +
       `├ Calls: ${pair(fmtNum(usage.stt.calls), fmtNum(today.stt.calls))}\n` +
       `└ Dur:   ${pair(fmtDuration(usage.stt.duration_sec), fmtDuration(today.stt.duration_sec))}\n\n` +
-      `🔍 <b>Web Search</b>\n` +
+      `🔍 <b>Web Search (Tavily)</b>\n` +
       `└ Calls: ${pair(fmtNum(usage.web_search.calls), fmtNum(today.web_search.calls))}\n\n` +
-      `👀 <b>Vision</b>\n` +
+      `👀 <b>Vision (Gemini)</b>\n` +
       `└ Calls: ${pair(fmtNum(usage.vision.calls), fmtNum(today.vision.calls))}`;
 
     await ctx.reply(text, { parse_mode: 'HTML' });

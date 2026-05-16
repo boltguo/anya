@@ -42,18 +42,11 @@ export function runUsage(month?: string): void {
   console.log(chalk.bold.cyan(`Anya Usage — ${usage.month}`));
   console.log();
 
-  console.log(chalk.bold('  🧠 LLM'));
+  console.log(chalk.bold('  🧠 LLM (OpenAI)'));
   console.log('     ' + pair('Calls:',         fmtNum(usage.llm.calls),          fmtNum(today.llm.calls)));
   console.log('     ' + pair('Input tokens:',  fmtNum(usage.llm.input_tokens),   fmtNum(today.llm.input_tokens)));
   console.log('     ' + pair('Output tokens:', fmtNum(usage.llm.output_tokens),  fmtNum(today.llm.output_tokens)));
   console.log('     ' + pair('Cached tokens:', fmtNum(usage.llm.cached_tokens),  fmtNum(today.llm.cached_tokens)));
-
-  const providers = Object.entries(usage.llm_by_provider);
-  if (providers.length > 0) {
-    for (const [name, stats] of providers) {
-      console.log(`     ${chalk.dim(`📌 ${name}:`)} ${fmtNum(stats.calls)} calls, ${fmtNum(stats.input_tokens)}/${fmtNum(stats.output_tokens)} tok`);
-    }
-  }
   console.log();
 
   console.log(chalk.bold('  📢 TTS (Azure Speech)'));
