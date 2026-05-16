@@ -13,8 +13,8 @@ export function registerVoiceHandler(rt: TelegramRuntime): void {
   rt.bot.on('message:voice', async (ctx) => {
     agentLogger.info({ msg: 'tg_voice', chatId: ctx.chat.id, userId: ctx.from?.id, duration: ctx.message.voice.duration });
 
-    // Indicators FIRST — before download/STT (which can take 1–5s).
-    const { stopTyping, statusMessageId } = await rt.startTurn(ctx, '🎤 Transcribing voice...');
+    // Status message FIRST — before download/STT (which can take 1–5s).
+    const { statusMessageId } = await rt.startTurn(ctx, '🎤 Transcribing voice...');
 
     rt.enqueuePerChat(ctx.chat.id, async () => {
       let audioPath: string;
@@ -31,7 +31,6 @@ export function registerVoiceHandler(rt: TelegramRuntime): void {
         agentLogger.error({ msg: 'tg_voice_download_error', error: (err as Error).message });
         await ctx.reply('❌ Voice download failed, please try again.');
         if (statusMessageId) await rt.bot.api.deleteMessage(ctx.chat.id, statusMessageId).catch(() => {});
-        stopTyping();
         return;
       }
 
@@ -42,7 +41,6 @@ export function registerVoiceHandler(rt: TelegramRuntime): void {
         agentLogger.warn({ msg: 'tg_stt_failed', error: errMsg });
         await ctx.reply(`🎤 ${errMsg}`);
         if (statusMessageId) await rt.bot.api.deleteMessage(ctx.chat.id, statusMessageId).catch(() => {});
-        stopTyping();
         fs.unlink(audioPath, () => {});
         return;
       }
@@ -51,7 +49,7 @@ export function registerVoiceHandler(rt: TelegramRuntime): void {
       agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, text: sttResult.transcript.substring(0, 100) });
       trackStt(ctx.message.voice.duration || 0);
 
-      await rt.handleIncoming(ctx, input, stopTyping, undefined, statusMessageId);
+      await rt.handleIncoming(ctx, input, undefined, statusMessageId);
     });
   });
 }

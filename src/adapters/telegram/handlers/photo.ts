@@ -12,8 +12,8 @@ export function registerPhotoHandler(rt: TelegramRuntime): void {
     const caption = ctx.message.caption || '';
     agentLogger.info({ msg: 'tg_photo', chatId: ctx.chat.id, userId: ctx.from?.id, caption: caption.substring(0, 100) });
 
-    // Indicators FIRST — before download/vision (which can take 1–5s).
-    const { stopTyping, statusMessageId } = await rt.startTurn(ctx, '🖼️ Analyzing image...');
+    // Status message FIRST — before download/vision (which can take 1–5s).
+    const { statusMessageId } = await rt.startTurn(ctx, '🖼️ Analyzing image...');
 
     // Always pick the largest photo (last element in the photo array)
     const photo = ctx.message.photo[ctx.message.photo.length - 1];
@@ -25,7 +25,6 @@ export function registerPhotoHandler(rt: TelegramRuntime): void {
         if (!file.file_path) {
           await ctx.reply('❌ Failed to download image.');
           if (statusMessageId) await rt.bot.api.deleteMessage(ctx.chat.id, statusMessageId).catch(() => {});
-          stopTyping();
           return;
         }
 
@@ -41,7 +40,6 @@ export function registerPhotoHandler(rt: TelegramRuntime): void {
         agentLogger.error({ msg: 'tg_photo_download_error', error: (err as Error).message });
         await ctx.reply('❌ Image download failed, please try again.');
         if (statusMessageId) await rt.bot.api.deleteMessage(ctx.chat.id, statusMessageId).catch(() => {});
-        stopTyping();
         return;
       }
 
@@ -54,7 +52,6 @@ export function registerPhotoHandler(rt: TelegramRuntime): void {
         agentLogger.warn({ msg: 'tg_vision_failed', error: errMsg });
         await ctx.reply(`🖼️ ${errMsg}`);
         if (statusMessageId) await rt.bot.api.deleteMessage(ctx.chat.id, statusMessageId).catch(() => {});
-        stopTyping();
         return;
       }
 
@@ -64,7 +61,7 @@ export function registerPhotoHandler(rt: TelegramRuntime): void {
 
       agentLogger.info({ msg: 'tg_vision_done', chatId: ctx.chat.id, descLength: visionResult.description.length });
 
-      await rt.handleIncoming(ctx, input, stopTyping, undefined, statusMessageId);
+      await rt.handleIncoming(ctx, input, undefined, statusMessageId);
     });
   });
 }

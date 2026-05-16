@@ -5,7 +5,7 @@ import { agentLogger } from '../../../lib/logger.js';
 import { createSession, setActiveSkill } from '../../../storage/state/sessions.js';
 import { getSkill } from '../../../skills/loader.js';
 import { TelegramSessionAdapter } from '../SessionAdapter.js';
-import { formatTgError, startTypingIndicator } from '../errors.js';
+import { formatTgError } from '../errors.js';
 import { isNavCallback, getNavPage, getMainMenu } from '../skillMenu.js';
 import type { TelegramRuntime } from '../runtime.js';
 
@@ -197,8 +197,7 @@ async function handleAgentCallback(rt: TelegramRuntime, ctx: any, data: string):
   agentLogger.info({ msg: 'tg_callback', chatId, userId, data, label: selectedLabel, skillSwitch: isSkillSwitch });
   console.log(`[gateway] callback: ${selectedLabel} (${data})${isSkillSwitch ? ' [skill-switch]' : ''}`);
 
-  // Fire typing + thinking immediately so the click feels responsive
-  const typingInterval = startTypingIndicator(ctx);
+  // Post thinking status immediately so the click feels responsive
   const statusMsg = await rt.bot.api.sendMessage(chatId, '🧠 Thinking...').catch(() => null);
 
   rt.enqueuePerChat(chatId, async () => {
@@ -229,7 +228,6 @@ async function handleAgentCallback(rt: TelegramRuntime, ctx: any, data: string):
       await rt.bot.api.sendMessage(chatId, formatTgError(error), { link_preview_options: { is_disabled: true } }).catch(() => {});
     } finally {
       await sessionAdapter.cleanupStatus();
-      clearInterval(typingInterval);
     }
   });
 }

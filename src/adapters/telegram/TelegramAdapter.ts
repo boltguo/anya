@@ -82,7 +82,6 @@ export class TelegramAdapter implements TelegramRuntime {
   async handleIncoming(
     ctx: Context,
     input: string,
-    cleanup?: () => void,
     files?: MessageFile[],
     preStatusId?: number,
   ): Promise<void> {
@@ -126,7 +125,6 @@ export class TelegramAdapter implements TelegramRuntime {
       await ctx.reply(formatTgError(error), { link_preview_options: { is_disabled: true } });
     } finally {
       await sessionAdapter.cleanupStatus();
-      cleanup?.();
     }
   }
 

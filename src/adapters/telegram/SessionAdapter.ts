@@ -518,12 +518,6 @@ export class TelegramSessionAdapter implements Adapter {
   }
 
 
-  async sendChatAction(action: string = 'typing'): Promise<void> {
-    return this.enqueue(async () => {
-      await this.bot.api.sendChatAction(this.chatId, action as any).catch(() => {});
-    });
-  }
-
   async sendDocument(
     fileUrl: string,
     opts: { caption?: string; tag?: string; replyTo?: number | string; parseMode?: string } = {},

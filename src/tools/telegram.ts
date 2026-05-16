@@ -52,11 +52,11 @@ function getCaption(args: Record<string, unknown>): string | undefined {
 
 register({
   name: 'tg_msg',
-  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), edit, delete, react, action, countdown (auto-edit timer with {seconds} placeholder), paginate (multi-page with client-side flipping). Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
+  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), edit, delete, react, countdown (auto-edit timer with {seconds} placeholder), paginate (multi-page with client-side flipping). Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
   parameters: {
     type: 'object',
     properties: {
-      type:       { type: 'string', description: 'Message type: text | audio | voice | document | keyboard | quiz | edit | delete | react | action | countdown | paginate' },
+      type:       { type: 'string', description: 'Message type: text | audio | voice | document | keyboard | quiz | edit | delete | react | countdown | paginate' },
       text:       { type: 'string', description: 'Message text/caption (HTML format). For countdown: use {seconds} as placeholder. For paginate: pages separated by ---PAGE--- delimiter.' },
       url:        { type: 'string', description: 'For audio/voice/document: URL or file path of the media to send.' },
       buttons:    { type: 'string', description: 'JSON 2D array for keyboard: [["label|callback_data",...]].' },
@@ -67,7 +67,6 @@ register({
       reply_to:   { type: 'string', description: 'Reply to a message_id, tag, or "user" for the incoming message.' },
       tag:        { type: 'string', description: 'Tag this message for later reference (edit, reply-to).' },
       emoji:      { type: 'string', description: 'For react: emoji to use.' },
-      action:     { type: 'string', description: 'For action type: typing, record_voice, upload_document, etc.' },
       parse_mode: { type: 'string', description: 'Parse mode: HTML (default), Markdown, MarkdownV2, or none.' },
       seconds:    { type: 'integer', description: 'For countdown: duration in seconds.' },
       expire_text:{ type: 'string', description: 'For countdown: text to show when timer reaches 0.' },
@@ -179,11 +178,6 @@ register({
         let ref: number | string = args.message_id as string;
         if (ref === 'user') ref = tg.getUserMessageId()!;
         await tg.react(ref, String(args.emoji || '👍'));
-        return JSON.stringify({ ok: true, sent_content: false });
-      }
-
-      case 'action': {
-        await tg.sendChatAction(String(args.action || 'typing'));
         return JSON.stringify({ ok: true, sent_content: false });
       }
 

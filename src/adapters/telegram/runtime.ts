@@ -18,7 +18,6 @@ export interface PaginatedMessage {
 }
 
 export interface TurnIndicators {
-  stopTyping: () => void;
   statusMessageId?: number;
 }
 
@@ -35,7 +34,6 @@ export interface TelegramRuntime {
   handleIncoming(
     ctx: Context,
     input: string,
-    cleanup?: () => void,
     files?: MessageFile[],
     preStatusId?: number,
   ): Promise<void>;

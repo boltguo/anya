@@ -172,9 +172,9 @@ function registerSkillCommands(rt: TelegramRuntime, skillCommandMap: Map<string,
       const sessionKey = `tg:${ctx.chat.id}`;
       await createSession(sessionKey);
       const input = `[/command: ${skillName}] Run the "${skillName}" skill now.`;
-      const { stopTyping, statusMessageId } = await rt.startTurn(ctx);
+      const { statusMessageId } = await rt.startTurn(ctx);
       rt.enqueuePerChat(ctx.chat.id, () =>
-        rt.handleIncoming(ctx, input, stopTyping, undefined, statusMessageId),
+        rt.handleIncoming(ctx, input, undefined, statusMessageId),
       );
     });
   }

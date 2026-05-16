@@ -1,6 +1,4 @@
-// adapters/telegram/errors.ts — error formatting and typing indicator
-
-import type { Context } from 'grammy';
+// adapters/telegram/errors.ts — error formatting
 
 export function formatTgError(error: Error): string {
   const msg = error.message || '';
@@ -19,11 +17,4 @@ export function formatTgError(error: Error): string {
 
   const clean = msg.replace(/https?:\/\/[^\s"]+/g, '[link]').substring(0, 200);
   return `⚠️ ${clean}`;
-}
-
-// Telegram's typing status expires after ~5s; refresh every 4s to keep it active
-export function startTypingIndicator(ctx: Context): ReturnType<typeof setInterval> {
-  const send = () => ctx.replyWithChatAction('typing').catch(() => {});
-  send();
-  return setInterval(send, 4000);
 }
