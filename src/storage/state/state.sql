@@ -6,13 +6,11 @@
 PRAGMA foreign_keys = ON;
 
 -- ─── Conversation sessions ────────────────────────────────────────────────
--- One row per logical chat session. `session_key` groups them by user/chat;
--- `active_skill` pins a skill so its SKILL.md is re-injected each turn.
+-- One row per logical chat session. `session_key` groups them by user/chat.
 CREATE TABLE IF NOT EXISTS sessions (
     id              TEXT PRIMARY KEY,
     session_key     TEXT NOT NULL,
     title           TEXT NOT NULL DEFAULT '',
-    active_skill    TEXT DEFAULT NULL,
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
     message_count   INTEGER NOT NULL DEFAULT 0

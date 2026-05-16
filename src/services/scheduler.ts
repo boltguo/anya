@@ -246,17 +246,19 @@ async function runAgentForJob(config: AnyaConfig, job: CronJob): Promise<string>
 
   const adapter = new CronAdapter();
   const agent = new Agent(config, adapter);
-  const prompt = [
-    '[SYSTEM: Cron job execution. This is unattended. Do not ask clarifying questions. If there is nothing useful to send, respond exactly with [SILENT].]',
-    `[Cron job: ${job.name}]`,
-    job.prompt,
-  ].join('\n\n');
 
-  const result = await agent.run(prompt, {
+  const result = await agent.run(job.prompt, {
     sessionKey: `cron:${job.id}:${Date.now()}`,
     newSession: true,
     toolPolicy: {
       deny: ['cron', 'tg_msg', 'clarify'],
+    },
+    turnMeta: {
+      trigger: 'cron',
+      details: {
+        job_name: job.name,
+        mode: 'unattended (no clarifying questions; reply exactly [SILENT] if nothing useful to send)',
+      },
     },
   });
 

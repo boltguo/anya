@@ -1,7 +1,7 @@
 // adapters/telegram/TelegramAdapter.ts — Telegram gateway: lifecycle + shared state
 
 import { Bot, type Context } from 'grammy';
-import { Agent, type RunResult } from '../../agent/Agent.js';
+import { Agent, type RunResult, type TurnMetadata } from '../../agent/Agent.js';
 import { registerAllTools } from '../../tools/registry.js';
 import { agentLogger } from '../../lib/logger.js';
 import type { AnyaConfig } from '../../config/defaults.js';
@@ -80,6 +80,7 @@ export class TelegramAdapter implements TelegramRuntime {
     input: string,
     files?: MessageFile[],
     preStatusId?: number,
+    turnMeta?: TurnMetadata,
   ): Promise<void> {
     const userId = ctx.from?.id;
     const allowedUsers = this.config.telegram.allowed_user_ids;
@@ -102,7 +103,7 @@ export class TelegramAdapter implements TelegramRuntime {
 
     try {
       await sessionAdapter.sendThinking();
-      const result: RunResult = await agent.run(input, { sessionKey, files });
+      const result: RunResult = await agent.run(input, { sessionKey, files, turnMeta });
       if (!result.tgSent && result.content) {
         // Warn when agent ran tools but ended without tg_msg — likely the LLM forgot to send final reply
         if (result.toolCallCount > 0) {

@@ -45,11 +45,16 @@ export function registerVoiceHandler(rt: TelegramRuntime): void {
         return;
       }
 
-      const input = `[Voice message | audio_path: ${audioPath}]\n"${sttResult.transcript}"`;
       agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, text: sttResult.transcript.substring(0, 100) });
       trackStt(ctx.message.voice.duration || 0);
 
-      await rt.handleIncoming(ctx, input, undefined, statusMessageId);
+      await rt.handleIncoming(ctx, sttResult.transcript, undefined, statusMessageId, {
+        trigger: 'voice',
+        details: {
+          audio_path: audioPath,
+          duration_sec: ctx.message.voice.duration || 0,
+        },
+      });
     });
   });
 }

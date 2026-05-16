@@ -23,10 +23,6 @@ export function registerPollAnswerHandler(rt: TelegramRuntime): void {
     const isCorrect = selectedIdx === poll.correctIndex;
     const correctOption = poll.options[poll.correctIndex] || `Option ${poll.correctIndex}`;
 
-    const input = isCorrect
-      ? `[Quiz answer] User answered: "${selectedOption}" ✅ Correct`
-      : `[Quiz answer] User answered: "${selectedOption}" ❌ Wrong (correct: "${correctOption}")`;
-
     agentLogger.info({ msg: 'tg_poll_answer', chatId: poll.chatId, userId, pollId, selectedIdx, isCorrect });
 
     rt.enqueuePerChat(poll.chatId, async () => {
@@ -39,7 +35,17 @@ export function registerPollAnswerHandler(rt: TelegramRuntime): void {
       const agent = new Agent(rt.config, sessionAdapter);
 
       try {
-        const result: RunResult = await agent.run(input, { sessionKey });
+        const result: RunResult = await agent.run(selectedOption, {
+          sessionKey,
+          turnMeta: {
+            trigger: 'poll',
+            details: {
+              selected: selectedOption,
+              correct_answer: correctOption,
+              correct: isCorrect,
+            },
+          },
+        });
         if (!result.tgSent && result.content) {
           await sessionAdapter.reply(result.content);
         }

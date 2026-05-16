@@ -5,11 +5,10 @@ import type { AnyaConfig } from '../config/defaults.js';
 import { buildSystemPrompt } from './promptBuilder.js';
 import { createProvider } from '../providers/index.js';
 import { getToolSchemas, dispatch } from '../tools/registry.js';
-import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle, getActiveSkill, setActiveSkill } from '../storage/state/sessions.js';
-import { getSkill } from './skills/loader.js';
+import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle } from '../storage/state/sessions.js';
 import { agentLogger } from '../lib/logger.js';
 import { trackLlm } from '../lib/usage.js';
-import { truncateHistory, sanitizeHistory } from './history.js';
+import { truncateHistory, sanitizeHistory, compactCompletedPractice } from './history.js';
 import { classifyApiError } from './errorClassifier.js';
 import { ContextCompressor, estimateTokens } from './contextCompressor.js';
 
@@ -18,12 +17,18 @@ export interface ToolPolicy {
   deny?: string[];
 }
 
+export interface TurnMetadata {
+  trigger: 'text' | 'voice' | 'photo' | 'callback' | 'command' | 'poll' | 'cron';
+  details?: Record<string, string | number | boolean>;
+}
+
 export interface RunOptions {
   sessionKey: string;
   sessionId?: string;
   newSession?: boolean;
   files?: MessageFile[];
   toolPolicy?: ToolPolicy;
+  turnMeta?: TurnMetadata;
 }
 
 export interface RunResult {
@@ -45,7 +50,7 @@ export class Agent {
   }
 
   async run(input: string, options: RunOptions): Promise<RunResult> {
-    const { sessionKey, newSession, files, toolPolicy } = options;
+    const { sessionKey, newSession, files, toolPolicy, turnMeta } = options;
     let { sessionId } = options;
 
     if (!sessionId) {
@@ -57,26 +62,15 @@ export class Agent {
     let history = loadMessages(sessionId);
     const maxHistory = this.config.provider.max_history_messages || 200;
     history = truncateHistory(history, maxHistory);
-    history = trimOldToolResults(history);
+    history = compactCompletedPractice(history);
     history = sanitizeHistory(history);
 
-    const baseSystemPrompt = buildSystemPrompt(this.config);
-    const activeSkillName = getActiveSkill(sessionId);
-    let systemPrompt = baseSystemPrompt;
-    if (activeSkillName) {
-      const skill = getSkill(activeSkillName);
-      if (skill) {
-        systemPrompt = buildActiveSkillSystemPrompt(baseSystemPrompt, activeSkillName, skill.body);
-      }
-    }
-
-    // Timestamp on user input (not system prompt) preserves cache hit rate across turns.
-    const timestampedInput = `[${new Date().toISOString()}] ${input}`;
+    const systemPrompt = buildSystemPrompt(this.config) + buildTurnContextBlock(turnMeta);
 
     const messages: Message[] = [
       { role: 'system', content: systemPrompt },
       ...history,
-      { role: 'user', content: timestampedInput, files },
+      { role: 'user', content: input, files },
     ];
 
     const newMessages: Message[] = [
@@ -201,20 +195,6 @@ export class Agent {
             sessionKey,
           });
 
-          if (toolCall.name === 'skill_view' && !toolCall.args.file && !result.isError) {
-            const skillName = String(toolCall.args.name || '');
-            const skill = getSkill(skillName);
-            if (skill) {
-              await setActiveSkill(sessionId, skillName);
-              messages[0] = {
-                role: 'system',
-                content: buildActiveSkillSystemPrompt(baseSystemPrompt, skillName, skill.body),
-              };
-              // Body now lives in system prompt — avoid duplicating it in history.
-              result.content = `[Skill "${skillName}" loaded — instructions are now in active context]`;
-            }
-          }
-
           if (toolCall.name === 'tg_msg' && !result.isError) {
             try {
               const parsed = JSON.parse(result.content);
@@ -289,62 +269,26 @@ function degradeForStorage(messages: Message[]): Message[] {
   });
 }
 
-const KEEP_RECENT_TOOL_RESULTS = 8;
-const MAX_OLD_TOOL_CHARS = 200;
-
-// Orphaned tool messages produced here are dropped later by sanitizeHistory.
-function trimOldToolResults(history: Message[]): Message[] {
-  let toolCount = 0;
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i].role === 'tool') {
-      toolCount++;
-      if (toolCount > KEEP_RECENT_TOOL_RESULTS) {
-        const content = history[i].content || '';
-        if (content.length > MAX_OLD_TOOL_CHARS) {
-          history[i] = {
-            ...history[i],
-            content: content.substring(0, MAX_OLD_TOOL_CHARS) + '\n[...truncated]',
-          };
-        }
-      }
-    } else if (history[i].role === 'assistant' && history[i].toolCalls && history[i].toolCalls!.length > 0) {
-      if (toolCount > KEEP_RECENT_TOOL_RESULTS) {
-        const toolCalls = history[i].toolCalls!;
-        const toolNames = toolCalls.map(t => t.name).join(', ');
-
-        // Preserve the text sent to the user via tg_msg so the LLM retains
-        // conversational continuity (what it actually said) even after the
-        // toolCalls structure is stripped. Without this, the LLM loses track
-        // of the current placement test state and may emit bare text instead
-        const parts: string[] = [`[Executed tools: ${toolNames}]`];
-        for (const tc of toolCalls) {
-          if (tc.name === 'tg_msg' && tc.args?.text) {
-            const text = String(tc.args.text);
-            // Keep up to 500 chars of the sent text — enough for the LLM to
-            // refer back to specifics in long final reports (e.g. placement
-            // scanner result) without bloating the prompt.
-            const preview = text.length > 500 ? text.substring(0, 500) + '…' : text;
-            parts.push(`[Sent to user: ${preview}]`);
-          }
-        }
-        if (history[i].content) {
-          parts.push(history[i].content!);
-        }
-        history[i] = {
-          role: 'assistant',
-          content: parts.join('\n'),
-        };
+// Per-turn context appended to the static system prompt. Keeps user.content
+// pristine (just what the user actually said) while still giving the model the
+// trigger source, audio path, vision summary, etc. Don't echo these to the user.
+function buildTurnContextBlock(meta?: TurnMetadata): string {
+  const ts = new Date().toISOString();
+  const lines = [
+    '\n\n## This Turn (system metadata, do not echo)',
+    `- timestamp: ${ts}`,
+  ];
+  if (meta) {
+    lines.push(`- trigger: ${meta.trigger}`);
+    if (meta.details) {
+      for (const [k, v] of Object.entries(meta.details)) {
+        if (v === undefined || v === null || v === '') continue;
+        lines.push(`- ${k}: ${v}`);
       }
     }
+  } else {
+    lines.push('- trigger: text');
   }
-  return history;
+  return lines.join('\n');
 }
 
-function buildActiveSkillSystemPrompt(baseSystemPrompt: string, skillName: string, skillBody: string): string {
-  return [
-    baseSystemPrompt,
-    `\n## Active Skill Instructions (${skillName})\n`,
-    skillBody,
-    `\n> Active skill "${skillName}" is already loaded above. Do not call \`skill_view\` for this SKILL.md again. Use \`skill_view\` with \`file\` only when the active skill explicitly references an attached file. Continue from the current workflow state.`,
-  ].join('\n');
-}

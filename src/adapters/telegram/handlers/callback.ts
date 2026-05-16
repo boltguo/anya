@@ -2,7 +2,7 @@
 
 import { Agent, type RunResult } from '../../../agent/Agent.js';
 import { agentLogger } from '../../../lib/logger.js';
-import { newOrReuseEmptySession, setActiveSkill } from '../../../storage/state/sessions.js';
+import { newOrReuseEmptySession } from '../../../storage/state/sessions.js';
 import { getSkill } from '../../../agent/skills/loader.js';
 import { TelegramSessionAdapter } from '../SessionAdapter.js';
 import { formatTgError } from '../errors.js';
@@ -192,7 +192,7 @@ async function handleAgentCallback(rt: TelegramRuntime, ctx: any, data: string):
   if (!chatId) return;
 
   const sessionKey = `tg:${chatId}`;
-  const agentInput = `[callback] ${data}`;
+  const agentInput = selectedLabel || data;
 
   agentLogger.info({ msg: 'tg_callback', chatId, userId, data, label: selectedLabel, skillSwitch: isSkillSwitch });
   console.log(`[gateway] callback: ${selectedLabel} (${data})${isSkillSwitch ? ' [skill-switch]' : ''}`);
@@ -209,13 +209,22 @@ async function handleAgentCallback(rt: TelegramRuntime, ctx: any, data: string):
 
     try {
       await sessionAdapter.sendThinking();
-      const runOpts: Record<string, unknown> = { sessionKey };
+      const runOpts: Record<string, unknown> = {
+        sessionKey,
+        turnMeta: {
+          trigger: 'callback',
+          details: {
+            callback_data: data,
+            button_label: selectedLabel,
+            ...(isSkillSwitch ? { skill: data } : {}),
+          },
+        },
+      };
 
       // Skill switch → fresh session so old history is truly shed (reuses an empty
       // row from a prior /new tap to avoid leaking yet another empty session).
       if (isSkillSwitch) {
         const newSid = await newOrReuseEmptySession(sessionKey);
-        await setActiveSkill(newSid, data);
         runOpts.sessionId = newSid;
       }
 

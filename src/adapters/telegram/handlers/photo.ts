@@ -55,13 +55,15 @@ export function registerPhotoHandler(rt: TelegramRuntime): void {
         return;
       }
 
-      const input = caption
-        ? `[User sent a photo with caption: "${caption}"]\n[Vision analysis: ${visionResult.description}]`
-        : `[User sent a photo]\n[Vision analysis: ${visionResult.description}]`;
-
       agentLogger.info({ msg: 'tg_vision_done', chatId: ctx.chat.id, descLength: visionResult.description.length });
 
-      await rt.handleIncoming(ctx, input, undefined, statusMessageId);
+      await rt.handleIncoming(ctx, caption, undefined, statusMessageId, {
+        trigger: 'photo',
+        details: {
+          image_path: imagePath,
+          vision_description: visionResult.description,
+        },
+      });
     });
   });
 }

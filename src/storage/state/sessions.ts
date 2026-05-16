@@ -70,7 +70,7 @@ export async function newOrReuseEmptySession(sessionKey: string): Promise<string
   ).all(sessionKey) as Array<{ id: string }>;
   if (rows.length > 0) {
     await withWriteRetry(() => {
-      db.prepare("UPDATE sessions SET active_skill = NULL, updated_at = datetime('now') WHERE id = ?").run(rows[0].id);
+      db.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ?").run(rows[0].id);
     });
     return rows[0].id;
   }
@@ -165,20 +165,5 @@ export async function updateSessionTitle(sessionId: string, title: string): Prom
   await withWriteRetry(() => {
     const db = getDb();
     db.prepare('UPDATE sessions SET title = ? WHERE id = ?').run(title, sessionId);
-  });
-}
-
-// Agent instances are transient (new per message), so the active skill must
-// be reloaded from storage to re-inject its SKILL.md into the system prompt.
-export function getActiveSkill(sessionId: string): string | null {
-  const db = getDb();
-  const rows = db.prepare('SELECT active_skill FROM sessions WHERE id = ?').all(sessionId) as Array<{ active_skill: string | null }>;
-  return rows.length > 0 ? rows[0].active_skill : null;
-}
-
-export async function setActiveSkill(sessionId: string, skillName: string | null): Promise<void> {
-  await withWriteRetry(() => {
-    const db = getDb();
-    db.prepare('UPDATE sessions SET active_skill = ? WHERE id = ?').run(skillName, sessionId);
   });
 }

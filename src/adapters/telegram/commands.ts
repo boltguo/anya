@@ -161,10 +161,12 @@ function registerSkillCommands(rt: TelegramRuntime, skillCommandMap: Map<string,
       agentLogger.info({ msg: 'tg_skill_command', chatId: ctx.chat.id, skill: skillName });
       const sessionKey = `tg:${ctx.chat.id}`;
       await newOrReuseEmptySession(sessionKey);
-      const input = `[/command: ${skillName}] Run the "${skillName}" skill now.`;
       const { statusMessageId } = await rt.startTurn(ctx);
       rt.enqueuePerChat(ctx.chat.id, () =>
-        rt.handleIncoming(ctx, input, undefined, statusMessageId),
+        rt.handleIncoming(ctx, `/${cmd}`, undefined, statusMessageId, {
+          trigger: 'command',
+          details: { command: cmd, skill: skillName },
+        }),
       );
     });
   }
