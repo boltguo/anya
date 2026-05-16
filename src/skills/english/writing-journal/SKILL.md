@@ -85,7 +85,7 @@ End-of-entry buttons (always, regardless of polish count):
 [["✍️ 再写一段|writing-journal", "🧭 练习其他|nav:main"]]
 ```
 
-The follow-up question (if any) and these buttons go in **one** `tg_msg type="keyboard"` call.
+The follow-up question (if any) and these buttons go in **one** `tg_msg type="render"` call (text + buttons, no `url`). On a clean entry (no polish needed) add `react: "🔥"` to the same call.
 
 ### State D: Persist Evidence (data contract)
 
@@ -151,4 +151,4 @@ Minimum payload:
 6. **Don't push word count.** No "you wrote less than yesterday!" prompts. The habit is intrinsic or it isn't.
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable state.
-9. **One-call keyboard** for the response. Never `type="text"` then `type="edit"` to attach buttons.
+9. **All Telegram sends go through `tg_msg type="render"`.** Empathy, polish notes, follow-up question + buttons + clean-entry `react: "🔥"` all fold into render calls. Never split into separate `text` / `keyboard` / `react` calls.

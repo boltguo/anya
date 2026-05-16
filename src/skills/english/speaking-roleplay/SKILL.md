@@ -5,7 +5,7 @@ description: "Scenario dialogue (airport / restaurant / interview / clinic / hob
 
 # Speaking Roleplay (Scenario Dialogue)
 
-Multi-turn realistic-setting dialogue. Different from `speaking-freetalk` (open chat with no fixed goal) and `speaking-repeat` (single-shot retell). Goal here: complete a real-world function (book a room, complain about a bag, defend a film opinion) in the right register. The signal driving i+1 is a **rubric-graded function-completion + register-match score** (0..1), not binary pass/fail.
+Multi-turn realistic-setting dialogue. Complete a real-world function (book a room, complain about a bag, defend a film opinion) in the right register.
 
 ## 1. Inputs
 
@@ -29,8 +29,8 @@ Target **i+1**: one stretch above the learner's current successful scenario. Ada
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `PASS_THRESHOLD` | `0.70` | A round with `accuracy ≥ PASS` is a pass. Lower than dictation/shadowing because function-completion is rubric-graded and forgiving by design. |
-| `FAIL_THRESHOLD` | `0.40` | Below = fail (function not achieved). Wider hold band reflects rubric noise. |
+| `PASS_THRESHOLD` | `0.70` | A round with `accuracy ≥ PASS` is a pass. |
+| `FAIL_THRESHOLD` | `0.40` | Below = fail (function not achieved). |
 | `STREAK` | `2` | Passes/fails to move tier / scenario complexity. |
 | `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
 | `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
@@ -108,9 +108,9 @@ Hold: keep tier, optionally swap **one** scenario family (work → hobby or vice
 ### State A: Setup Scene
 
 1. From §2.3 + §2.4, decide tier, scenario, register. Compute `prompt_hash` on the scenario brief (身份 + 对方 + 目标); regenerate on dedup hit.
-2. Send scene announcement via `tg_msg type="keyboard"` (no audio yet — this is the brief, not Anya's first line):
-   - Text: `🎬 **场景**：<scenario>\n**你是**：<learner role>\n**我是**：<Anya role>\n**目标**：<goal in plain Chinese>\n**语域**：<polite | casual | formal>\n\n💡 几个能用的句子：<2-3 useful chunks>\n\n准备好就按住录音说第一句吧！`
-   - Buttons (2 only, persist throughout conversation):
+2. Send scene announcement via `tg_msg type="render"` (text + buttons only, no `url` — this is the brief, not Anya's first line):
+   - `text`: `🎬 **场景**：<scenario>\n**你是**：<learner role>\n**我是**：<Anya role>\n**目标**：<goal in plain Chinese>\n**语域**：<polite | casual | formal>\n\n💡 几个能用的句子：<2-3 useful chunks>\n\n准备好就按住录音说第一句吧！`
+   - `buttons` (2 only, persist throughout conversation):
 
    ```json
    [["🆘 不知道怎么说|roleplay_sos", "👋 结束对话|roleplay_end"]]
@@ -124,7 +124,7 @@ Hold: keep tier, optionally swap **one** scenario family (work → hobby or vice
 `roleplay_sos`:
 
 - Append `🆘 不知道怎么说` to `ui_feedback`.
-- Send **text-only** scaffolding via `tg_msg type="text"` (**no buttons, no keyboard**). The user reads the hint and directly records their next line.
+- Send **text-only** scaffolding via `tg_msg type="render"` (text only, no `url`/`buttons`). The user reads the hint and directly records their next line.
 - **Scaffolding content**: 2-3 useful phrases that fit the current scenario + turn context. Stay in character for the hints. Example:
 
   ```text
@@ -141,25 +141,25 @@ Hold: keep tier, optionally swap **one** scenario family (work → hobby or vice
 
 **Anya stays in role throughout.** No mid-dialogue teaching (Hard Rule 1).
 
-Each Anya turn consists of exactly **2 messages** in strict order:
+Each Anya turn is **one** `tg_msg type="render"` call (voice + spoiler text + buttons in one envelope):
 
-1. **Voice message**: `tts` → `tg_msg type="voice"` (Anya's line in character)
-2. **Spoiler text + buttons**: `tg_msg type="keyboard"` with:
-   - Text: `<tg-spoiler>{Anya's line in English}</tg-spoiler>` (hidden by default — user listens first, taps to reveal if stuck)
-   - Buttons: same 2 throughout:
+```json
+{
+  "type": "render",
+  "url": "<tts audio path of Anya's line>",
+  "text": "||{Anya's line in English}||",
+  "buttons": "[[\"🆘 不知道怎么说|roleplay_sos\", \"👋 结束对话|roleplay_end\"]]"
+}
+```
 
-   ```json
-   [["🆘 不知道怎么说|roleplay_sos", "👋 结束对话|roleplay_end"]]
-   ```
+(Spoiler hides the text by default — user listens first, taps to reveal if stuck. `||...||` expands to `<tg-spoiler>` HTML.)
 
-   Voice first, then keyboard — **never parallel** (Hard Rule 8).
-
-3. Wait for user's voice/text reply, or button tap.
+Wait for user's voice/text reply, or button tap.
 
 **End signals** (any one triggers State C-End):
 1. **User taps `👋 结束对话`** (`roleplay_end` callback) — manual end.
 2. **Goal completed**: the scenario's functional goal has been achieved (order placed, complaint resolved, interview wrapped) — auto-end.
-3. **Max 8 turns reached**: token budget safety net.
+3. **Max 8 turns reached**: cap.
 
 When any fires, proceed to State C-End.
 
@@ -187,7 +187,7 @@ Summary content — deliver as a natural Chinese wrap-up:
 [["🔄 再来一个场景|roleplay_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: summary + buttons in **one** `tg_msg type="keyboard"` call.
+**Critical**: summary + buttons in **one** `tg_msg type="render"` call (no `url` — summary has no media). On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call.
 
 ### State D: Persist Evidence
 
@@ -256,16 +256,15 @@ Error keys: `register_mismatch`, `register_too_formal`, `register_too_casual`, `
 ## 6. Hard Rules
 
 1. **Stay in role.** No mid-dialogue teaching. All feedback comes in State C-End, after the scene closes.
-2. **Auto-end on goal completion or max 8 turns.** When the functional goal is achieved, auto-close. Max 8 turns as safety net.
+2. **Auto-end on goal completion or max 8 turns.** When the functional goal is achieved, auto-close. Max 8 turns is the cap.
 3. **One complication maximum.** Don't stack two.
 4. **Text fallback accepted.** Voice preferred but typed turns scored under the same rubric — don't penalize the modality.
 5. **Feedback after, not during.** State C-End only.
 6. **Register is enforced** — score register mismatches in `errors`.
 7. **Persist entire transcript** in `response` for future `speaking-explain` lookups + `learner-state` evidence.
-8. **Voice then spoiler-keyboard, sequential.** Per Anya turn: `tg_msg type="voice"` first (separate message), THEN `tg_msg type="keyboard"` with `<tg-spoiler>` text + buttons. Never bundle voice into text/keyboard. Never parallel.
-9. **One-call keyboard** (State A and State C): text + buttons in a single `tg_msg type="keyboard"` call.
-10. Use `persist` for reads/writes; no raw DB. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-11. **ASR uncertainty handling.** When a voice transcription produces a semantically absurd sentence that doesn't fit the scenario context (e.g., "ample wealth" when the user likely said "Apple Wallet"), do NOT score it as a semantic error. Instead:
+8. **All Telegram sends go through `tg_msg type="render"`.** Per Anya turn: one render call with `url` (voice) + `text` (spoiler line) + `buttons`. Setup brief (State A), SOS scaffold (State B text-only), summary (State C-End text + buttons) + perfect-score `react: "🔥"` all fold into render calls. Never split into separate `voice` / `text` / `keyboard` / `react` calls.
+9. Use `persist` for reads/writes; no raw DB. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
+10. **ASR uncertainty handling.** When a voice transcription produces a semantically absurd sentence that doesn't fit the scenario context (e.g., "ample wealth" when the user likely said "Apple Wallet"), do NOT score it as a semantic error. Instead:
     - Stay in role: "Sorry, I didn't catch that — could you say it again?"
     - Record `{"key":"asr_uncertain","category":"speaking","severity":"info","note":"Transcription '...' is likely ASR error, not learner mistake."}` in `errors` if it persists.
     - Give the user one free retry on that turn — it does not count toward the turn total or accuracy.

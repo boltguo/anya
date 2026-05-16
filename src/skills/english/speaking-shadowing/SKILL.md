@@ -5,7 +5,7 @@ description: "Speaking Pronunciation Clinic. Trigger ONLY when the user explicit
 
 # Speaking Shadowing (Pronunciation Clinic)
 
-Different from `listening-shadowing` (rhythm clinic). Goal here: phoneme-level accuracy. The signal driving i+1 is **pronunciation accuracy**, not fluency.
+Phoneme-level accuracy. **Pronunciation accuracy** drives i+1; fluency is recorded separately.
 
 ## 1. Inputs
 
@@ -29,13 +29,13 @@ Target **i+1**: one stretch above the learner's current successful pronunciation
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `PASS_THRESHOLD` | `0.85` | `accuracy ≥ PASS` (= Azure pron accuracy ≥ 85) is a pass. Set high because phoneme accuracy is exactly what this drill targets; a lower bar over-promotes "almost-right" attempts. |
+| `PASS_THRESHOLD` | `0.85` | `accuracy ≥ PASS` (= Azure pron accuracy ≥ 85) is a pass. |
 | `FAIL_THRESHOLD` | `0.60` | Below = fail; `[FAIL, PASS)` = "hold". |
 | `STREAK` | `2` | Passes/fails to move tier / length. |
 | `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
 | `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
 
-**Score normalization (CRITICAL):** `pron_assess` returns 4 scores 0–100: `accuracy`, `fluency`, `completeness`, `prosody`. DB `accuracy` column = `pron_accuracy / 100` (this drives credit gating — pronunciation accuracy is the i+1 signal). `fluency` goes to `subcap_scores.speaking.fluency` separately for `learner-state`; not used for tier decisions.
+**Score normalization (CRITICAL):** `pron_assess` returns 4 scores 0–100: `accuracy`, `fluency`, `completeness`, `prosody`. DB `accuracy` column = `pron_accuracy / 100` (drives credit gating). `fluency` goes to `subcap_scores.speaking.fluency`; not used for tier decisions.
 
 Standard 100% speed only. Slow-down is the `speak_slow` button (State B), not a tier property.
 
@@ -113,14 +113,14 @@ Hold: keep length, optionally swap **one** dimension (target phoneme / linking /
 
 `speak_slow`:
 
-- Append `🐢 慢速示范` to `ui_feedback` (mandatory — survives into State D so a "passed only at slow speed" attempt is not mistaken for native-tempo competence).
-- Brief ack via `tg_msg type="text"`.
+- Append `🐢 慢速示范` to `ui_feedback` (mandatory).
+- Brief ack via `tg_msg type="render"` (text only).
 - Same sentence; `tts rate="-10%"`.
 - Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons).
 
 `speak_hard`:
 
-1. **Persist abandoned record FIRST.** A "drop the level" tap is exactly the signal `learner-state` needs to lower the phoneme target; it MUST hit the database before being replaced:
+1. **Persist abandoned record FIRST** (before generating the replacement):
 
    ```json
    {
@@ -146,7 +146,7 @@ Hold: keep length, optionally swap **one** dimension (target phoneme / linking /
 
    After `persist` returns, reset the round (fresh `ui_feedback` accumulator).
 
-2. **Replacement.** Apply the demotion / length-down rule from §2.3 (the abandoned row will surface as one fail in the next `recent_practice` call). Brief ack via `tg_msg type="text"`, generate a new shorter sentence → State A.
+2. **Replacement.** Apply the demotion / length-down rule from §2.3 (the abandoned row will surface as one fail in the next `recent_practice` call). Brief ack via `tg_msg type="render"` (text only), generate a new shorter sentence → State A.
 
 ### State C: Evaluate
 
@@ -234,7 +234,7 @@ Minimum payload:
 
 `prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
 
-`ui_feedback` mandatory whenever any 🐢 / 😵 / 🎯 marker was added, even on `accuracy=1.0` — without it, `learner-state` over-promotes "passed only at slow speed" passes.
+`ui_feedback` mandatory whenever any 🐢 / 😵 / 🎯 marker was added, even on `accuracy=1.0`.
 
 State D persists fully-attempted sentences only (with or without slow-down). Abandoned-on-too-long rows are written by State B.
 

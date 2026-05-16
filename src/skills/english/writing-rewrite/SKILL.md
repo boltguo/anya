@@ -94,7 +94,7 @@ Hold: keep tier source/target; swap topic family.
 
 1. From §2.3 + `coach_context`, decide tier → source band, target band, source length.
 2. Generate the source paragraph at the chosen band. Compute `prompt_hash`; regenerate on dedup hit. Mark 1–2 weak spots with `~...~`.
-3. Send a **single** `tg_msg type="keyboard"` containing task + buttons:
+3. Send a **single** `tg_msg type="render"` (text + buttons, no `url`) containing task + buttons:
 
    Text:
 
@@ -184,7 +184,7 @@ Buttons (always, regardless of band):
 [["✏️ 再升级一段|rw_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. The model rewrite and side-by-side diff can be inside the same body. Never `type="text"` then `type="edit"` to attach buttons.
+**Critical**: feedback + buttons in **one** `tg_msg type="render"` call (no `url`). The model rewrite and side-by-side diff can be inside the same body. On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call.
 
 ### State D: Persist Evidence
 
@@ -258,4 +258,4 @@ State D persists fully-attempted rewrites only. Abandoned rows are written in St
 5. **One paragraph per session.** No multi-paragraph batches. Cohesion + lexical lift at the paragraph level is the unit.
 6. Use `persist` for reads/writes; no raw DB.
 7. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-8. **One-call keyboard.** Feedback + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` to attach buttons.
+8. **All Telegram sends go through `tg_msg type="render"`.** Task delivery + buttons, scaffolds, feedback + model rewrite + buttons + perfect-score `react: "🔥"` all fold into render calls. Never split into separate `text` / `keyboard` / `react` calls.

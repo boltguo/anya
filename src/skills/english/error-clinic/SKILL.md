@@ -21,7 +21,7 @@ Batch error analysis with client-side pagination. Pulls ALL recent error pattern
 2. From `summary.errors`, collect **all error patterns** that:
    - Appeared in ≥ 2 samples (recurring, not one-off)
    - Have concrete `original` / `correction` pairs in the data
-3. Sort by frequency (highest first). If no recurring errors exist, send a single message: "🎉 最近没有反复出现的错误！继续练习攒数据吧。" with `[["🧭 回主菜单|nav:main"]]` and stop.
+3. Sort by frequency (highest first). If no recurring errors exist, send a single `tg_msg type="render"` (text + buttons, no `url`): `text="🎉 最近没有反复出现的错误！继续练习攒数据吧。"` + `buttons=[["🧭 回主菜单|nav:main"]]` and stop.
 
 ### State B: Build Pages & Send
 
@@ -80,3 +80,4 @@ The `drill_callback` in trailing buttons should route to the **first page's** re
 5. **Empathetic tone.** Treat errors as normal learning signals. Brief encouragement on page 1 (1 line max).
 6. Use `persist` for reads; no raw DB. This skill is **read-only** — do not write any data.
 7. **`---PAGE---` delimiter.** Pages MUST be separated by exactly `---PAGE---` (3 dashes, PAGE, 3 dashes). No other delimiter.
+8. **`paginate` is the only non-render type in this skill.** The empty-state fallback uses `tg_msg type="render"`. `paginate` stays separate because it owns multi-page client-side flipping that render can't replicate.

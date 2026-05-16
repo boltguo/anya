@@ -66,7 +66,7 @@ These phrases in user replies are **signals, not answers**. Recognise them:
 3. **Execute exactly ONE probe per turn.** After sending the probe, **STOP** and wait for the user's reply.
 4. **No difficulty self-rating buttons.** The answer alone drives adaptation. Only buttons in this skill: State 0 kickoff.
 5. **Domain rotation Round 2 is non-negotiable** — skipping it forces `confidence = low` for that dimension.
-6. **ALL replies MUST use `tg_msg`.** Never return a bare text response. Every message to the user — probes, feedback, transitions, the final report — MUST go through a `tg_msg` tool call with the appropriate `type` (`text`, `keyboard`, `voice`). Returning text without calling `tg_msg` will cause the message to be silently swallowed.
+6. **ALL replies MUST use `tg_msg type="render"`.** Never return a bare text response, and never split into separate `text` / `voice` / `keyboard` / `react` calls. Every message to the user — probes, feedback, transitions, the final report — MUST go through a single `tg_msg type="render"` call. Render dispatches internally to voice (`url`), keyboard (`buttons`), text-only, or reaction (`react`) based on which fields are present.
 
 ## 3. Adaptation Inference Rules
 
@@ -127,9 +127,9 @@ Reply containing `不认识 / 不会` is treated as `k = 0`.
 ### State 0 — Initialization
 
 1. Send a short spy-themed kickoff covering: scope (5 dimensions × ~3 probes ≈ 8–12 min), no dictionaries, voice required for speaking, **题目会在熟悉领域和陌生领域之间切换**。
-2. `tg_msg(type="keyboard")`:
-   - text: kickoff message
-   - buttons: `[["🚀 出发！开始体检|start_vocab"]]`
+2. `tg_msg(type="render")`:
+   - `text`: kickoff message
+   - `buttons`: `[["🚀 出发！开始体检|start_vocab"]]`
 3. **WAIT** for the `start_vocab` callback.
 
 ### State 1 — Vocabulary (≥ 3 rounds)
@@ -139,7 +139,7 @@ Vocab words are **domain-neutral by default** — pick a mix of register (concre
 **Per round:**
 
 1. Pick current `level` (start at B1). Generate **5 fresh English words** at that level.
-2. Send via `tg_msg(type="text")`:
+2. Send via `tg_msg(type="render")` (text only, no `url`/`buttons`):
 
 ```
 🔤 词汇侦察 · 第 N 轮（共 3 轮）  当前难度：<level>
@@ -181,7 +181,7 @@ Vocab words are **domain-neutral by default** — pick a mix of register (concre
    - B2: casual workplace English, common idioms, mild reduction.
    - C1: fast natural speech, heavy reductions, idiomatic.
    - C2: dense, abstract, multiple subordinate clauses.
-2. Render via `tts`; send `tg_msg(type="voice")` with caption:
+2. Render via `tts`; send via **one** `tg_msg(type="render")` call with `url=<tts audio path>` and the caption below as `text` (voice + caption in one bubble):
 
 ```
 👂 听力侦察 · 第 N/3 轮  难度：<level>  领域：<topic 中文标签>
@@ -207,7 +207,7 @@ Vocab words are **domain-neutral by default** — pick a mix of register (concre
    - B2: explain a missed deadline / argue why you'd recommend a recent movie.
    - C1: pitch a product to a skeptical client / argue a position on a current issue.
    - C2: defend a contrarian opinion in a panel.
-2. `tg_msg(type="text")`:
+2. `tg_msg(type="render")` (text only):
 
 ```
 🎙️ 口语侦察 · 第 N 轮  难度：<level>  领域：<topic 中文标签>
@@ -232,7 +232,7 @@ Add R3 only if R1 vs R2 disagree by ≥ 1 band.
 
 1. Generate **passage (60–110 words)** at current `level`. Topic per rotation rule.
 2. Pose **one open-ended question** needing a 1–2 English-sentence answer. Avoid yes/no.
-3. `tg_msg(type="text")` with passage + question + footer:
+3. `tg_msg(type="render")` (text only) with passage + question + footer:
 
 ```
 📖 用 1–2 句英文作答；不要直接抄原文。
@@ -252,7 +252,7 @@ Add R3 only if R1 vs R2 disagree by ≥ 1 band.
    - B2: "Briefly explain a recent decision you made (work or personal) and why."
    - C1: "Argue for or against working from home in 4–5 sentences."
    - C2: "Defend an unpopular opinion you hold, in 5 sentences."
-2. Ask for **3–5 English sentences**. `tg_msg(type="text")`.
+2. Ask for **3–5 English sentences**. `tg_msg(type="render")` (text only).
 3. **WAIT** for typed answer.
 4. Apply §3.4 rule. Final writing level = average of (Reading-derived level baseline) and (Writing signal-derived adjustment).
 

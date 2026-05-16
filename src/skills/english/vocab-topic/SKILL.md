@@ -74,7 +74,7 @@ Persist via `persist action="word_review"` once per recalled/missed item.
 1. Pick topic; call `due_words` + auto-seed if needed.
 2. Compose the bundle (4–5 concepts + 3–4 chunks + 2–3 hedging).
 3. Compute `prompt_hash` over `topic + sorted item list` so a same-topic-same-bundle replay is dedup'd.
-4. Send a `tg_msg type="text"` containing the bundle, **grouped by kind**:
+4. Send a `tg_msg type="render"` (text only, no `url`/`buttons`) containing the bundle, **grouped by kind**:
 
    ```text
    📚 主题：**{topic}** （{n} 个）
@@ -104,15 +104,15 @@ Persist via `persist action="word_review"` once per recalled/missed item.
    }
    ```
 
-7. Send a separate `tg_msg type="keyboard"`:
+7. Send a separate `tg_msg type="render"` (text + buttons, no `url`):
 
-   Text:
+   `text`:
 
    ```text
    ⏱️ 90 秒学习时间，到时自动开始测试。
    ```
 
-   Buttons:
+   `buttons`:
 
    ```json
    [["🛑 太多了换一组|vt_easier"]]
@@ -141,7 +141,7 @@ When the user sends any message (or the timer expires and the user responds):
 
    After `persist` returns, reset `ui_feedback`.
 
-2. **Replacement.** Pick a different (less abstract) topic OR shrink bundle to 8 items, brief Chinese ack, regenerate → State A.
+2. **Replacement.** Pick a different (less abstract) topic OR shrink bundle to 8 items, brief Chinese ack via `tg_msg type="render"` (text only), regenerate → State A.
 
 ### State C: Recall Round
 
@@ -149,13 +149,13 @@ After the bundle is hidden, run **5 mixed recall prompts** (no format dominates 
 
 | Format | UI | Item count |
 | --- | --- | --- |
-| CN → EN | `keyboard` with text prompt (user types answer) | 1–2 |
-| Meaning → chunk (gist clue → chunk) | `keyboard` 4 option buttons, 1 fits | 1 |
-| Fill-in-blank (sentence with the topic word missing) | `keyboard` with text prompt (user types answer) | 1 |
-| Register pick (formal vs informal alternative for a hedge) | `keyboard` 2–4 option buttons | 1 |
-| Production sentence (write 1 sentence on the topic using ≥ 2 items) | `keyboard` with text prompt | 1 |
+| CN → EN | `render` with text prompt (user types answer) | 1–2 |
+| Meaning → chunk (gist clue → chunk) | `render` 4 option `buttons`, 1 fits | 1 |
+| Fill-in-blank (sentence with the topic word missing) | `render` with text prompt (user types answer) | 1 |
+| Register pick (formal vs informal alternative for a hedge) | `render` 2–4 option `buttons` | 1 |
+| Production sentence (write 1 sentence on the topic using ≥ 2 items) | `render` with text prompt | 1 |
 
-Do NOT use `tg_msg type="quiz"`. All MC formats use `tg_msg type="keyboard"` with inline option buttons (callbacks like `vt_q1_a`, `vt_q1_b`, etc.). Text-input formats use `tg_msg type="keyboard"` with the prompt and no option buttons — the user types directly.
+Do NOT use `tg_msg type="quiz"`. All MC formats use `tg_msg type="render"` with inline option `buttons` (callbacks like `vt_q1_a`, `vt_q1_b`, etc.). Text-input formats use `tg_msg type="render"` (text only, no `buttons`) — the user types directly.
 
 Cover **at least one item from each kind** (concept / chunk / hedging). Don't test items the user already has at `mastery='mastered'` even if they were in the display bundle.
 
@@ -169,7 +169,7 @@ After all 5 prompts:
 
 1. Summarize: `recall {x}/5 · missed: {list}`.
 2. **Persist FIRST, THEN reveal**. Sequential.
-3. Reveal the bundle again as a fresh `tg_msg type="text"`, with each item that was missed wrapped in `<tg-spoiler>` so the user can self-test on review.
+3. Reveal the bundle again as a fresh `tg_msg type="render"` (text only, no `url`/`buttons`), with each item that was missed wrapped in `<tg-spoiler>` so the user can self-test on review.
 
 ### State D: Persist Evidence (batch close)
 
@@ -217,7 +217,7 @@ End-of-batch buttons:
 [["🔄 换个主题|vocab-topic", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: send the recall summary + buttons in **one** `tg_msg type="keyboard"` call. The bundle reveal `tg_msg type="text"` with `<tg-spoiler>` for missed items is a separate message before.
+**Critical**: send the recall summary + buttons in **one** `tg_msg type="render"` call (no `url`). On a perfect recall (`accuracy === 1.0`) add `react: "🔥"` to the same call. The bundle reveal render call with `<tg-spoiler>` for missed items is a separate render message before.
 
 ## 4. Collaborates With
 
@@ -249,4 +249,4 @@ End-of-batch buttons:
 7. **Persist `metadata.topic`** so `recent_practice` filters work next round.
 8. Use `persist` for reads/writes; no raw DB.
 9. Don't update `MEMORY.md`; `learner-state` owns durable vocab state.
-10. **One-call keyboard** for the recall summary. Never `type="text"` then `type="edit"` to attach buttons.
+10. **All non-countdown/non-edit Telegram sends go through `tg_msg type="render"`.** Bundle display, study-window keyboard, recall prompts, summary + buttons + perfect-recall `react: "🔥"`, bundle reveal all fold into render calls. Only `countdown` (study timer) and `edit` (hide bundle) stay separate. Never use stand-alone `voice` / `keyboard` / `text` / `quiz` / `react`.

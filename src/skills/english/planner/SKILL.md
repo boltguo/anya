@@ -23,9 +23,9 @@ Onboarding gating is owned by `/new` (via `config.onboarding.{profile_done,place
 2. Otherwise:
    - Call `persist` with `{"action":"coach_context","days":14,"limit":8}`.
    - Call `persist` with `{"action":"session_start","session_key":"<current session id>","platform":"telegram","entrypoint":"planner","plan":"<short summary>"}`.
-   - Send **one** `tg_msg(type="keyboard")` with:
-     - **Text**: the recommendation (see "Recommendation text" below).
-     - **Buttons**: a single row — `[["🧭 主菜单|nav:main"]]`. The user picks the actual skill from the menu.
+   - Send **one** `tg_msg(type="render")` (text + buttons, no `url`) with:
+     - `text`: the recommendation (see "Recommendation text" below).
+     - `buttons`: a single row — `[["🧭 主菜单|nav:main"]]`. The user picks the actual skill from the menu.
 
 ## Recommendation text
 
@@ -57,7 +57,7 @@ When triggered by cron (not user), evaluate nudge triggers. Most runs should pro
 1. Read `MEMORY.md` and `persist action="coach_context"` for the last 7 days.
 2. Evaluate triggers in `references/triggers.md` in priority order.
 3. If none fire, output `[SILENT]` and stop.
-4. If one fires, send a short message (≤ 4 sentences) with exactly one action button via `tg_msg type="keyboard"`.
+4. If one fires, send a short message (≤ 4 sentences) with exactly one action button via `tg_msg type="render"` (text + buttons, no `url`).
 5. Record the push with `persist action="practice"`, `skill_type="planner.proactive"`, `section="coaching"`, `completed=1`, `load_score=0`.
 
 **Nudge rules**:
@@ -78,3 +78,4 @@ When triggered by cron (not user), evaluate nudge triggers. Most runs should pro
 3. **First-run onboarding belongs to `profile-manager`.** Don't collect profile here.
 4. **No raw DB access.** Recommendations read through `persist`.
 5. **`session_start` lives here.** The planner invocation opens a `study_sessions` row; learner-state may close it with `session_end`.
+6. **All Telegram sends go through `tg_msg type="render"`.** Recommendation + menu button and proactive nudge + action button both use render. Never use stand-alone `text` / `keyboard` calls.

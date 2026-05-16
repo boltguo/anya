@@ -98,20 +98,33 @@ Hold: keep density, optionally swap **one** trap category (teen-vs-ty → date f
 ### State A: Prepare And Deliver
 
 1. From §2.3 + §2.4, decide tier and trap category. Generate the sentence containing the chosen trap. Compute `prompt_hash` (§State D); regenerate on dedup hit.
-2. `tts` only for the target sentence at 100% speed, default GB voice. No filler audio. Send via a separate `tg_msg type="voice"` call with the audio `url`. Wait for delivery.
-3. THEN a separate `tg_msg type="keyboard"` call (text + buttons only — **never include `url` here**, the keyboard endpoint has no media slot):
-   - Text: `🎧 听录音，把听到的**数字、时间、或拼写的单词**打出来。\n\n实在听不出可以点开看原文：<tg-spoiler>{correct English sentence}</tg-spoiler>`
-   - Buttons: `[["🐢 慢速播放|num_slow", "😵 太难了，换简单点|num_hard"]]`
+2. `tts` only for the target sentence at 100% speed, default GB voice. No filler audio.
+3. Send voice + instruction + buttons in **one** `tg_msg type="render"` call. Renders as two bubbles (voice on its own line, then text + buttons) for clean cross-client display — still one tool call.
 4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
-5. Wait for typed answer or button tap.
+
+Render envelope (all fields at top level, same as `voice`/`keyboard`):
+
+```json
+{
+  "type": "render",
+  "url": "<tts audio path>",
+  "text": "🎧 听录音，把听到的**数字、时间、或拼写的单词**打出来。\n\n实在听不出可以点开看原文：||{correct English sentence}||",
+  "buttons": "[[\"🐢 慢速播放|num_slow\", \"😵 太难了，换简单点|num_hard\"]]"
+}
+```
+
+(`||...||` is the Telegram-spoiler shorthand; the adapter expands it to `<tg-spoiler>` HTML.)
+
+Wait for the typed answer or button tap.
 
 ### State B: Button Handling
 
 `num_slow`:
 
-- Append `🐢 慢速播放` to `ui_feedback` (mandatory — survives into State D so a "passed only after slow-down" attempt is not mistaken for clean comprehension).
-- Brief ack via `tg_msg type="text"`.
-- Same sentence; `tts rate="-10%"`; send slower voice + same keyboard. Wait.
+- Append `🐢 慢速播放` to `ui_feedback` (mandatory).
+- Brief ack via `tg_msg type="render"` (text only).
+- Same sentence; `tts rate="-10%"`.
+- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons). Wait.
 
 `num_hard`:
 
@@ -141,7 +154,7 @@ Hold: keep density, optionally swap **one** trap category (teen-vs-ty → date f
 
    After `persist` returns, reset `ui_feedback`.
 
-2. **Replacement.** Apply demotion / nudge-down (§2.3). Brief ack via `tg_msg type="text"`, briefly explain the trap, generate a new simpler sentence → State A.
+2. **Replacement.** Apply demotion / nudge-down (§2.3). Brief ack via `tg_msg type="render"` (text only), briefly explain the trap, generate a new simpler sentence → State A.
 
 ### State C: Evaluate
 
@@ -173,7 +186,7 @@ Buttons (always, regardless of accuracy):
 [["🔄 再来一个|num_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` — that pattern leaves the message buttonless on the client. Voice is replayable from chat history; the report already shows the correct sentence + trap diagnosis, so a dedicated retry button has no learning value.
+**Critical**: feedback + buttons in **one** `tg_msg type="render"` call (no `url` — feedback has no media). On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call — Telegram reacts the learner's message, no extra tool call. Voice is replayable from chat history; the report already shows the correct sentence + trap diagnosis, so a dedicated retry button has no learning value.
 
 ### State D: Persist Evidence
 
@@ -224,4 +237,4 @@ State D persists fully-attempted sentences only (with or without slow-down). Aba
 2. `tts` only for the practice sentence — no assistant chatter.
 3. Use `persist` for reads/writes; no raw DB.
 4. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-5. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` followed by `type="edit"` to attach buttons.
+5. **All Telegram sends go through `tg_msg type="render"`.** Voice + text + buttons + perfect-score `react: "🔥"` (when `accuracy === 1.0`) all fold into one render call. Never split into separate `voice` / `keyboard` / `text` / `react` calls.

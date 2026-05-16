@@ -5,7 +5,7 @@ description: "Listen-then-retell. Play a clip ONCE, learner retells in their own
 
 # Speaking Repeat (Listen-Then-Retell)
 
-Different from `speaking-shadowing` (verbatim phoneme-level repeat) and `speaking-freetalk` (no source input). Goal here: hear once, hold the meaning, paraphrase. The signal driving i+1 is a **rubric-graded info-overlap score** (0..1), not binary pass/fail.
+Hear once, hold the meaning, paraphrase.
 
 ## 1. Inputs
 
@@ -29,8 +29,8 @@ Target **i+1**: one stretch above the learner's current successful retell. Adapt
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `PASS_THRESHOLD` | `0.70` | A round with `accuracy ≥ PASS` is a pass. Lower than dictation/shadowing because info-overlap is forgiving by design — paraphrase is the goal, not transcription. |
-| `FAIL_THRESHOLD` | `0.40` | Below = fail (lost the main idea). Wider hold band reflects rubric noise. |
+| `PASS_THRESHOLD` | `0.70` | A round with `accuracy ≥ PASS` is a pass. |
+| `FAIL_THRESHOLD` | `0.40` | Below = fail (lost the main idea). |
 | `STREAK` | `2` | Passes/fails to move tier / length. |
 | `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
 | `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
@@ -46,9 +46,9 @@ Target **i+1**: one stretch above the learner's current successful retell. Adapt
 | `0.25` | Off-topic but at least the domain was right (e.g., source about a movie → retell mentions movies generally). |
 | `0.00` | Totally off, hallucinated content, no answer, or answered in Chinese. |
 
-Use this rubric verbatim — do **not** reward fluency, English grammar, or wording closeness to source. This skill measures **how much info survived the retell**, nothing else. Granular `speaking.lexical_variety` and `speaking.interaction` (0–10) go into `subcap_scores` separately.
+Use this rubric verbatim — do **not** reward fluency, English grammar, or wording closeness to source. Granular `speaking.lexical_variety` and `speaking.interaction` (0–10) go into `subcap_scores` separately.
 
-Standard 100% speed only. **Source plays once only — no slow-down button** (replay defeats the drill). Hard escape only.
+Standard 100% speed only. **Source plays once only — no slow-down button.** Hard escape only.
 
 | Tier (IELTS band ≈ CEFR) | Source length | Register | Structure |
 | --- | --- | --- | --- |
@@ -104,18 +104,29 @@ Hold: keep length, optionally swap **one** dimension (register / structure / piv
 
 1. From §2.3 + §2.4, decide tier, source length, topic (rotate). Generate the source passage at chosen length / register / structure. Compute `prompt_hash` (§State D); regenerate on dedup hit.
 2. `tts` only for the target source at 100% speed. No filler audio.
-3. Send voice FIRST: a separate `tg_msg type="voice"` call with the audio `url`. Wait for delivery.
-4. THEN send instruction: a separate `tg_msg type="keyboard"` call (text + buttons only — **never include `url` here**, the keyboard endpoint has no media slot). Never parallel — see Hard Rule 3.
-   - Text: `🎧 听完一次就够。**用你自己的话**把重点说出来（按住录音键）。\n\n听不懂可以点开看原文：<tg-spoiler>{correct English source}</tg-spoiler>`
-   - Buttons: `[["😵 听不懂，换一段|repeat_hard"]]` (single button — no slow button by design, see §2.0)
-5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
-6. Wait for the user's voice retell (or text fallback) or button tap.
+3. Send voice + instruction + buttons in **one** `tg_msg type="render"` call. Renders as two bubbles (voice + text-with-buttons) for clean cross-client display — still one tool call.
+4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+
+Render envelope:
+
+```json
+{
+  "type": "render",
+  "url": "<tts audio path>",
+  "text": "🎧 听完一次就够。**用你自己的话**把重点说出来（按住录音键）。\n\n听不懂可以点开看原文：||{correct English source}||",
+  "buttons": "[[\"😵 听不懂，换一段|repeat_hard\"]]"
+}
+```
+
+(Single button — no slow button, see §2.0. `||...||` is the Telegram-spoiler shorthand.)
+
+Wait for the user's voice retell (or text fallback) or button tap.
 
 ### State B: Button Handling (before retelling)
 
 `repeat_hard`:
 
-1. **Persist abandoned record FIRST** (a "couldn't catch it" tap is the highest-value signal for dropping the source length):
+1. **Persist abandoned record FIRST**:
 
    ```json
    {
@@ -141,7 +152,7 @@ Hold: keep length, optionally swap **one** dimension (register / structure / piv
 
    After `persist` returns, reset `ui_feedback`.
 
-2. **Replacement.** Apply demotion / length-down (§2.3). Brief ack via `tg_msg type="text"`, briefly preview the topic in Chinese for context, generate a new shorter / simpler source → State A.
+2. **Replacement.** Apply demotion / length-down (§2.3). Brief ack via `tg_msg type="render"` (text only), briefly preview the topic in Chinese for context, generate a new shorter / simpler source → State A.
 
 ### State C: Evaluate
 
@@ -169,7 +180,7 @@ Buttons (always, regardless of accuracy):
 [["🔄 再来一段|repeat_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` — see Hard Rule 9. Source audio is replayable from chat history (the rule is "no replay before retell" — after grading, reveal is fine), so no dedicated retry button.
+**Critical**: feedback + buttons in **one** `tg_msg type="render"` call (no `url` — feedback has no media). On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call. Source audio is replayable from chat history (the rule is "no replay before retell" — after grading, reveal is fine), so no dedicated retry button.
 
 **Micro drill (optional, same call)**: ask the learner to use the upgrade in one new sentence in the next turn (no separate persist; harvest goes via `errors` / `subcap_scores.evidence`).
 
@@ -241,10 +252,9 @@ Error keys: `info_loss`, `paraphrase_parroting`, `register_mismatch`, `register_
 
 1. **Play once only.** Replay defeats the drill. State A delivers source ONCE; reveal happens in State C after the retell.
 2. **Hide source until after retell**: never show the transcript outside `<tg-spoiler>`.
-3. **Voice before instruction, sequential.** Never `tg_msg type="voice"` and `type="keyboard"` in parallel.
+3. **All Telegram sends go through `tg_msg type="render"`.** Voice + text + buttons + perfect-score `react: "🔥"` (when `accuracy === 1.0`) all fold into one render call. Never split into separate `voice` / `text` / `keyboard` / `react` calls.
 4. Use `persist` for reads/writes; no raw DB.
 5. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
 6. **Measure retention, not wording.** Score against the §2.0 rubric — paraphrase scored as high as parroting, parroting scored LOWER if it echoes source verbatim without comprehension.
 7. **One upgrade per session.** Don't list 5 corrections — pick the highest-leverage one and harvest it.
 8. **Text fallback accepted.** Voice preferred but typed retells score under the same rubric — don't penalize the modality.
-9. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call.

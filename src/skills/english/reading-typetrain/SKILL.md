@@ -102,7 +102,7 @@ Hold: keep difficulty, swap topic family.
 
 1. From the chosen `question_type` and §2.3 credits, decide difficulty (easy / medium / hard) and pick (words, items, time) from the §2.0 table.
 2. Generate the passage + items. Compute `prompt_hash`; regenerate on dedup hit.
-3. Send the **strategy nudge + passage** in a single `tg_msg type="text"`:
+3. Send the **strategy nudge + passage** in a single `tg_msg type="render"` (text only, no `url`/`buttons`):
 
    ```text
    💡 {strategy nudge ≤ 3 lines for this type}
@@ -110,9 +110,9 @@ Hold: keep difficulty, swap topic family.
    {passage text — plain, no <blockquote>}
    ```
 
-4. Send a **single** `tg_msg type="keyboard"` with timer info + items + buttons:
+4. Send a **single** `tg_msg type="render"` (text + buttons, no `url`) with timer info + items + buttons:
 
-   Text:
+   `text`:
 
    ```text
    ⏱️ {type} · {difficulty} — {items} 题，限时 {time} 分钟。
@@ -122,7 +122,7 @@ Hold: keep difficulty, swap topic family.
    答完直接发给我。
    ```
 
-   Buttons:
+   `buttons`:
 
    ```json
    [["⏸️ 暂停|tt_pause", "🆘 看不懂题型策略|tt_strategy"]]
@@ -135,13 +135,13 @@ Hold: keep difficulty, swap topic family.
 `tt_pause`:
 
 - Append `⏸️ 暂停` to `ui_feedback`.
-- Brief Chinese ack ("好，慢慢来"). Don't generate anything; user resumes by submitting answers.
+- Brief Chinese ack via `tg_msg type="render"` (text only, e.g. "好，慢慢来"). Don't generate anything else; user resumes by submitting answers.
 - Do NOT persist abandoned record.
 
 `tt_strategy`:
 
 - Append `🆘 看不懂题型策略` to `ui_feedback`.
-- Send a slightly longer (≤ 8 lines) strategy explanation for this type, with a worked mini-example **on a different passage** (so it's a teaching aid, not the answer).
+- Send via `tg_msg type="render"` (text only) a slightly longer (≤ 8 lines) strategy explanation for this type, with a worked mini-example **on a different passage** (so it's a teaching aid, not the answer).
 - Wait for the user's typed answer.
 
 ### State C: Evaluate
@@ -167,7 +167,7 @@ Buttons (always, regardless of accuracy):
 [["🎯 再来一组|reading-typetrain:<type>", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. The per-item evidence list can be a separate `tg_msg type="text"` before; feedback+buttons must go together.
+**Critical**: feedback + buttons in **one** `tg_msg type="render"` call (no `url`). The per-item evidence list can be a separate `tg_msg type="render"` (text only) before; feedback+buttons must go together. On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the feedback render call.
 
 ### State D: Persist Evidence
 
@@ -242,4 +242,4 @@ Subcap mapping by type:
 5. **Distractors must have archetypes.** MCQ wrong answers cannot all be random — keyword-match / partial-truth / opposite. That's what makes the type drillable.
 6. Use `persist` for reads/writes; no raw DB.
 7. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-8. **One-call keyboard.** Feedback + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` to attach buttons.
+8. **All Telegram sends go through `tg_msg type="render"`.** Strategy nudge + passage, timed items + buttons, scaffolds (`tt_pause` / `tt_strategy`), per-item evidence, feedback + buttons + perfect-score `react: "🔥"` all fold into render calls. Never split into separate `text` / `keyboard` / `react` calls.

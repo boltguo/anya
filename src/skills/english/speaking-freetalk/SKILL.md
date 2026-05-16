@@ -5,7 +5,7 @@ description: "MUST trigger for conversational practice, free-flowing speaking, o
 
 # Speaking Freetalk (Impromptu And Debate)
 
-Open chat with no source clip and no fixed function. Different from `speaking-roleplay` (fixed scenario + role) and `speaking-repeat` (single-shot retell). Goal here: sustain a natural multi-turn English conversation about a topic, with stealth feedback at the end. The signal driving i+1 is a **rubric-graded engagement + topic-depth score** (0..1).
+Open chat with no source clip and no fixed function. Sustain a natural multi-turn English conversation about a topic, with stealth feedback at the end.
 
 ## 1. Inputs
 
@@ -29,7 +29,7 @@ Target **i+1**: one stretch above the learner's current successful chat depth. A
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `PASS_THRESHOLD` | `0.65` | A round with `accuracy ≥ PASS` is a pass. Lowest of all speaking skills because freetalk is rubric-graded and the priority is fluency, not precision — over-strict thresholds discourage the very practice this skill targets. |
+| `PASS_THRESHOLD` | `0.65` | A round with `accuracy ≥ PASS` is a pass. |
 | `FAIL_THRESHOLD` | `0.35` | Below = fail (collapsed under 3 turns, or fell to Chinese throughout). |
 | `STREAK` | `2` | Passes/fails to move tier / push-back intensity. |
 | `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
@@ -102,24 +102,28 @@ Hold: keep tier, optionally swap **one** topic family (work → hobby or vice ve
 
 1. From §2.3 + §2.4, decide tier, topic (rotate), push-back plan. Compute `prompt_hash` on the topic question; regenerate on dedup hit.
 2. `tts` for the hook question only (one short audio, ~5–10 seconds).
-3. Send voice FIRST: a separate `tg_msg type="voice"` call with the audio `url`. Wait for delivery.
-4. THEN send instruction: a separate `tg_msg type="keyboard"` call (text + buttons only — **never include `url` here**, the keyboard endpoint has no media slot). Never parallel — see Hard Rule 3.
-   - Text: the topic question in writing. E.g. `💬 <topic question>\n\n按住录音键说说你的看法（卡壳就点 SOS）。`
-   - Buttons (2 only, entire duration of conversation):
+3. Send voice + instruction + buttons in **one** `tg_msg type="render"` call. Renders as two bubbles (voice + text-with-buttons) for clean cross-client display — still one tool call.
+4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
 
-   ```json
-   [["🆘 不知道怎么说|freetalk_sos", "👋 结束聊天|freetalk_end"]]
-   ```
+Render envelope:
 
-5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
-6. Wait for the user's voice / text reply, or button tap.
+```json
+{
+  "type": "render",
+  "url": "<tts audio path>",
+  "text": "💬 <topic question>\n\n按住录音键说说你的看法（卡壳就点 SOS）。",
+  "buttons": "[[\"🆘 不知道怎么说|freetalk_sos\", \"👋 结束聊天|freetalk_end\"]]"
+}
+```
+
+Wait for the user's voice / text reply, or button tap.
 
 ### State B: SOS Handling
 
 `freetalk_sos`:
 
 - Append `🆘 不知道怎么说` to `ui_feedback`.
-- Send **text-only** scaffolding via `tg_msg type="text"` (**no buttons, no keyboard**). The user just reads and then directly records their voice. Showing buttons here is unnecessary — they know how to continue.
+- Send **text-only** scaffolding via `tg_msg type="render"` (text only, no `url`/`buttons`). The user just reads and then directly records their voice. Showing buttons here is unnecessary — they know how to continue.
 - **Scaffolding content**: 3 useful phrases + 1 sentence starter tailored to the current topic. Example:
 
   ```text
@@ -135,20 +139,18 @@ Hold: keep tier, optionally swap **one** topic family (work → hobby or vice ve
 
 ### State C: Conversation Loop
 
-The conversation continues **until the user taps `👋 结束聊天` or max 8 turns reached** (whichever first). The user controls when to stop; 8-turn cap is a safety net to prevent infinite token spend.
+The conversation continues **until the user taps `👋 结束聊天` or max 8 turns reached** (whichever first).
 
 Each user turn:
 
 1. Listen to their response (transcribe if voice; accept text directly).
 2. Push back gently per tier plan (§2.0): "I see your point, but what about…", "Could you give an example?". For Beginner tier, just acknowledge and ask one simple follow-up.
 3. **Stealth feedback**: do NOT stop the flow to correct every error. Mention at most 1 advanced phrase **within YOUR response naturally** — don't break the conversation.
-4. Send the next response via `tg_msg type="voice"` + `tg_msg type="keyboard"` with the same 2 buttons:
+4. Send the next response via **one** `tg_msg type="render"` call (`url=<tts>`, `text=<your reply>`, `buttons=<same 2 buttons below>`):
 
    ```json
    [["🆘 不知道怎么说|freetalk_sos", "👋 结束聊天|freetalk_end"]]
    ```
-
-   Voice first, then keyboard — never parallel.
 
 ### State C-End: Summary & Evaluation
 
@@ -171,7 +173,7 @@ Summary content — deliver as a natural Chinese wrap-up:
 [["🔄 换个话题继续聊|freetalk_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: summary + buttons in **one** `tg_msg type="keyboard"` call.
+**Critical**: summary + buttons in **one** `tg_msg type="render"` call (no `url`). On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call.
 
 ### State D: Persist Evidence
 
@@ -240,11 +242,10 @@ Error keys: `filler_overuse`, `verb_form_error`, `l1_transfer`, `vocabulary_repe
 
 1. **Fluency over accuracy.** Keep the conversation flowing. Stealth feedback at the end of YOUR turn, not interrupting the learner's flow.
 2. **The "I'm Stuck" protocol**: if the user uses native language or hits SOS, do NOT grade them. Provide a word bank immediately and resume.
-3. **Voice before instruction, sequential.** Never `tg_msg type="voice"` and `type="keyboard"` in parallel.
-4. **At most 1–2 errors logged** per session, only ones you gave stealth feedback on. Don't list 5 at the end — that's overwhelming and inconsistent with the stealth-feedback rule.
-5. **User controls when to stop; max 8 turns as safety net.** The conversation ends on `👋 结束聊天` tap or after 8 turns, whichever comes first.
+3. **All Telegram sends go through `tg_msg type="render"`.** Voice + text + buttons + perfect-score `react: "🔥"` (when `accuracy === 1.0`) all fold into one render call. Never split into separate `voice` / `text` / `keyboard` / `react` calls.
+4. **At most 1–2 errors logged** per session, only ones you gave stealth feedback on.
+5. **User controls when to stop; max 8 turns.** The conversation ends on `👋 结束聊天` tap or after 8 turns, whichever comes first.
 6. **Feedback after, not during** (except inline stealth in §State C step 3).
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-9. **One-call keyboard** (State A and State C close): text + buttons in a single `tg_msg type="keyboard"` call.
-10. **TTS = English question ONLY.** The `tts` call text must be the English hook question verbatim — do NOT include Chinese prompts ("按住录音键…"), button descriptions, or emoji in the TTS input.
+9. **TTS = English question ONLY.** The `tts` call text must be the English hook question verbatim — do NOT include Chinese prompts ("按住录音键…"), button descriptions, or emoji in the TTS input.

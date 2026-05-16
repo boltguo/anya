@@ -29,8 +29,8 @@ Target **i+1**: one stretch above the learner's last successful logic-grasp. Ada
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `PASS_THRESHOLD` | `0.70` | A round with `accuracy ≥ PASS` is a pass. Lower than dictation because rubric grading is forgiving by design. |
-| `FAIL_THRESHOLD` | `0.40` | Below = fail. Wider hold band reflects rubric noise. |
+| `PASS_THRESHOLD` | `0.70` | A round with `accuracy ≥ PASS` is a pass. |
+| `FAIL_THRESHOLD` | `0.40` | Below = fail. |
 | `STREAK` | `2` | Passes/fails to move tier. |
 | `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
 | `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
@@ -46,7 +46,7 @@ Target **i+1**: one stretch above the learner's last successful logic-grasp. Ada
 | `0.25` | Off-topic but at least the domain was right (e.g., user said "about climate" when actual claim is about climate **policy tradeoffs**). |
 | `0.00` | Off / hallucinated content / no answer. |
 
-Use this rubric verbatim — do **not** reward word count, English grammar, or detail recall. This skill measures **comprehension of the argument**, nothing else. Granular `reading.gist` / `reading.syntax_parsing` subcaps go into `subcap_scores` separately.
+Use this rubric verbatim — do **not** reward word count, English grammar, or detail recall. Granular `reading.gist` / `reading.syntax_parsing` subcaps go into `subcap_scores` separately.
 
 | Tier (IELTS band ≈ CEFR) | Words | Genre & syntax |
 | --- | --- | --- |
@@ -104,16 +104,16 @@ Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptiv
 
 1. From §2.3 + `coach_context`, decide tier, word count, genre, killer-sentence target.
 2. Generate the passage. Compute `prompt_hash`; regenerate on dedup hit.
-3. **Send the passage FIRST** via `tg_msg type="text"` — plain text, no buttons, no extra decoration. Let the user read at their own pace.
-4. **THEN send the question + buttons** via `tg_msg type="keyboard"`:
+3. **Send the passage FIRST** via `tg_msg type="render"` (text only, no `url`/`buttons`) — plain text, no decoration. Let the user read at their own pace.
+4. **THEN send the question + buttons** via `tg_msg type="render"` (text + buttons, no `url`):
 
-   Text:
+   `text`:
 
    ```text
    📖 读完用一句话告诉我：**这段话的核心论点和它是怎么被支撑的**？(中英文都行)
    ```
 
-   Buttons (2 only — help and abandon):
+   `buttons` (2 only — help and abandon):
 
    ```json
    [["🆘 看不太懂|dd_help", "🛑 太难了换一篇|dd_abandon"]]
@@ -127,7 +127,7 @@ Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptiv
 `dd_help`:
 
 - Append `🆘 看不太懂` to `ui_feedback`.
-- Send **text-only** scaffolding via `tg_msg type="text"` (**no buttons**) combining:
+- Send **text-only** scaffolding via `tg_msg type="render"` (text only, no `url`/`buttons`) combining:
   - **生词**: 3 hardest words with IPA + Chinese gloss + in-passage usage
   - **长难句**: break down the killer sentence (Subject → Verb → Object → modifiers)
   - **结构提示**: 2-3 bullet structural map in Chinese
@@ -144,7 +144,7 @@ Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptiv
    metadata={"abandoned_reason":"too_hard","tier":"<beginner|intermediate|advanced>","words":<n>,"genre":"<genre>"}
    ```
 
-2. **Replacement.** Apply demotion (§2.3). Brief Chinese ack, generate a shorter / easier passage → State A.
+2. **Replacement.** Apply demotion (§2.3). Brief Chinese ack via `tg_msg type="render"` (text only), generate a shorter / easier passage → State A.
 
 ### State C: Evaluate
 
@@ -171,7 +171,7 @@ Buttons (always, regardless of accuracy):
 [["📖 再读一篇|dd_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. The killer-sentence parse can be inside the same feedback body. Never `type="text"` then `type="edit"` to attach buttons.
+**Critical**: feedback + buttons in **one** `tg_msg type="render"` call (no `url` — feedback has no media). The killer-sentence parse can be inside the same feedback body. On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call.
 
 ### State D: Persist Evidence
 
@@ -244,4 +244,4 @@ In **parallel** to this practice persist, call `word_upsert` for each harvested 
 6. **No forced keyboard.** The user reads at their own pace.
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-9. **One-call keyboard.** Feedback + buttons go out in a single `tg_msg type="keyboard"` call.
+9. **All Telegram sends go through `tg_msg type="render"`.** Passage delivery, question + buttons, scaffold (`dd_help`), feedback + buttons + perfect-score `react: "🔥"` all fold into render calls. Never split into separate `text` / `keyboard` / `react` calls.

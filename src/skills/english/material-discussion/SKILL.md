@@ -5,7 +5,7 @@ description: "Topic discussion with authentic materials. Trigger for '话题讨�
 
 # Material Discussion (话题讨论)
 
-Read authentic content → discuss it in English. This is an **output-focused** skill: the reading is input, the discussion is the exercise. Different from `reading-deepdive` (untimed syntax analysis) and `speaking-freetalk` (no source material).
+Read authentic content → discuss it in English. **Output-focused**: the reading is input, the discussion is the exercise.
 
 ## 1. Inputs
 
@@ -34,13 +34,13 @@ Required context before generating:
 ### State A: Source & Present
 
 1. Check user's interests from `USER.md`. Use `web_search` to find a recent, interesting short article/thread.
-2. **Send the material FIRST** via `tg_msg type="text"`:
+2. **Send the material FIRST** via `tg_msg type="render"` (text only, no `url`/`buttons`):
    - English excerpt (adapted to tier length)
    - 2-3 key phrases **bolded** in the English text
-   - Chinese summary hidden: `<tg-spoiler>中文摘要：...</tg-spoiler>` (user taps to reveal if needed — don't show directly)
-3. **THEN send the discussion question + buttons** via `tg_msg type="keyboard"`:
-   - A thought-provoking discussion question in Chinese: e.g. `💬 你觉得 AI 会取代程序员吗？用英文说说你的看法（中文也行，我帮你翻）`
-   - Buttons:
+   - Chinese summary hidden: `||中文摘要：...||` (user taps to reveal if needed — don't show directly. `||...||` expands to `<tg-spoiler>`)
+3. **THEN send the discussion question + buttons** via `tg_msg type="render"` (text + buttons, no `url`):
+   - `text`: a thought-provoking discussion question in Chinese: e.g. `💬 你觉得 AI 会取代程序员吗？用英文说说你的看法（中文也行，我帮你翻）`
+   - `buttons`:
 
    ```json
    [["🆘 看不懂|discussion_help", "👋 结束讨论|discussion_end"]]
@@ -50,7 +50,7 @@ Required context before generating:
 
 `discussion_help`:
 
-- Send **text-only** scaffolding via `tg_msg type="text"` (**no buttons**):
+- Send **text-only** scaffolding via `tg_msg type="render"` (text only, no `url`/`buttons`):
   - 3 key vocabulary items with Chinese gloss
   - 1-2 sentence starters the user can use
   - Example: `试试这样说：I think AI can/cannot replace programmers because...`
@@ -61,7 +61,7 @@ Required context before generating:
 1. Accept user's response (voice or text). If in Chinese, **recast** their point in natural English and ask them to try again.
 2. Respond with 1 follow-up or gentle push-back, referencing the source material.
 3. **Stealth correction**: if the user makes a significant expression error, use recasting (repeat their thought in correct English naturally in your reply).
-4. Send response via `tg_msg type="keyboard"` with the same 2 buttons:
+4. Send response via `tg_msg type="render"` (text + buttons, no `url`) with the same 2 buttons:
 
    ```json
    [["🆘 看不懂|discussion_help", "👋 结束讨论|discussion_end"]]
@@ -81,12 +81,10 @@ When user taps `👋 结束讨论` (`discussion_end` callback) or max 5 turns re
 
 2. **Persist FIRST, THEN feedback.**
 
-3. Feedback via **ONE** `tg_msg type="keyboard"`:
-   - Score + brief evaluation
-   - 1 thing they did well (specific quote)
-   - 1 upgrade: 原句 → 升级版 → 原因
-   - 1-2 phrases from the source worth remembering
-   - Buttons: `[["🔄 换个话题再聊|discussion_next", "🧭 练习其他|nav:main"]]`
+3. Feedback via **ONE** `tg_msg type="render"` (text + buttons, no `url`):
+   - `text`: score + brief evaluation, 1 thing they did well (specific quote), 1 upgrade (原句 → 升级版 → 原因), 1-2 phrases from the source worth remembering
+   - `buttons`: `[["🔄 换个话题再聊|discussion_next", "🧭 练习其他|nav:main"]]`
+   - On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call.
 
 ### State D: Persist Evidence
 
@@ -122,4 +120,4 @@ When user taps `👋 结束讨论` (`discussion_end` callback) or max 5 turns re
 5. **TTS optional.** Only use TTS for the discussion question if voice practice is the goal. Don't TTS the source article.
 6. Use `persist` for reads/writes; no raw DB.
 7. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-8. **One-call keyboard.** Text + buttons in a single `tg_msg type="keyboard"` call.
+8. **All Telegram sends go through `tg_msg type="render"`.** Source delivery, discussion turn, SOS scaffold, feedback + buttons + perfect-score `react: "🔥"` all fold into render calls. Never split into separate `text` / `keyboard` / `react` calls.

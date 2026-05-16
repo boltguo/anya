@@ -28,9 +28,9 @@ For active scenarios, optionally call `persist {"action":"recent_practice","skil
 ### Scenario A — User asked a dictionary question
 
 1. **Explain** the meaning concisely. One short paragraph + 1 native example sentence.
-2. **Offer the save**: send a single `tg_msg type="keyboard"` with text + button:
+2. **Offer the save**: send a single `tg_msg type="render"` (text + buttons, no `url`):
 
-   Buttons:
+   `buttons`:
 
    ```json
    [["➕ 加入生词本|vh_save:<word>"]]
@@ -86,3 +86,4 @@ This skill writes only `word_upsert` (and optional `word_lookup`) actions. It do
 4. **No single common words from passive harvest.** A passive call with `word="said"` or `word="people"` is a bug — the host skill should pick collocations / phrasal verbs / domain phrases, not closed-class items.
 5. **`origin` is mandatory.** `learner-state` reads it to balance "user-asked" vs "auto-pulled" items in due-flow.
 6. Use `persist` for all writes; no raw DB.
+7. **All Telegram sends go through `tg_msg type="render"`.** The save-offer in Scenario A uses render with `text`+`buttons`. Passive Scenario B's notification is folded into the host skill's render call. Never use stand-alone `text` / `keyboard` calls.

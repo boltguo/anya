@@ -41,7 +41,7 @@ Execute the following actions:
 
 ### State C: Delivery (UI)
 
-Use `tg_msg(type=keyboard)` to present a **compact, scannable** report. Do NOT dump raw data or repeat information across sections.
+Use `tg_msg(type="render")` (text + buttons, no `url`) to present a **compact, scannable** report. Do NOT dump raw data or repeat information across sections.
 
 **Template** (adapt numbers; do not add extra sections):
 
@@ -72,7 +72,7 @@ Use `tg_msg(type=keyboard)` to present a **compact, scannable** report. Do NOT d
   - `collocation_error` → 搭配不自然
   - Other keys → translate to short Chinese description
 - Each weakness line MUST include **one concrete example** from `coach_context.summary.errors` (e.g., "must to fix → must fix").
-- **Buttons**: `[["🧭 回到主菜单|nav:main"]]` — no coach button.
+- `buttons`: `[["🧭 回到主菜单|nav:main"]]` — no coach button.
 - **CRITICAL STOP**: End your turn. Do NOT offer to explain errors or suggest next steps — that's planner's job.
 
 ## 3. Hard Rules
@@ -81,3 +81,4 @@ Use `tg_msg(type=keyboard)` to present a **compact, scannable** report. Do NOT d
 3. **Own Learning State**: Durable ability summaries, weekly snapshots, and MEMORY level records belong here. Other practice skills only write evidence through `persist action="practice"`.
 4. **Compact output**: The entire report should fit in ~10 lines. No paragraphs, no numbered sub-lists under each weakness. One line per item.
 5. **No raw keys**: Never expose database column names or error keys to the user. Always translate to Chinese.
+6. **All Telegram sends go through `tg_msg type="render"`.** The radar report uses render with `text`+`buttons`. Never use stand-alone `text` / `keyboard` calls.

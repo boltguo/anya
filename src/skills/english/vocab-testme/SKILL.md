@@ -21,7 +21,7 @@ Required context before generating:
 2. `persist {"action":"coach_context","days":14,"limit":8}` for `Vocabulary Profile.cefr` (caps register / gloss complexity) and recent error keys (e.g. `collocation_error` → bias toward collocation-pick + spot-wrong formats).
 3. `MEMORY.md` / `USER.md` only as fallback. No raw `study.db` access.
 
-If `due_words` returns < 4 items, fall back to: `📚 现在没几个到期单词。要不要先 vocab-topic 学一组？` with `[["📚 学一组新词|vocab-topic", "🧭 练习其他|nav:main"]]` and stop.
+If `due_words` returns < 4 items, fall back to one `tg_msg type="render"` (text + buttons, no `url`): `text="📚 现在没几个到期单词。要不要先 vocab-topic 学一组？"` + `buttons=[["📚 学一组新词|vocab-topic", "🧭 练习其他|nav:main"]]` and stop.
 
 ## 2. SRS Promotion
 
@@ -47,12 +47,12 @@ Cycle through these 5 formats; aim for at least 4 distinct formats per batch of 
 
 | Format | UI | What it tests |
 | --- | --- | --- |
-| Recall meaning | `keyboard` 4 Chinese option buttons | Receptive recall (EN word → CN meaning) |
-| Produce sentence | `keyboard` with text prompt | Productive use in context |
-| Pick collocation | `keyboard` 4 collocation buttons, 1 correct | Knowledge of natural pairing |
-| Spot wrong usage | `keyboard` 4 sentence buttons, 1 wrong | Discriminative usage |
-| Register pick | `keyboard` 4 word buttons, 1 fits the frame | Register awareness |
-| Paraphrase map | `keyboard` 4 phrase buttons, 1 paraphrases target | Synonym/paraphrase mapping |
+| Recall meaning | `render` 4 Chinese option `buttons` | Receptive recall (EN word → CN meaning) |
+| Produce sentence | `render` with text prompt (no `buttons`) | Productive use in context |
+| Pick collocation | `render` 4 collocation `buttons`, 1 correct | Knowledge of natural pairing |
+| Spot wrong usage | `render` 4 sentence `buttons`, 1 wrong | Discriminative usage |
+| Register pick | `render` 4 word `buttons`, 1 fits the frame | Register awareness |
+| Paraphrase map | `render` 4 phrase `buttons`, 1 paraphrases target | Synonym/paraphrase mapping |
 
 Bias by error key:
 
@@ -71,14 +71,14 @@ For the current word in the batch:
 
 1. Pick a format (cycle, biased per §2.4).
 2. Generate the question. For `keyboard` MC formats, ensure exactly 1 correct option and 3 plausible distractors. For production formats, give the user a short topic frame ("写一句你今天工作里能用到 `<word>` 的话").
-3. Send via `tg_msg type="keyboard"` with one button per option (e.g. `[["A. xxx|tm_q1_a"], ["B. xxx|tm_q1_b"], ["C. xxx|tm_q1_c"], ["D. xxx|tm_q1_d"]]`). For production format, send `tg_msg type="keyboard"` with the prompt text and no option buttons — the user types their answer directly. Do NOT use `tg_msg type="quiz"`.
+3. Send via `tg_msg type="render"` (text + buttons, no `url`) with one button per option (e.g. `buttons=[["A. xxx|tm_q1_a"], ["B. xxx|tm_q1_b"], ["C. xxx|tm_q1_c"], ["D. xxx|tm_q1_d"]]`). For production format, send `tg_msg type="render"` (text only, no `buttons`) with the prompt text — the user types their answer directly. Do NOT use `tg_msg type="quiz"`.
 4. Record `question_format`, `question_index`, `target_word`, and the canonical correct answer in working state.
 
 ### State B: Per-question Grading
 
 When the user's answer arrives:
 
-**⚡ CALLBACK BUDGET: max 2 tool calls per question** — `persist word_review` + `tg_msg` (1-line note + next question). Do NOT call `persist coach_context`, `persist recent_practice`, or `persist due_words` between questions. The batch data is already in context.
+**⚡ CALLBACK BUDGET: max 2 tool calls per question** — `persist word_review` + `tg_msg type="render"` (1-line note + next question's text/buttons in one envelope). Do NOT call `persist coach_context`, `persist recent_practice`, or `persist due_words` between questions. The batch data is already in context.
 
 1. **Quiz formats**: compare the chosen option to the canonical answer. Correct → `rating=4`; wrong → `rating=1`.
 2. **Production format**: evaluate naturalness:
@@ -140,7 +140,7 @@ End-of-batch buttons:
 [["🎯 再考一组|vocab-testme", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: send the batch summary + buttons in **one** `tg_msg type="keyboard"` call.
+**Critical**: send the batch summary + buttons in **one** `tg_msg type="render"` call (no `url`). On a perfect batch (`accuracy === 1.0`) add `react: "🔥"` to the same call.
 
 ## 4. Collaborates With
 
@@ -152,7 +152,7 @@ End-of-batch buttons:
 
 ## 5. Failure And Fallbacks
 
-- `tg_msg type="quiz"` should NEVER be used — always use `tg_msg type="keyboard"` with option buttons.
+- `tg_msg type="quiz"` should NEVER be used — always use `tg_msg type="render"` with option `buttons`.
 - User taps the same option twice rapidly → debounce: ignore the second; persist only one `word_review`.
 - Production answer is in Chinese → ask once for an English answer; if user refuses, grade as `rating=1` (didn't use the word) and proceed.
 - `persist action="word_review"` fails on one card → still send the 1-line note, but mention "未保存，下次还会出现"; continue to the next question.
@@ -169,6 +169,6 @@ End-of-batch buttons:
 6. **Cap at 8 items.** Larger batches lose the user; SRS is fed at a sustainable rhythm.
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable vocab state.
-9. **One-call keyboard** for the batch summary. Never `type="text"` then `type="edit"` to attach buttons.
-10. **Callback = 2 tools max per question.** Answer callback → `persist word_review` + `tg_msg` (note + next question or batch summary). No context re-reads between questions.
+9. **All Telegram sends go through `tg_msg type="render"`.** Quiz delivery, per-question note + next question, batch summary + buttons + perfect-score `react: "🔥"`, fallback notice all fold into render calls. Never use `quiz` / stand-alone `keyboard` / `text` / `react`.
+10. **Callback = 2 tools max per question.** Answer callback → `persist word_review` + `tg_msg type="render"` (note + next question or batch summary). No context re-reads between questions.
 11. **Skip coach_context on continue.** Within the same batch, do NOT re-read `coach_context`. The data from batch start is still valid.

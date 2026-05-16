@@ -114,7 +114,7 @@ Wait for the typed answer or button tap.
 `dict_slow`:
 
 - Append `🐢 慢速播放` to `ui_feedback`.
-- Brief ack via `tg_msg type="text"`.
+- Brief ack via `tg_msg type="render"` (text only).
 - Same sentence; `tts rate="-10%"`.
 - Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons).
 

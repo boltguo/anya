@@ -107,10 +107,10 @@ Hold: keep word count + skim window, swap topic family to probe a different weak
 
    The countdown edits this SAME message every few seconds (only updating the timer number). When it reaches 0, the entire message content is replaced by `expire_text` — passage is hidden.
 
-4. **Message 2 — instructions + buttons** via `tg_msg type="keyboard"`:
+4. **Message 2 — instructions + buttons** via `tg_msg type="render"` (text + buttons, no `url`):
 
-   - Text: `📖 这段大约 {words} 词，倒计时 {seconds} 秒。看完点“准备好了”开始答题！`
-   - Buttons:
+   - `text`: `📖 这段大约 {words} 词，倒计时 {seconds} 秒。看完点"准备好了"开始答题！`
+   - `buttons`:
 
    ```json
    [["🆘 看不太懂|skim_help", "✅ 准备好了|skim_ready", "🛑 太难了|skim_hard"]]
@@ -131,7 +131,7 @@ When the user taps `✅ 准备好了` (`skim_ready`), the timer expires, or taps
 `skim_help`:
 
 - Append `🆘 看不太懂` to `ui_feedback`.
-- Send **text-only** scaffolding via `tg_msg type="text"` (**no buttons**):
+- Send **text-only** scaffolding via `tg_msg type="render"` (text only, no `url`/`buttons`):
   - 3 hardest words with Chinese gloss
   - 1-line structural hint: "注意第二段的转折"
 - Wait for user's next action.
@@ -147,16 +147,16 @@ When the user taps `✅ 准备好了` (`skim_ready`), the timer expires, or taps
    metadata={"abandoned_reason":"too_hard","tier":"<beginner|intermediate|advanced>","words":<n>,"topic":"<topic>"}
    ```
 
-2. **Replacement.** Apply demotion (§2.3). Brief Chinese ack, generate a shorter / easier passage → State A.
+2. **Replacement.** Apply demotion (§2.3). Brief Chinese ack via `tg_msg type="render"` (text only), generate a shorter / easier passage → State A.
 
 **Answering flow** (triggered by `skim_ready` tap or timer expiry):
 
-First, make sure the passage is hidden (edit `passage_timer` to `expire_text` if not already).
+First, make sure the passage is hidden (edit `passage_timer` to `expire_text` if not already, via `tg_msg type="edit"`).
 
 Then ask questions sequentially:
 
-1. Main-idea: `tg_msg type="text"` — `一句话说主旨（≤ 15 字）`.
-2. After main-idea reply, send 3-4 paragraph-function questions + 1 detail-trap MCQ, **one at a time via `tg_msg type="keyboard"`** with inline option buttons. Each button callback encodes the answer: `skim_q1_a`, `skim_q1_b`, etc. Do NOT use Telegram quiz/poll (`sendQuiz`).
+1. Main-idea: `tg_msg type="render"` (text only) — `一句话说主旨（≤ 15 字）`.
+2. After main-idea reply, send 3-4 paragraph-function questions + 1 detail-trap MCQ, **one at a time via `tg_msg type="render"`** with `text`+`buttons` (no `url`) carrying inline option buttons. Each button callback encodes the answer: `skim_q1_a`, `skim_q1_b`, etc. Do NOT use Telegram quiz/poll (`sendQuiz`).
 
 ### State C: Evaluate
 
@@ -175,7 +175,7 @@ When all answers are in:
 4. Compute `wpm = words / actual_skim_seconds` (use 1 if elapsed > skim_window — clamp to skim_window for fair WPM).
 5. **Persist FIRST, THEN feedback**. Sequential.
 
-Reveal step (after persist + feedback): re-send the passage as a fresh `tg_msg type="text"` with each paragraph's function as a `<tg-spoiler>` label so the learner can self-debrief without re-reading the whole passage. The main-idea pivot phrase should also be wrapped in `<tg-spoiler>` so they can verify what carried it.
+Reveal step (after persist + feedback): re-send the passage as a fresh `tg_msg type="render"` (text only, no `url`/`buttons`) with each paragraph's function as a `<tg-spoiler>` label so the learner can self-debrief without re-reading the whole passage. The main-idea pivot phrase should also be wrapped in `<tg-spoiler>` so they can verify what carried it.
 
 Feedback message must include:
 
@@ -190,7 +190,7 @@ Buttons (always, regardless of accuracy):
 [["🔁 再来一篇|skim_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. The reveal `tg_msg type="text"` with spoilers can be a separate message before or after — but feedback+buttons must go together. Never `type="text"` then `type="edit"` to attach buttons.
+**Critical**: feedback + buttons in **one** `tg_msg type="render"` call (no `url`). The reveal render call with spoilers can be a separate message before or after — but feedback+buttons must go together. On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the feedback render call.
 
 ### State D: Persist Evidence
 
@@ -262,5 +262,5 @@ State D persists fully-attempted passages only. Abandoned rows are written in St
 7. **No forced keyboard.** The user answers at their own pace.
 8. Use `persist` for reads/writes; no raw DB.
 9. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-10. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call.
-11. **MCQ via keyboard buttons.** Quiz questions MUST use `tg_msg type="keyboard"` with inline option buttons. Do NOT use Telegram quiz/poll.
+10. **All non-countdown/non-edit Telegram sends go through `tg_msg type="render"`.** Instructions, scaffolds, questions, feedback + buttons + perfect-score `react: "🔥"` all fold into render calls. Only `countdown` (passage timer) and `edit` (hide on `skim_ready`) stay separate. Never use stand-alone `voice` / `keyboard` / `text` / `react` calls.
+11. **MCQ via render buttons.** Quiz questions MUST use `tg_msg type="render"` with inline option `buttons`. Do NOT use Telegram quiz/poll.

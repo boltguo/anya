@@ -21,7 +21,7 @@ Required context before generating:
 2. `persist {"action":"coach_context","days":14,"limit":8}` for `Vocabulary Profile.cefr` (caps which words the LLM can mint on the fly when seeding examples) and `coach_context.summary.subcaps.vocab.recall` (informs whether to include extra production hints).
 3. `MEMORY.md` / `USER.md` only as fallback. No raw `study.db` access.
 
-If `due_words` returns 0 items, **do not invent**. Send a message: `📚 现在没有到期单词。要不要 vocab-topic 学一组新的？` with `[["📚 学一组新词|vocab-topic", "🧭 练习其他|nav:main"]]` and stop.
+If `due_words` returns 0 items, **do not invent**. Send via one `tg_msg type="render"` (no `url`): `text="📚 现在没有到期单词。要不要 vocab-topic 学一组新的？"` + `buttons=[["📚 学一组新词|vocab-topic", "🧭 练习其他|nav:main"]]` and stop.
 
 ## 2. SRS Promotion
 
@@ -48,7 +48,7 @@ Two-turn state machine, looped for each word in the batch.
 For the current word, present a flashcard test. Hidden meaning until the user taps a memory button.
 
 1. Pre-step: confirm the word came from this batch's `due_words` list (don't run State A on a word that wasn't fetched).
-2. **Audio (mandatory)**: send a `tg_msg type="voice"` with TTS. Use SSML `<break>` tags for the segmented breakdown:
+2. **Audio (mandatory)**: TTS the word using SSML `<break>` tags for the segmented breakdown:
 
    ```
    apple. apple. apple. ap <break time="500ms"/> ple. I ate an apple.
@@ -56,22 +56,15 @@ For the current word, present a flashcard test. Hidden meaning until the user ta
 
    Format: word ×3 (normal speed) → word with one mid-syllable break ×1 → example sentence ×1.
 
-3. **Card text (mandatory)**: send a separate `tg_msg type="keyboard"` (no media — the voice already played):
-
-   Text:
-
-   ```text
-   {word} /{IPA}/
-
-   {fill-in-the-blank example sentence using the word, OR a clever yes/no question that forces recall}
-
-   先想 5 秒再点 ↓
-   ```
-
-   Buttons:
+3. **Send card via one `tg_msg type="render"` call** (voice + card text + rating buttons in one envelope):
 
    ```json
-   [["👍 认识|srs:easy:{word}", "🤔 模糊|srs:hard:{word}"], ["❌ 不认识|srs:again:{word}"]]
+   {
+     "type": "render",
+     "url": "<tts audio path>",
+     "text": "{word} /{IPA}/\n\n{fill-in-the-blank example sentence using the word, OR a clever yes/no question that forces recall}\n\n先想 5 秒再点 ↓",
+     "buttons": "[[\"👍 认识|srs:easy:{word}\", \"🤔 模糊|srs:hard:{word}\"], [\"❌ 不认识|srs:again:{word}\"]]"
+   }
    ```
 
 4. **Stop and wait.** Do NOT generate the micro-lesson. Wait for callback.
@@ -151,7 +144,7 @@ End-of-batch buttons (after State D persist returns):
 [["🔄 再背一组|vocab-review", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: send the batch summary + buttons in **one** `tg_msg type="keyboard"` call.
+**Critical**: send the batch summary + buttons in **one** `tg_msg type="render"` call (no `url`). On a perfect batch (`accuracy === 1.0`) add `react: "🔥"` to the same call.
 
 ## 4. Collaborates With
 
@@ -180,8 +173,9 @@ End-of-batch buttons (after State D persist returns):
 6. **Don't override `mastery`.** The persist algorithm owns it. Read for display, never write directly from this skill.
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable vocab state.
-9. **Edit card for reveal.** Use `tg_msg type="edit"` to append the micro-lesson to the existing card message. Do NOT send the reveal as a separate new message.
+9. **Edit card for reveal.** Use `tg_msg type="edit"` to append the micro-lesson to the existing card message. Do NOT send the reveal as a separate new message. (`edit` is the one exception to the "all sends go through render" rule — render can't mutate an existing message.)
 10. **Batch sample mandatory.** State D MUST write a `persist action="practice"` row for every completed batch. Without it, learner-state underestimates vocab-review volume.
 11. **Handle word-not-found.** If `word_review` returns "word not found", call `word_upsert` to create the word first, then retry. Never silently skip.
 12. **Callback = 2 tools (normal path).** SRS callback (`srs:*`): `persist word_review` + `tg_msg edit`. No context re-reads, no coach_context, no recent_practice. Word-not-found exception may use `word_upsert` + retry, max 4 calls.
 13. **Skip coach_context on continue.** When generating the next card (State A within the same batch), do NOT re-read `coach_context` or `recent_practice`. The data from the first load is still valid.
+14. **All non-edit Telegram sends go through `tg_msg type="render"`.** Card delivery, batch summary, empty-due notice all use render. Only `edit` (Hard Rule 9) stays separate. Never use stand-alone `voice` / `keyboard` / `text` / `react` calls.

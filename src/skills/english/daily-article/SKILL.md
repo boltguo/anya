@@ -33,13 +33,13 @@ Read the user's interests from `USER.md` and their level from `MEMORY.md`.
 ### State B: Audio Delivery & Presentation
 Once the article is written and words are seeded, deliver the payload:
 1. **Generate Audio**: Use the `tts` tool to generate the spoken audio of the English article. Choose a high-quality podcast-style voice (e.g., `en-US-AriaNeural` or `en-GB-RyanNeural`).
-2. **Execute Parallel UI Actions**: You MUST invoke the `tg_msg` tool multiple times concurrently (in the same turn) to send the audio and the text separately.
-   - **Action 1 (Voice)**: `tg_msg(type="voice")` to send the generated audio file.
-   - **Action 2 (Text)**: `tg_msg(type="text")` to send the article text.
-     - **Text**: Send the English article. Below it, include a short Chinese translation/summary wrapped in `<blockquote expandable>...</blockquote>` so it stays collapsed by default. Highlight the 3-5 words you seeded in **bold**.
-     - **No buttons.** The skill ends here — the article is the payload.
+2. **Send via one `tg_msg type="render"` call** (voice + article text in a single envelope):
+   - `url`: the generated audio file path.
+   - `text`: the English article. Below it, include a short Chinese translation/summary wrapped in `<blockquote expandable>...</blockquote>` so it stays collapsed by default. Highlight the 3-5 words you seeded in **bold**.
+   - **No `buttons`.** The skill ends here — the article is the payload.
 3. **CRITICAL STOP**: End your turn. The skill is complete.
 
 ## 4. Hard Rules
 1. **Absolute Silence on Vocab**: NEVER write "I added some words to your list" in the message sent to the user.
 2. **No Conversational TTS**: The `tts` tool is ONLY for reading the article itself. Do not use TTS for conversational filler.
+3. **All Telegram sends go through `tg_msg type="render"`.** Voice + article text fold into one render call. Never split into separate `voice` / `text` calls.

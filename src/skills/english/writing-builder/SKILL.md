@@ -101,15 +101,15 @@ Hold: keep tier and constraint family; swap target word / vocab to probe the sam
 
 1. From `coach_context` + §2.3 credits, decide: tier, target structure, target word(s), expected subcaps.
 2. Generate the micro-task (e.g. "用 `Despite` 和 `fluctuate` 把这两句话连起来：The economy is recovering. Energy prices are rising fast."). Compute `prompt_hash`; regenerate on dedup hit.
-3. Send a single `tg_msg type="keyboard"` call (no media):
+3. Send a single `tg_msg type="render"` call (text + buttons, no `url`):
 
-   Text:
+   `text`:
 
    ```text
    ✍️ {micro-task in Chinese, with target words bolded and 2 source clauses}
    ```
 
-   Buttons:
+   `buttons`:
 
    ```json
    [["🆘 我卡壳了|wb_sos", "💡 换个简单的|wb_easier"]]
@@ -123,8 +123,7 @@ Hold: keep tier and constraint family; swap target word / vocab to probe the sam
 `wb_sos`:
 
 - Append `🆘 我卡壳了` to `ui_feedback`.
-- Reply with a **sentence starter only** (e.g. "你可以这样开头：`Despite the fact that energy prices...`"). Do NOT write the full target sentence.
-- Re-send the same keyboard so the user can still tap `wb_easier` if the starter wasn't enough.
+- Reply via `tg_msg type="render"` (text + same `buttons` as State A, no `url`) with a **sentence starter only** (e.g. "你可以这样开头：`Despite the fact that energy prices...`"). Do NOT write the full target sentence. The same buttons stay available so the user can still tap `wb_easier` if the starter wasn't enough.
 - Wait again. SOS does NOT change the score envelope; it only assists.
 
 `wb_easier`:
@@ -140,7 +139,7 @@ Hold: keep tier and constraint family; swap target word / vocab to probe the sam
 
    After `persist` returns, reset `ui_feedback`.
 
-2. **Replacement.** Apply demotion / constraint-down (§2.3). Show the previous task's target sentence as a model (1 line, plain text — not as evidence the user "should have known", but as a teaching example). Generate a new simpler micro-task → State A.
+2. **Replacement.** Apply demotion / constraint-down (§2.3). Show the previous task's target sentence as a model via `tg_msg type="render"` (text only — not as evidence the user "should have known", but as a teaching example). Generate a new simpler micro-task → State A.
 
 ### State C: Evaluate
 
@@ -166,7 +165,7 @@ Buttons (always, regardless of accuracy):
 [["✏️ 再写一句|wb_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` — see Hard Rule 7.
+**Critical**: feedback + buttons in **one** `tg_msg type="render"` call (no `url` — feedback has no media). On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call.
 
 ### State D: Persist Evidence
 
@@ -235,5 +234,5 @@ State D persists attempted sentences only. Abandoned rows are written in State B
 4. **Diff every word** in the polish — explain what changed (lexical / grammatical / cohesive) so the learner knows the lesson.
 5. Use `persist` for reads/writes; no raw DB.
 6. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-7. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` to attach buttons.
+7. **All Telegram sends go through `tg_msg type="render"`.** Micro-task + buttons, SOS starter + buttons, demotion model + buttons, feedback + buttons + perfect-score `react: "🔥"` all fold into render calls. Never split into separate `text` / `keyboard` / `react` calls.
 8. **No full sample writing.** SOS gives a sentence-starter, not the full answer. The user must complete the sentence themselves — that's the drill.

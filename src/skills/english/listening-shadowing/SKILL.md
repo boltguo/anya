@@ -5,7 +5,7 @@ description: "Listening Rhythm Shadowing. Trigger when the user wants to practic
 
 # Listening Shadowing
 
-Different from `speaking-shadowing` (phoneme accuracy). Goal here: stay with the speaker — decoding speed and rhythm. The signal driving i+1 is **fluency**, not pronunciation accuracy.
+Stay with the speaker — decoding speed and rhythm. **Fluency** drives i+1; pronunciation accuracy is recorded separately.
 
 ## 1. Inputs
 
@@ -29,13 +29,13 @@ Target **i+1**: one stretch above the learner's current successful tempo. Adapt 
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `PASS_THRESHOLD` | `0.85` | `accuracy ≥ PASS` (= fluency ≥ 85) is a pass. Raised from 0.80 because fluency alone over-promotes attempts that kept rhythm but dropped key words. |
-| `FAIL_THRESHOLD` | `0.55` | Below = fail. Wider hold band than dictation — shadowing is noisier; beginners stutter even when they "got it". |
+| `PASS_THRESHOLD` | `0.85` | `accuracy ≥ PASS` (= fluency ≥ 85) is a pass. |
+| `FAIL_THRESHOLD` | `0.55` | Below = fail. |
 | `STREAK` | `2` | Passes/fails to move tier / length. |
 | `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
 | `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
 
-**Score normalization (CRITICAL):** `pron_assess` returns `fluency` and pronunciation `accuracy` 0–100. DB `accuracy` column = `fluency / 100` (this drives credit gating — rhythm is the i+1 signal). Raw pronunciation goes to `band_pronunciation` separately for `learner-state` later; not used for tier decisions.
+**Score normalization (CRITICAL):** `pron_assess` returns `fluency` and pronunciation `accuracy` 0–100. DB `accuracy` column = `fluency / 100` (drives credit gating). Raw pronunciation goes to `band_pronunciation`; not used for tier decisions.
 
 Standard 100% speed only. Slow-down is the `shadow_slow` button (State B), not a tier property.
 
@@ -92,25 +92,36 @@ Hold: keep length, optionally swap **one** dimension (syntax / connected-speech 
 
 1. From §2.3 credits, decide tier and clip length. Generate the passage at chosen length/syntax/accent. Compute `prompt_hash` (§State D); regenerate on dedup hit.
 2. `tts` only for the target passage at 100% speed. No filler audio.
-3. Send voice FIRST: a separate `tg_msg type="voice"` call with the audio `url`. Wait for delivery.
-4. THEN send instruction: a separate `tg_msg type="keyboard"` call (text + buttons only — **never include `url` here**, the keyboard endpoint has no media slot). Never parallel — see Hard Rule 3.
-   - Text: `🎧 先盲听一遍，然后直接按住录音，**一边听一边跟我读（影子跟读）**。\n\n如果实在跟不上，可以点开看原文：<tg-spoiler>{correct English passage}</tg-spoiler>`
-   - Buttons: `[["🐢 慢速播放|shadow_slow", "😵 太难了，降级|shadow_hard"]]`
-5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
-6. Wait for the user's voice message or button tap.
+3. Send voice + instruction + buttons in **one** `tg_msg type="render"` call. Renders as two bubbles (voice on its own line, then text + buttons) for clean cross-client display — still one tool call.
+4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+
+Render envelope (all fields at top level, same as `voice`/`keyboard`):
+
+```json
+{
+  "type": "render",
+  "url": "<tts audio path>",
+  "text": "🎧 先盲听一遍，然后直接按住录音，**一边听一边跟我读（影子跟读）**。\n\n如果实在跟不上，可以点开看原文：||{correct English passage}||",
+  "buttons": "[[\"🐢 慢速播放|shadow_slow\", \"😵 太难了，降级|shadow_hard\"]]"
+}
+```
+
+(`||...||` is the Telegram-spoiler shorthand; the adapter expands it to `<tg-spoiler>` HTML.)
+
+Wait for the user's voice message or button tap.
 
 ### State B: Button Handling (before recording)
 
 `shadow_slow`:
 
-- Append `🐢 慢速播放` to `ui_feedback` (mandatory — survives into State D so a "kept up only at slow speed" attempt is not mistaken for native-tempo competence).
-- Brief ack via `tg_msg type="text"`.
+- Append `🐢 慢速播放` to `ui_feedback` (mandatory).
+- Brief ack via `tg_msg type="render"` (text only).
 - Same passage; `tts rate="-10%"`.
-- Send slower voice FIRST, THEN re-send instruction keyboard. Never parallel.
+- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons).
 
 `shadow_hard`:
 
-1. **Persist abandoned record FIRST.** A "drop the level" tap is exactly the signal `learner-state` needs to lower the tempo target; it MUST hit the database before being replaced:
+1. **Persist abandoned record FIRST** (before generating the replacement):
 
    ```json
    {
@@ -136,7 +147,7 @@ Hold: keep length, optionally swap **one** dimension (syntax / connected-speech 
 
    After `persist` returns, reset the round (fresh `ui_feedback` accumulator).
 
-2. **Replacement.** Apply the demotion / length-down rule from §2.3 (the abandoned row will surface as one fail in the next `recent_practice` call). Brief ack via `tg_msg type="text"`, generate a new simpler clip → State A.
+2. **Replacement.** Apply the demotion / length-down rule from §2.3 (the abandoned row will surface as one fail in the next `recent_practice` call). Brief ack via `tg_msg type="render"` (text only), generate a new simpler clip → State A.
 
 ### State C: Evaluate
 
@@ -162,10 +173,10 @@ Two to four sentences after the score line, conversational.
 **Buttons (binary by `accuracy` vs `PASS_THRESHOLD`):**
 
 - `accuracy < PASS` (fluency < 85) — forced re-practice, **NO buttons**:
-  1. Generate coaching audio (see "Low-score coaching TTS" below); send AFTER feedback text but BEFORE waiting.
-  2. Append: `这句还没跟稳节奏哦，先听听这一段示范，再多听几遍原音找找感觉，然后直接录音发给我！💪`
+  1. Generate coaching audio (see "Low-score coaching TTS" below).
+  2. Deliver coaching voice + feedback text in **one** `tg_msg type="render"` call: `url=<coaching audio>`, `text=<feedback + 这句还没跟稳节奏哦，先听听这一段示范，再多听几遍原音找找感觉，然后直接录音发给我！💪>`, **no `buttons`**. Renders as two bubbles (voice + text) for clean cross-client display.
   3. Wait for the next voice message → re-evaluate via State F.
-- `accuracy ≥ PASS` (fluency ≥ 85, clean pass): `[["🔄 再来一句|shadow_next", "🧭 练习其他|nav:main"]]`
+- `accuracy ≥ PASS` (fluency ≥ 85, clean pass): **ONE `tg_msg type="render"`** (no `url`) with feedback text + buttons `[["🔄 再来一句|shadow_next", "🧭 练习其他|nav:main"]]`. On **perfect** (`accuracy === 1.0`, fluency 100) add `react: "🔥"` to the same call.
 
 **Low-score coaching TTS** (mandatory when `accuracy < PASS`):
 
@@ -197,7 +208,7 @@ Example call (two chunks — `gonna` + `wanna`):
 }
 ```
 
-Send sequentially (Hard Rule 3): report `tg_msg type="text"`, THEN coaching `tg_msg type="voice"`. Don't bundle into `keyboard` — there are no buttons in this branch.
+Bundle into the single State C `< PASS` render call (`url=<coaching audio>` + `text=<feedback>`, no buttons). No separate text/voice splits.
 
 Append `🎯 发音示范` to `ui_feedback` so State D records that coaching was given.
 
@@ -234,7 +245,7 @@ Minimum payload:
 
 `prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
 
-`ui_feedback` mandatory whenever any 🐢/😵 button was tapped, even on `fluency ≥ 80` — without it, `learner-state` over-promotes "kept up only at slow speed" passes.
+`ui_feedback` mandatory whenever any 🐢/😵 button was tapped, even on `fluency ≥ 80`.
 
 State D persists fully-attempted clips only (with or without slow-down). Abandoned-on-too-hard rows are written by State B.
 
@@ -281,10 +292,9 @@ When the user sends another voice message after a sub-pass evaluation (no button
 
 1. **No early reveals**: never show the transcript before they attempt, except inside `<tg-spoiler>`.
 2. **Score rhythm, not phonemes**: fluency drives credits; pronunciation accuracy goes to `band_pronunciation`.
-3. **Voice before instruction, sequential.** Never `tg_msg type="voice"` and `type="keyboard"` in parallel.
+3. **All Telegram sends go through `tg_msg type="render"`.** Voice + text + buttons + perfect-score `react: "🔥"` (when `accuracy === 1.0`, fluency 100) all fold into one render call. State A / B's `shadow_slow` use render with `url`+`text`+`buttons`. State C / F `< PASS` use render with `url`+`text`, no buttons. State C / F `≥ PASS` use render with `text`+`buttons`, no `url`. Never split into separate `voice` / `text` / `keyboard` / `react` calls.
 4. Use `persist` for reads/writes; no raw DB.
 5. Don't update `MEMORY.md`; `learner-state` owns durable state.
 6. **Binary buttons by `accuracy` vs `PASS`**: `< PASS` → no buttons + coaching TTS + forced re-practice; `≥ PASS` → `shadow_next` + `nav:main`. Never a dedicated retry button.
 7. **Feedback content (not format)**: every report covers 4 scores (准确度/流利度/完整度/韵律感), correct passage, brief translation, specific rhythm/linking diagnosis. Format is the LLM's call — no fixed template.
 8. **Persist before feedback**: `await persist(...)` returns before sending the evaluation. State F needs the row in DB.
-9. **One-call keyboard**: when buttons are shown, report text + buttons in a single `tg_msg type="keyboard"` call. Never split.

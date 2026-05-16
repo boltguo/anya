@@ -30,8 +30,8 @@ Target **i+1**: one notch above the learner's last successful band on this task 
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `PASS_THRESHOLD` | `6.0` | A round with `band_overall ≥ PASS` is a pass. Anchored at IELTS 6 (baseline pass). |
-| `FAIL_THRESHOLD` | `5.0` | Below = fail. Wider hold band reflects half-band noise + slow frequency. |
+| `PASS_THRESHOLD` | `6.0` | A round with `band_overall ≥ PASS` is a pass. |
+| `FAIL_THRESHOLD` | `5.0` | Below = fail. |
 | `STREAK` | `3` | Passes/fails to move tier — one notch higher than other writing skills because writing essays is high-effort and one outlier shouldn't move the bar. |
 | `ACC_WINDOW` | `5` | Sample window for §2.2 mean — wider for the same reason. |
 | `DEDUP_WINDOW` | `30` | Rolling `prompt_hash` window — wider; user shouldn't see the same prompt within ~30 attempts (≈ 4–8 weeks). |
@@ -94,9 +94,9 @@ Hold: keep tier and word range; rotate task topic.
 
 1. From §2.3 + `coach_context`, decide tier → task type, word count, time budget.
 2. Generate **one** prompt directly (no 3-choice menu — choosing wastes a full LLM round). Compute `prompt_hash`; regenerate on dedup hit.
-3. **Prompt delivery** in a single `tg_msg type="keyboard"`:
+3. **Prompt delivery** in a single `tg_msg type="render"` (text + buttons, no `url`):
 
-   Text:
+   `text`:
 
    ```text
    ✍️ {task type} · ~{word_count} 词 · ~{time} 分钟
@@ -106,7 +106,7 @@ Hold: keep tier and word range; rotate task topic.
    写好后整段直接发给我就行。
    ```
 
-   Buttons:
+   `buttons`:
 
    ```json
    [["💡 给我提纲|we_outline", "🆘 卡壳了|we_sos", "💡 换个简单的|we_easier"]]
@@ -176,7 +176,7 @@ Buttons (always, regardless of band):
 [["✍️ 再写一篇|writing-essay", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. The Native Polish sentences fit inside the same body. Never `type="text"` then `type="edit"` to attach buttons.
+**Critical**: feedback + buttons in **one** `tg_msg type="render"` call (no `url` — feedback has no media). The Native Polish sentences fit inside the same body. On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call.
 
 ### State D: Persist Evidence
 
@@ -252,4 +252,4 @@ State D persists fully-attempted essays only. Abandoned rows are written in Stat
 6. **Scaffolded runs get `metadata.scaffolded = true`.** A 6.5 with outline + SOS is not the same as a 6.5 unaided; learner-state must know.
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-9. **One-call keyboard.** Feedback + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` to attach buttons.
+9. **All Telegram sends go through `tg_msg type="render"`.** Prompt delivery + buttons, scaffolds (`we_outline` / `we_sos` / `we_easier`), feedback + buttons + perfect-score `react: "🔥"` all fold into render calls. Never split into separate `text` / `keyboard` / `react` calls.

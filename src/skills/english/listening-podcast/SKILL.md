@@ -5,7 +5,7 @@ description: "Extensive listening practice for grasping the main idea, not dicta
 
 # Listening Podcast (Extensive & Gist)
 
-Extensive listening for **gist**, not transcription. The learner listens once and types a Chinese summary; we score how well they caught the main idea (and the pivot, if any). The signal driving i+1 is a **rubric-graded gist score** (0..1), not binary pass/fail.
+Extensive listening for **gist**, not transcription. The learner listens once and types a Chinese summary; score how well they caught the main idea (and the pivot, if any).
 
 ## 1. Inputs
 
@@ -28,8 +28,8 @@ Target **i+1**: one stretch above the learner's current successful comprehension
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `PASS_THRESHOLD` | `0.70` | A round with `accuracy ≥ PASS` is a pass. Lower than dictation/shadowing because gist comprehension is forgiving by design. |
-| `FAIL_THRESHOLD` | `0.40` | Below = fail (totally missed the main idea). Wider hold band reflects rubric noise. |
+| `PASS_THRESHOLD` | `0.70` | A round with `accuracy ≥ PASS` is a pass. |
+| `FAIL_THRESHOLD` | `0.40` | Below = fail (totally missed the main idea). |
 | `STREAK` | `2` | Passes/fails to move tier. |
 | `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
 | `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
@@ -45,7 +45,7 @@ Target **i+1**: one stretch above the learner's current successful comprehension
 | `0.25` | Off-topic but at least the domain was right (e.g., user heard "tech" but missed the actual subject). |
 | `0.00` | Totally off, hallucinated content, or no answer. |
 
-Use this rubric verbatim — do **not** reward typing length, English grammar, or detail recall. This skill measures **comprehension of the main idea**, nothing else. Granular `listening.gist` subcap (0–10) goes into `subcap_scores` separately for `learner-state`.
+Use this rubric verbatim — do **not** reward typing length, English grammar, or detail recall. Granular `listening.gist` subcap (0–10) goes into `subcap_scores` separately for `learner-state`.
 
 Standard 100% speed only. Slow-down is the `pod_slow` button (State B), not a tier property.
 
@@ -102,24 +102,37 @@ Hold: keep length, optionally swap **one** dimension (topic / filler density / a
 ### State A: Prepare And Deliver
 
 1. From §2.3, decide tier and script length. Generate the script at chosen length / topic / register / filler density. Compute `prompt_hash` (§State D); regenerate on dedup hit.
-2. `tts` only for the target script at 100% speed. No filler audio (filler is in the script, not assistant chatter). Send via a separate `tg_msg type="voice"` call with the audio `url`. Wait for delivery.
-3. THEN a separate `tg_msg type="keyboard"` call (text + buttons only — **never include `url` here**, the keyboard endpoint has no media slot):
-   - Text: `🎧 听听这段播客。不用抓每一个字，**你觉得他最想表达的核心观点是什么？** (可以用中文回答)\n\n实在听不出可以点开看原文：<tg-spoiler>{correct English script}</tg-spoiler>`
-   - Buttons: `[["🐢 慢速播放|pod_slow", "😵 完全听不懂|pod_hard"]]`
+2. `tts` only for the target script at 100% speed. No filler audio (filler is in the script, not assistant chatter).
+3. Send voice + instruction + buttons in **one** `tg_msg type="render"` call. Renders as two bubbles (voice on its own line, then text + buttons) for clean cross-client display — still one tool call.
 4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
-5. Wait for the user's typed Chinese summary or button tap.
+
+Render envelope (all fields at top level, same as `voice`/`keyboard`):
+
+```json
+{
+  "type": "render",
+  "url": "<tts audio path>",
+  "text": "🎧 听听这段播客。不用抓每一个字，**你觉得他最想表达的核心观点是什么？** (可以用中文回答)\n\n实在听不出可以点开看原文：||{correct English script}||",
+  "buttons": "[[\"🐢 慢速播放|pod_slow\", \"😵 完全听不懂|pod_hard\"]]"
+}
+```
+
+(`||...||` is the Telegram-spoiler shorthand; the adapter expands it to `<tg-spoiler>` HTML.)
+
+Wait for the user's typed Chinese summary or button tap.
 
 ### State B: Button Handling (before typing)
 
 `pod_slow`:
 
-- Append `🐢 慢速播放` to `ui_feedback` (mandatory — survives into State D so a "got the gist only after slow-down" attempt is not mistaken for native-speed comprehension).
-- Brief ack via `tg_msg type="text"`.
-- Same script; `tts rate="-10%"`; send slower voice + same keyboard. Wait.
+- Append `🐢 慢速播放` to `ui_feedback` (mandatory).
+- Brief ack via `tg_msg type="render"` (text only).
+- Same script; `tts rate="-10%"`.
+- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons). Wait.
 
 `pod_hard`:
 
-1. **Persist abandoned record FIRST** (a "completely lost" reaction is the highest-value signal for dropping the listening level):
+1. **Persist abandoned record FIRST**:
 
    ```json
    {
@@ -145,7 +158,7 @@ Hold: keep length, optionally swap **one** dimension (topic / filler density / a
 
    After `persist` returns, reset `ui_feedback`.
 
-2. **Replacement.** Apply demotion / length-down (§2.3). Brief ack via `tg_msg type="text"`, briefly explain the topic in Chinese for context, generate a new shorter / simpler script → State A.
+2. **Replacement.** Apply demotion / length-down (§2.3). Brief ack via `tg_msg type="render"` (text only), briefly explain the topic in Chinese for context, generate a new shorter / simpler script → State A.
 
 ### State C: Evaluate
 
@@ -167,7 +180,7 @@ Buttons (always, regardless of accuracy):
 [["🔄 再听一篇|pod_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` — that pattern leaves the message buttonless on the client. Voice is replayable from chat history; the report already names the pivot / main idea, so a dedicated retry button has no learning value.
+**Critical**: feedback + buttons in **one** `tg_msg type="render"` call (no `url` — feedback has no media). On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call — Telegram reacts the learner's message, no extra tool call. Voice is replayable from chat history; the report already names the pivot / main idea, so a dedicated retry button has no learning value.
 
 ### State D: Persist Evidence
 
@@ -218,4 +231,4 @@ State D persists fully-attempted scripts only (with or without slow-down). Aband
 4. **Use the §2.0 rubric verbatim** when grading — do not reward summary length, English grammar, or detail recall over comprehension of the main idea.
 5. Use `persist` for reads/writes; no raw DB.
 6. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-7. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` followed by `type="edit"` to attach buttons.
+7. **All Telegram sends go through `tg_msg type="render"`.** Voice + text + buttons + perfect-score `react: "🔥"` (when `accuracy === 1.0`) all fold into one render call. Never split into separate `voice` / `keyboard` / `text` / `react` calls.
