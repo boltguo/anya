@@ -3,7 +3,7 @@
 import { Agent, type RunResult } from '../../../agent/Agent.js';
 import { agentLogger } from '../../../lib/logger.js';
 import { newOrReuseEmptySession, setActiveSkill } from '../../../storage/state/sessions.js';
-import { getSkill } from '../../../skills/loader.js';
+import { getSkill } from '../../../agent/skills/loader.js';
 import { TelegramSessionAdapter } from '../SessionAdapter.js';
 import { formatTgError } from '../errors.js';
 import { isNavCallback, getNavPage, getMainMenu } from '../skillMenu.js';

@@ -1,4 +1,4 @@
-// skills/parser.ts — parse SKILL.md frontmatter and body
+// agent/skills/parser.ts — parse SKILL.md frontmatter and body
 
 import matter from 'gray-matter';
 

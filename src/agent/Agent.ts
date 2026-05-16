@@ -6,7 +6,7 @@ import { buildSystemPrompt } from './promptBuilder.js';
 import { createProvider } from '../providers/index.js';
 import { getToolSchemas, dispatch } from '../tools/registry.js';
 import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle, getActiveSkill, setActiveSkill } from '../storage/state/sessions.js';
-import { getSkill } from '../skills/loader.js';
+import { getSkill } from './skills/loader.js';
 import { agentLogger } from '../lib/logger.js';
 import { trackLlm } from '../lib/usage.js';
 import { truncateHistory, sanitizeHistory } from './history.js';

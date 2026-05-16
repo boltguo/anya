@@ -3,7 +3,7 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { SOUL_PATH, RULES_PATH, USER_MD_PATH, MEMORY_MD_PATH } from '../lib/paths.js';
 import type { AnyaConfig } from '../config/defaults.js';
-import { buildSkillIndex } from '../skills/loader.js';
+import { buildSkillIndex } from './skills/loader.js';
 
 const FILE_CACHE_TTL_MS = 300_000;
 const fileCache = new Map<string, { content: string; mtime: number; cachedAt: number }>();

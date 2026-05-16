@@ -1,8 +1,8 @@
-// skills/loader.ts — load SKILL.md from disk with mtime cache
+// agent/skills/loader.ts — load SKILL.md from disk with mtime cache
 
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join, basename, dirname, resolve, relative, sep } from 'node:path';
-import { SKILLS_DIR } from '../lib/paths.js';
+import { SKILLS_DIR } from '../../lib/paths.js';
 import { parseSkill, type Skill } from './parser.js';
 
 interface SkillCache {

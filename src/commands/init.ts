@@ -80,21 +80,9 @@ export async function runInit(): Promise<void> {
   console.log(chalk.dim('  [ok] memories/'));
 
 
-  let skillsSrc = resolveAsset(__dirname, 'skills');
-  if (skillsSrc && existsSync(join(skillsSrc, 'bundled'))) {
-    skillsSrc = join(skillsSrc, 'bundled');
-  }
-  
+  const skillsSrc = resolveAsset(__dirname, 'skills');
   if (skillsSrc) {
-    for (const oldBundledPath of [
-      join(SKILLS_DIR, 'ielts'),
-      join(SKILLS_DIR, 'support', 'ielts-data-contract'),
-      join(SKILLS_DIR, 'support', 'ielts-band-descriptors'),
-    ]) {
-      if (existsSync(oldBundledPath)) {
-        rmSync(oldBundledPath, { recursive: true, force: true });
-      }
-    }
+    rmSync(SKILLS_DIR, { recursive: true, force: true });
     cpSync(skillsSrc, SKILLS_DIR, { recursive: true, force: true });
     console.log(chalk.dim('  [ok] skills/'));
   } else {

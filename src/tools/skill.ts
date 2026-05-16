@@ -1,7 +1,7 @@
 // tools/skill.ts — read-only skill inspector
 
 import { register } from './registry.js';
-import { getSkill, loadSkills, listSkillFiles, readSkillFile } from '../skills/loader.js';
+import { getSkill, loadSkills, listSkillFiles, readSkillFile } from '../agent/skills/loader.js';
 import type { ToolContext } from '../agent/types.js';
 
 register({

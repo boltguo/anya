@@ -40,7 +40,7 @@ const assetCopies = [
   { from: 'src/config/schema.json',        to: 'dist/config/schema.json' },
   { from: 'src/storage/state/state.sql',   to: 'dist/storage/state/state.sql' },
   { from: 'src/storage/study/study.sql',   to: 'dist/storage/study/study.sql' },
-  { from: 'src/skills/bundled',            to: 'dist/skills', dir: true },
+  { from: 'src/skills',                    to: 'dist/skills', dir: true },
 ];
 for (const { from, to, dir } of assetCopies) {
   if (!fs.existsSync(from)) continue;

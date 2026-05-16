@@ -2,7 +2,7 @@
 
 import { InlineKeyboard } from 'grammy';
 import { agentLogger } from '../../lib/logger.js';
-import { loadSkills } from '../../skills/loader.js';
+import { loadSkills } from '../../agent/skills/loader.js';
 import { newOrReuseEmptySession } from '../../storage/state/sessions.js';
 import { handleRestart } from './restartManager.js';
 import { getMainMenu } from './skillMenu.js';

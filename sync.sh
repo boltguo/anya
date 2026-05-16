@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./sync.sh push    Push local skills → ~/.anya/skills/, then build & restart
-#   ./sync.sh pull    Pull ~/.anya/skills/ → local src/skills/bundled/
+#   ./sync.sh pull    Pull ~/.anya/skills/ → local src/skills/
 #
 # push is the deploy path  (dev → runtime)
 # pull is the recover path (runtime → dev)
@@ -12,7 +12,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
-LOCAL_SKILLS="$PROJECT_DIR/src/skills/bundled"
+LOCAL_SKILLS="$PROJECT_DIR/src/skills"
 SYSTEM_SKILLS="$HOME/.anya/skills"
 
 # Ensure node is on PATH (nvm)

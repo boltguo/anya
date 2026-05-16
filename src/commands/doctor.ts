@@ -3,7 +3,7 @@
 import chalk from 'chalk';
 import { isInitialized } from '../lib/paths.js';
 import { loadConfig } from '../config/loader.js';
-import { loadSkills } from '../skills/loader.js';
+import { loadSkills } from '../agent/skills/loader.js';
 import { isServiceRunning } from '../lib/pidfile.js';
 
 export async function runDoctor(): Promise<void> {
