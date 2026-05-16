@@ -4,8 +4,9 @@ import { Bot, InlineKeyboard, InputFile, Context } from 'grammy';
 import PQueue from 'p-queue';
 import type { Adapter } from '../../agent/types.js';
 import { agentLogger } from '../../lib/logger.js';
-import { markdownToTelegramHtml } from './format.js';
+import { renderTelegramText } from './format.js';
 import { stripMarkdown, splitMarkdownForTelegram } from './markdown.js';
+import { sendTextWithFallback, editTextWithFallback } from './sender.js';
 import type { SendMessageOptions, PendingChoice } from './types.js';
 
 export class TelegramSessionAdapter implements Adapter {
@@ -17,7 +18,6 @@ export class TelegramSessionAdapter implements Adapter {
   private paginatedMessages: Map<number, { pages: string[]; buttons: string; chatId: number }>;
 
   private taggedMessages = new Map<string, number>();
-  private lastSentMessageId?: number;
 
   // ALL TG API calls go through this single queue to guarantee strict ordering
   private outboundQueue = new PQueue({ concurrency: 1 });
@@ -93,7 +93,6 @@ export class TelegramSessionAdapter implements Adapter {
   }
 
   private trackMessage(messageId: number, tag?: string): void {
-    this.lastSentMessageId = messageId;
     if (tag) {
       this.taggedMessages.set(tag, messageId);
     }
@@ -131,24 +130,17 @@ export class TelegramSessionAdapter implements Adapter {
 
       for (let idx = 0; idx < segments.length; idx++) {
         const segment = segments[idx];
-        const formatted = markdownToTelegramHtml(segment);
-        const rp = idx === 0 ? replyParams : undefined;
-        const markup = idx === segments.length - 1 ? replyMarkup : undefined;
-
-        const msg = await this.bot.api.sendMessage(this.chatId, formatted, {
-          parse_mode: 'HTML',
-          reply_parameters: rp,
-          reply_markup: markup,
-        }).catch(async (err) => {
-          agentLogger.warn({ msg: 'tg_html_parse_fallback', error: err?.message, formattedLen: formatted.length, segmentIdx: idx });
-          return this.bot.api.sendMessage(this.chatId, stripMarkdown(segment), {
-            reply_parameters: rp,
-            reply_markup: markup,
-          }).catch((err2) => {
-            agentLogger.error({ msg: 'tg_reply_dropped', error: err2?.message, segmentIdx: idx });
-            return null;
-          });
-        });
+        const msg = await sendTextWithFallback(
+          this.bot,
+          this.chatId,
+          renderTelegramText(segment),
+          {
+            parse_mode: 'HTML',
+            reply_parameters: idx === 0 ? replyParams : undefined,
+            reply_markup: idx === segments.length - 1 ? replyMarkup : undefined,
+          },
+          stripMarkdown(segment),
+        );
         if (msg) this.trackMessage(msg.message_id);
       }
     }
@@ -165,7 +157,6 @@ export class TelegramSessionAdapter implements Adapter {
     tg_msg: '',  // suppress — the actual message arrives immediately after
     tts: '🔊 Generating audio',
     pron_assess: '🗣️ Assessing pronunciation',
-    db: '🗄️ Querying database',
     persist: '💾 Saving data',
     cron: '⏰ Updating schedule',
   };
@@ -351,17 +342,11 @@ export class TelegramSessionAdapter implements Adapter {
       const replyTo = this.autoReplyTo(opts?.replyTo);
       const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'HTML');
 
-      let msg;
-      try {
-        msg = await this.bot.api.sendMessage(this.chatId, text, {
-          parse_mode: parseMode as any,
-          reply_parameters: replyTo ? { message_id: replyTo } : undefined,
-        });
-      } catch {
-        msg = await this.bot.api.sendMessage(this.chatId, text, {
-          reply_parameters: replyTo ? { message_id: replyTo } : undefined,
-        });
-      }
+      const msg = await sendTextWithFallback(this.bot, this.chatId, text, {
+        parse_mode: parseMode,
+        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
+      });
+      if (!msg) throw new Error('sendMessage failed (HTML + plain fallback)');
 
       this.trackMessage(msg.message_id, opts?.tag);
       this.hasSentContent = true;
@@ -397,21 +382,12 @@ export class TelegramSessionAdapter implements Adapter {
       const replyTo = this.autoReplyTo(opts?.replyTo);
       const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'HTML');
 
-      const keyboard = this.buildInlineKeyboard(buttons);
-
-      let msg;
-      try {
-        msg = await this.bot.api.sendMessage(this.chatId, text, {
-          parse_mode: parseMode as any,
-          reply_markup: keyboard,
-          reply_parameters: replyTo ? { message_id: replyTo } : undefined,
-        });
-      } catch {
-        msg = await this.bot.api.sendMessage(this.chatId, text, {
-          reply_markup: keyboard,
-          reply_parameters: replyTo ? { message_id: replyTo } : undefined,
-        });
-      }
+      const msg = await sendTextWithFallback(this.bot, this.chatId, text, {
+        parse_mode: parseMode,
+        reply_markup: this.buildInlineKeyboard(buttons),
+        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
+      });
+      if (!msg) throw new Error('sendKeyboard failed (HTML + plain fallback)');
 
       this.trackMessage(msg.message_id, opts?.tag);
       this.hasSentContent = true;
@@ -448,15 +424,9 @@ export class TelegramSessionAdapter implements Adapter {
       const msgId = typeof messageId === 'string' ? this.taggedMessages.get(messageId) : messageId;
       if (!msgId) throw new Error(`Message not found: ${messageId}`);
 
-      const replyMarkup = buttons ? this.buildInlineKeyboard(buttons) : undefined;
-
-      await this.bot.api.editMessageText(this.chatId, msgId, text, {
+      await editTextWithFallback(this.bot, this.chatId, msgId, text, {
         parse_mode: 'HTML',
-        reply_markup: replyMarkup,
-      }).catch(async () => {
-        await this.bot.api.editMessageText(this.chatId, msgId, text, {
-          reply_markup: replyMarkup,
-        }).catch(() => {});
+        reply_markup: buttons ? this.buildInlineKeyboard(buttons) : undefined,
       });
     });
   }
@@ -471,14 +441,6 @@ export class TelegramSessionAdapter implements Adapter {
         { type: 'emoji', emoji: emoji as any },
       ]).catch(() => {});
     });
-  }
-
-  getLastMessageId(): number | undefined {
-    return this.lastSentMessageId;
-  }
-
-  getTaggedMessageId(tag: string): number | undefined {
-    return this.taggedMessages.get(tag);
   }
 
   getUserMessageId(): number | undefined {

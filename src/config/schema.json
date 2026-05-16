@@ -4,113 +4,78 @@
   "description": "Configuration file for the Anya AI Agent. Place at ~/.anya/config.json",
   "type": "object",
   "properties": {
-    "$schema": {
-      "type": "string",
-      "description": "JSON Schema reference for editor auto-completion."
-    },
-    "version": {
-      "type": "string",
-      "description": "Configuration version, should match the Anya version."
-    },
-    "agent": {
-      "type": "object",
-      "description": "Agent identity settings.",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "The agent's name. Used in prompts and UI.",
-          "default": "anya"
-        },
-        "personality": {
-          "type": "string",
-          "description": "Agent identity/style prompt. Injected directly into the system prompt and replaces legacy file-based personality loading.",
-          "default": "你是 Anya，一个简洁、直接的个人 AI 助手。"
-        }
-      }
-    },
-    "user": {
-      "type": "object",
-      "description": "Global single-user context used as a fallback before domain profiles are initialized.",
-      "properties": {
-        "native_language": {
-          "type": "string",
-          "description": "Current user's native language, e.g. Chinese, English, Japanese. Used as a fallback context before skill-specific profile data is collected.",
-          "default": ""
-        }
-      }
-    },
+    "$schema": { "type": "string" },
+    "version": { "type": "string" },
     "provider": {
       "type": "object",
-      "description": "LLM provider configuration.",
+      "description": "LLM provider configuration (Codex backend).",
       "properties": {
-        "model": {
-          "type": "string",
-          "description": "Primary model name (e.g. gpt-5.4 or gemini-3-flash-preview).",
-          "default": "gpt-5.4"
-        },
-        "max_tokens": {
-          "type": "integer",
-          "description": "Maximum tokens in the response.",
-          "default": 8192
-        },
-        "temperature": {
-          "type": "number",
-          "description": "Sampling temperature (0.0 - 2.0).",
-          "default": 0.7,
-          "minimum": 0,
-          "maximum": 2
-        },
-        "max_retries": {
-          "type": "integer",
-          "description": "Max retries on transient failures.",
-          "default": 3
-        }
+        "model": { "type": "string", "default": "gpt-5.4" },
+        "max_retries": { "type": "integer", "default": 3 },
+        "context_window": { "type": "integer", "default": 1000000 },
+        "compress_threshold": { "type": "number", "default": 0.8, "minimum": 0, "maximum": 1 },
+        "max_history_messages": { "type": "integer", "default": 200 },
+        "max_react_loops": { "type": "integer", "default": 20 }
       }
     },
     "gemini": {
       "type": "object",
-      "description": "Gemini API Configuration",
       "properties": {
-        "api_key": {
-          "type": "string",
-          "description": "API key for the Gemini provider. Get from https://aistudio.google.com/"
-        }
+        "api_key": { "type": "string", "description": "Gemini API key (https://aistudio.google.com/)." },
+        "vision_model": { "type": "string", "default": "gemini-3-flash-preview" }
       }
     },
-    "tools": {
+    "web_search": {
       "type": "object",
-      "description": "Tool system configuration.",
+      "description": "Tavily web search.",
       "properties": {
-        "enabled": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "List of enabled tool names."
-        },
-        "web_search": {
-          "type": "object",
-          "properties": {
-            "backend": {
-              "type": "string",
-              "description": "Search backend (currently only 'tavily').",
-              "enum": ["tavily"],
-              "default": "tavily"
-            },
-            "api_key": {
-              "type": "string",
-              "description": "API key for the search backend."
-            },
-            "max_results": {
-              "type": "integer",
-              "description": "Maximum number of search results.",
-              "default": 5
-            }
-          }
-        }
+        "api_key": { "type": "string" },
+        "max_results": { "type": "integer", "default": 5 }
+      }
+    },
+    "azure": {
+      "type": "object",
+      "description": "Azure Speech (TTS + pronunciation assessment).",
+      "properties": {
+        "speech_key": { "type": "string" },
+        "speech_region": { "type": "string", "default": "eastasia" }
+      }
+    },
+    "stt": {
+      "type": "object",
+      "description": "Speech-to-text (Groq Whisper for inbound voice).",
+      "properties": {
+        "groq_api_key": { "type": "string" },
+        "model": { "type": "string", "default": "whisper-large-v3-turbo" }
+      }
+    },
+    "tts": {
+      "type": "object",
+      "properties": {
+        "voice": { "type": "string", "default": "en-US-AriaNeural" },
+        "rate": { "type": "string", "default": "+0%" }
+      }
+    },
+    "telegram": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "bot_token": { "type": "string" },
+        "allowed_user_ids": { "type": "array", "items": { "type": "integer" } }
+      }
+    },
+    "cron": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "tick_seconds": { "type": "integer", "default": 60, "minimum": 10 },
+        "timezone": { "type": "string", "default": "UTC" },
+        "default_platform": { "type": "string", "enum": ["telegram"], "default": "telegram" },
+        "default_chat_id": { "type": "string" }
       }
     },
     "security": {
       "type": "object",
-      "description": "Security settings for file access.",
       "properties": {
         "allowed_paths": {
           "type": "array",
@@ -119,109 +84,17 @@
         }
       }
     },
-    "telegram": {
-      "type": "object",
-      "description": "Telegram bot configuration.",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "default": false
-        },
-        "bot_token": {
-          "type": "string",
-          "description": "Telegram bot token from @BotFather."
-        },
-        "allowed_user_ids": {
-          "type": "array",
-          "items": { "type": "integer" },
-          "description": "Telegram user IDs allowed to interact with the bot."
-        }
-      }
-    },
-    "cron": {
-      "type": "object",
-      "description": "Scheduled task system. Jobs are stored in ~/.anya/cron/jobs.json and can be managed via CLI or the cron tool.",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Start the background scheduler with the Telegram gateway.",
-          "default": false
-        },
-        "tick_seconds": {
-          "type": "integer",
-          "description": "Scheduler polling interval in seconds.",
-          "default": 60,
-          "minimum": 10
-        },
-        "timezone": {
-          "type": "string",
-          "description": "IANA timezone used to compute cron expressions.",
-          "default": "UTC"
-        },
-        "default_platform": {
-          "type": "string",
-          "enum": ["telegram"],
-          "description": "Default proactive delivery platform.",
-          "default": "telegram"
-        },
-        "default_chat_id": {
-          "type": "string",
-          "description": "Default Telegram chat ID for cron jobs created outside a chat context.",
-          "default": ""
-        }
-      }
-    },
     "ui": {
       "type": "object",
-      "description": "UI display settings.",
       "properties": {
-        "show_tool_calls": {
-          "type": "boolean",
-          "description": "Show tool call details in the terminal.",
-          "default": true
-        },
-        "show_thinking": {
-          "type": "boolean",
-          "description": "Show model thinking process.",
-          "default": false
-        }
+        "show_tool_calls": { "type": "boolean", "default": true }
       }
     },
-    "advanced": {
+    "onboarding": {
       "type": "object",
-      "description": "Advanced settings. Usually don't need to change.",
       "properties": {
-        "context_window": {
-          "type": "integer",
-          "description": "Model context window size in tokens.",
-          "default": 1000000
-        },
-        "compress_threshold": {
-          "type": "number",
-          "description": "Context usage ratio to trigger compression.",
-          "default": 0.8
-        },
-        "session_history_limit": {
-          "type": "integer",
-          "description": "Max number of sessions to keep.",
-          "default": 50
-        },
-        "max_history_messages": {
-          "type": "integer",
-          "description": "Max number of messages to send to LLM context.",
-          "default": 50
-        },
-        "log_level": {
-          "type": "string",
-          "enum": ["fatal", "error", "warn", "info", "debug", "trace"],
-          "description": "Minimum log level.",
-          "default": "info"
-        },
-        "max_react_loops": {
-          "type": "integer",
-          "description": "Maximum ReAct loop iterations to prevent infinite loops.",
-          "default": 20
-        }
+        "profile_done": { "type": "boolean", "default": false },
+        "placement_done": { "type": "boolean", "default": false }
       }
     }
   }

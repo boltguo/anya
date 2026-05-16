@@ -55,7 +55,7 @@ export class Agent {
     }
 
     let history = loadMessages(sessionId);
-    const maxHistory = this.config.advanced.max_history_messages || 200;
+    const maxHistory = this.config.provider.max_history_messages || 200;
     history = truncateHistory(history, maxHistory);
     history = trimOldToolResults(history);
     history = sanitizeHistory(history);
@@ -88,9 +88,11 @@ export class Agent {
       await updateSessionTitle(sessionId, title);
     }
 
-    const maxLoops = this.config.advanced.max_react_loops;
-    const contextLimit = this.config.advanced.context_window;
+    const maxLoops = this.config.provider.max_react_loops;
+    const contextLimit = this.config.provider.context_window;
     const compressor = new ContextCompressor(this.config, this.provider);
+    // Tool schemas are loop-invariant (depend on static config + platform + policy).
+    const toolSchemas = getToolSchemas(this.config, this.adapter.platform, toolPolicy);
     let totalToolCalls = 0;
     let tgSent = false;
     let compressionCount = 0;
@@ -100,7 +102,7 @@ export class Agent {
 
     for (let loop = 0; loop < maxLoops; loop++) {
 
-      const tokenCount = lastRealTokenCount || estimateTokens(messages, this.config.tools.enabled.length);
+      const tokenCount = lastRealTokenCount || estimateTokens(messages, toolSchemas.length);
       if (compressor.shouldCompress(messages, tokenCount, contextLimit) && compressionCount < MAX_COMPRESSIONS) {
         compressionCount++;
         const compressed = await compressor.compress(messages, contextLimit);
@@ -109,13 +111,11 @@ export class Agent {
         lastRealTokenCount = 0;
       }
 
-      const toolSchemas = getToolSchemas(this.config, this.adapter.platform, toolPolicy);
       const model = this.config.provider.model;
-      const provider = this.provider;
 
       let response;
       try {
-        response = await provider.chat(messages, toolSchemas, this.config, { sessionId });
+        response = await this.provider.chat(messages, toolSchemas, this.config, { sessionId });
 
         // Strip inline file data after first call to avoid re-uploading base64 in loops.
         if (firstLlmCall && files && files.length > 0) {
@@ -208,7 +208,7 @@ export class Agent {
               await setActiveSkill(sessionId, skillName);
               messages[0] = {
                 role: 'system',
-                content: buildActiveSkillSystemPrompt(buildSystemPrompt(this.config), skillName, skill.body),
+                content: buildActiveSkillSystemPrompt(baseSystemPrompt, skillName, skill.body),
               };
               // Body now lives in system prompt — avoid duplicating it in history.
               result.content = `[Skill "${skillName}" loaded — instructions are now in active context]`;

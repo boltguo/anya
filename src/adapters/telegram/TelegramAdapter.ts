@@ -10,7 +10,8 @@ import type { MessageFile } from '../../agent/types.js';
 import { TelegramSessionAdapter } from './SessionAdapter.js';
 import { formatTgError } from './errors.js';
 import { startScheduler, stopScheduler } from '../../services/scheduler.js';
-import { markdownToTelegramHtml } from './format.js';
+import { renderTelegramText } from './format.js';
+import { sendTextWithFallback } from './sender.js';
 
 import { ChatQueue } from './chatQueue.js';
 import { startTurn } from './turnIndicator.js';
@@ -65,12 +66,13 @@ export class TelegramAdapter implements TelegramRuntime {
   }
 
   async sendProactiveMessage(chatId: number, text: string): Promise<void> {
-    await this.bot.api.sendMessage(chatId, markdownToTelegramHtml(text), {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true },
-    }).catch(() => this.bot.api.sendMessage(chatId, text, {
-      link_preview_options: { is_disabled: true },
-    }));
+    await sendTextWithFallback(
+      this.bot,
+      chatId,
+      renderTelegramText(text),
+      { parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
+      text,
+    );
   }
 
   async handleIncoming(

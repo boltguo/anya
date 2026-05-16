@@ -73,16 +73,11 @@ register({
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<string> {
     const query = String(args.query);
-    const maxResults = Number(args.max_results) || context.config.tools.web_search.max_results;
+    const maxResults = Number(args.max_results) || context.config.web_search.max_results;
 
-    const apiKey = context.config.tools.web_search.api_key;
+    const apiKey = context.config.web_search.api_key;
     if (!apiKey) {
-      return 'Error: Tavily API key not configured. Run: anya config set tools.web_search.api_key <key>\nGet a free key at: https://tavily.com/';
-    }
-
-    const backend = context.config.tools.web_search.backend;
-    if (backend !== 'tavily') {
-      return `Error: Unknown search backend "${backend}". Currently only "tavily" is supported.`;
+      return 'Error: Tavily API key not configured. Run: anya config set web_search.api_key <key>\nGet a free key at: https://tavily.com/';
     }
 
     const cached = readCache(query);

@@ -4,18 +4,9 @@
 import { register } from './registry.js';
 import type { ToolContext } from '../agent/types.js';
 import { TelegramSessionAdapter } from '../adapters/telegram.js';
-import { markdownToTelegramHtml } from '../adapters/telegram/format.js';
+import { renderTelegramText } from '../adapters/telegram/format.js';
 
-function renderText(text: string | undefined, parseMode: string | undefined): string {
-  if (!text) return '';
-  const mode = parseMode || 'HTML';
-  if (mode !== 'HTML') return text;
-  // ||hidden|| → Telegram spoiler. Applied before markdown detection so the shorthand works everywhere.
-  const withSpoilers = text.replace(/\|\|([^|]+?)\|\|/g, '<tg-spoiler>$1</tg-spoiler>');
-  // Detect common markdown markers so pure-HTML input is left untouched.
-  const looksLikeMarkdown = /(^|\n)\s{0,3}#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s+|`{3}/m.test(withSpoilers);
-  return looksLikeMarkdown ? markdownToTelegramHtml(withSpoilers) : withSpoilers;
-}
+const renderText = renderTelegramText;
 
 function getTgAdapter(context: ToolContext): TelegramSessionAdapter {
   if (!(context.adapter instanceof TelegramSessionAdapter)) {

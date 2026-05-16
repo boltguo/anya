@@ -32,19 +32,9 @@ export function register(tool: ToolDefinition): void {
   tools.set(tool.name, tool);
 }
 
-export function getAllTools(): ToolDefinition[] {
-  return [...tools.values()];
-}
-
-export function getEnabledTools(config: AnyaConfig): ToolDefinition[] {
-  return config.tools.enabled
-    .map(name => tools.get(name))
-    .filter((t): t is ToolDefinition => t !== undefined);
-}
-
-// Filter order matters: enabled → platform → deny → allow (allow is a hard override).
+// Filter order: platform → deny → allow (allow is a hard override).
 export function getToolSchemas(
-  config: AnyaConfig,
+  _config: AnyaConfig,
   platform: string = 'telegram',
   toolPolicy?: { allow?: string[]; deny?: string[] },
 ): Array<{
@@ -52,7 +42,7 @@ export function getToolSchemas(
   description: string;
   parameters: ToolParameterSchema;
 }> {
-  let enabled = getEnabledTools(config);
+  let enabled = [...tools.values()];
 
   if (platform !== 'telegram') {
     enabled = enabled.filter(t => t.name !== 'tg_msg');
@@ -118,14 +108,3 @@ export async function dispatch(
   }
 }
 
-export function listToolsWithStatus(config: AnyaConfig): Array<{
-  name: string;
-  description: string;
-  enabled: boolean;
-}> {
-  return getAllTools().map(t => ({
-    name: t.name,
-    description: t.description,
-    enabled: config.tools.enabled.includes(t.name),
-  }));
-}

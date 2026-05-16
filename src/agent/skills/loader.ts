@@ -157,6 +157,3 @@ export function readSkillFile(name: string, filePath: string): string | null {
   }
 }
 
-export function invalidateCache(): void {
-  _cache = null;
-}

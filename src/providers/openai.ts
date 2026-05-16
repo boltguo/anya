@@ -118,9 +118,6 @@ export class CodexProvider implements LLMProvider {
   }
 }
 
-/** @deprecated use CodexProvider */
-export const OpenAIProvider = CodexProvider;
-
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }

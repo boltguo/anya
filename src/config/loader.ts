@@ -34,9 +34,8 @@ function deepMerge(target: Record<string, any>, source: Record<string, any>): Re
 function applyEnvOverrides(config: AnyaConfig): AnyaConfig {
   const envMap: Record<string, (c: AnyaConfig, v: string) => void> = {
     ANYA_GEMINI_API_KEY: (c, v) => { c.gemini.api_key = v; },
-    ANYA_TAVILY_API_KEY: (c, v) => { c.tools.web_search.api_key = v; },
+    ANYA_TAVILY_API_KEY: (c, v) => { c.web_search.api_key = v; },
     ANYA_TELEGRAM_BOT_TOKEN: (c, v) => { c.telegram.bot_token = v; },
-    ANYA_LOG_LEVEL: (c, v) => { c.advanced.log_level = v; },
     ANYA_MODEL: (c, v) => { c.provider.model = v; },
   };
 

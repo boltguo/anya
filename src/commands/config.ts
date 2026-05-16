@@ -56,7 +56,7 @@ export async function runConfigMenu(): Promise<void> {
           value: 'stt',
         },
         {
-          name: `Tavily   ${chalk.dim(`(Web Search${config.tools?.web_search?.api_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+          name: `Tavily   ${chalk.dim(`(Web Search${config.web_search?.api_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
           value: 'tavily',
         },
         {
@@ -209,7 +209,7 @@ async function configSTT(config: AnyaConfig): Promise<void> {
 }
 
 async function configTavily(config: AnyaConfig): Promise<void> {
-  const currentKey = config.tools?.web_search?.api_key;
+  const currentKey = config.web_search?.api_key;
   
   console.log();
   if (currentKey) {
@@ -229,7 +229,7 @@ async function configTavily(config: AnyaConfig): Promise<void> {
     return; 
   }
 
-  config.tools.web_search.api_key = apiKey.trim();
+  config.web_search.api_key = apiKey.trim();
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
   console.log(chalk.green('\n  [ok] Tavily API key saved.'));
   await autoRestartGateway();

@@ -31,7 +31,7 @@ export class ContextCompressor implements ContextEngine {
   constructor(config: AnyaConfig, provider: LLMProvider) {
     this.config = config;
     this.provider = provider;
-    this.thresholdRatio = config.advanced.compress_threshold || 0.75;
+    this.thresholdRatio = config.provider.compress_threshold || 0.75;
   }
 
   shouldCompress(messages: Message[], estimatedTokens: number, contextLimit: number): boolean {

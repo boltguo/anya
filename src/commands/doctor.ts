@@ -32,7 +32,7 @@ export async function runDoctor(): Promise<void> {
     `  Azure:     ${hasAzure ? '[ok]' : '[--]'} ${hasAzure ? `Speech (${config.azure.speech_region})` : 'not configured (TTS + pron unavailable)'}`,
   );
 
-  const hasTavily = !!config.tools.web_search.api_key;
+  const hasTavily = !!config.web_search?.api_key;
   console.log(
     `  Tavily:    ${hasTavily ? '[ok]' : '[--]'} ${hasTavily ? 'configured' : 'not configured (web_search unavailable)'}`,
   );

@@ -9,28 +9,18 @@ if (!existsSync(LOGS_DIR)) {
   mkdirSync(LOGS_DIR, { recursive: true });
 }
 
-function createLogger(service: string, level: string = 'info'): pino.Logger {
+function createLogger(service: string): pino.Logger {
   try {
     const dest = pino.destination({
       dest: join(LOGS_DIR, `${service}.log`),
       append: true,
-      // Sync writes are acceptable for low-volume logging
       sync: true,
     });
-    return pino({ level, name: service }, dest);
+    return pino({ level: 'info', name: service }, dest);
   } catch {
-    // Fallback to stderr if file transport fails
-    return pino({ level, name: service });
+    return pino({ level: 'info', name: service });
   }
 }
 
-let logLevel = 'info';
-
-export function setLogLevel(level: string): void {
-  logLevel = level;
-  agentLogger.level = level;
-  gatewayLogger.level = level;
-}
-
-export const agentLogger = createLogger('agent', logLevel);
-export const gatewayLogger = createLogger('gateway', logLevel);
+export const agentLogger = createLogger('agent');
+export const gatewayLogger = createLogger('gateway');

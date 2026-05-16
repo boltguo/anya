@@ -2,6 +2,17 @@
 
 import { marked } from 'marked';
 
+// Smart text→HTML for Telegram. Handles ||spoiler|| shorthand and auto-detects
+// Markdown so pure-HTML inputs aren't double-processed. Non-HTML parse modes pass through.
+export function renderTelegramText(text: string | undefined, parseMode?: string): string {
+  if (!text) return '';
+  const mode = parseMode || 'HTML';
+  if (mode !== 'HTML') return text;
+  const withSpoilers = text.replace(/\|\|([^|]+?)\|\|/g, '<tg-spoiler>$1</tg-spoiler>');
+  const looksLikeMarkdown = /(^|\n)\s{0,3}#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s+|`{3}/m.test(withSpoilers);
+  return looksLikeMarkdown ? markdownToTelegramHtml(withSpoilers) : withSpoilers;
+}
+
 // Telegram parse_mode=HTML accepts only this restricted tag set.
 const ALLOWED_TAGS = new Set([
   'b', 'i', 'u', 's', 'code', 'pre', 'a',
