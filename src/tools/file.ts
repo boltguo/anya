@@ -1,45 +1,10 @@
 // tools/file.ts — sandboxed filesystem agent tool
 
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { join, dirname } from 'node:path';
 import { register } from './registry.js';
 import { isPathAllowed } from '../lib/approval.js';
-import { persistConfig } from '../config/loader.js';
 import type { ToolContext } from '../agent/types.js';
-
-// Security fence: paths outside the allowed set require explicit user approval per fence_mode.
-async function checkFileAccess(
-  filePath: string,
-  operation: string,
-  context: ToolContext,
-): Promise<boolean> {
-  if (isPathAllowed(filePath, context.config)) {
-    return true;
-  }
-
-  if (context.config.security.fence_mode === 'deny') {
-    return false;
-  }
-
-  if (context.config.security.fence_mode === 'allow') {
-    return true;
-  }
-
-  const result = await context.adapter.requestApproval(
-    `Agent wants to ${operation} a file outside the security fence:\n   ${filePath}`
-  );
-
-  if (result === 'always') {
-    // Persist 'always' decisions to allowed_paths so they survive restarts.
-    const dir = dirname(resolve(filePath)) + '/';
-    if (!context.config.security.allowed_paths.includes(dir)) {
-      context.config.security.allowed_paths.push(dir);
-      persistConfig(context.config);
-    }
-  }
-
-  return result !== 'deny';
-}
 
 register({
   name: 'read_file',
@@ -62,8 +27,7 @@ register({
       return `Error: File not found: ${filePath}`;
     }
 
-    const allowed = await checkFileAccess(filePath, 'read', context);
-    if (!allowed) {
+    if (!isPathAllowed(filePath, context.config)) {
       return `Access denied: ${filePath} is outside the security fence.`;
     }
 
@@ -107,8 +71,7 @@ register({
     const filePath = String(args.path).replace(/^~/, process.env.HOME || '');
     const content = String(args.content);
 
-    const allowed = await checkFileAccess(filePath, 'write', context);
-    if (!allowed) {
+    if (!isPathAllowed(filePath, context.config)) {
       return `Access denied: ${filePath} is outside the security fence.`;
     }
 
@@ -147,8 +110,7 @@ register({
       return `Error: Directory not found: ${dirPath}`;
     }
 
-    const allowed = await checkFileAccess(dirPath, 'list', context);
-    if (!allowed) {
+    if (!isPathAllowed(dirPath, context.config)) {
       return `Access denied: ${dirPath} is outside the security fence.`;
     }
 

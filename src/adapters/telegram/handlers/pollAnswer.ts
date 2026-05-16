@@ -33,7 +33,7 @@ export function registerPollAnswerHandler(rt: TelegramRuntime): void {
       // poll_answer ctx has no chat — override chatId on the adapter and send via bot.api
       const sessionKey = `tg:${poll.chatId}`;
       const sessionAdapter = new TelegramSessionAdapter(
-        ctx as any, rt.bot, rt.config, rt.pendingApprovals, rt.pendingChoices, rt.activePolls, rt.paginatedMessages,
+        ctx as any, rt.bot, rt.config, rt.pendingChoices, rt.activePolls, rt.paginatedMessages,
       );
       sessionAdapter.setChatIdOverride(poll.chatId);
       const agent = new Agent(rt.config, sessionAdapter);

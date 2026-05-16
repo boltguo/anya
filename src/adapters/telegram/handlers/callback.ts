@@ -202,7 +202,7 @@ async function handleAgentCallback(rt: TelegramRuntime, ctx: any, data: string):
 
   rt.enqueuePerChat(chatId, async () => {
     const sessionAdapter = new TelegramSessionAdapter(
-      ctx, rt.bot, rt.config, rt.pendingApprovals, rt.pendingChoices, rt.activePolls, rt.paginatedMessages,
+      ctx, rt.bot, rt.config, rt.pendingChoices, rt.activePolls, rt.paginatedMessages,
     );
     if (statusMsg) sessionAdapter.attachStatusMessage(statusMsg.message_id);
     const agent = new Agent(rt.config, sessionAdapter);

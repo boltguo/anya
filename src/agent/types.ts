@@ -65,8 +65,6 @@ export interface Adapter {
 
   showToolResult?(toolName: string, result: string, isError: boolean): void;
 
-  requestApproval(description: string): Promise<'allow' | 'deny' | 'always'>;
-
   requestChoice?(description: string, choices: string[]): Promise<string>;
 }
 

@@ -6,10 +6,6 @@ export interface SendMessageOptions {
   tag?: string;
 }
 
-export interface PendingApproval {
-  resolve: (value: 'allow' | 'deny' | 'always') => void;
-}
-
 export interface PendingChoice {
   resolve: (value: string) => void;
 }

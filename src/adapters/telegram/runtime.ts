@@ -3,7 +3,7 @@
 import type { Bot, Context } from 'grammy';
 import type { AnyaConfig } from '../../config/defaults.js';
 import type { MessageFile } from '../../agent/types.js';
-import type { PendingApproval, PendingChoice } from './types.js';
+import type { PendingChoice } from './types.js';
 
 export interface ActivePoll {
   chatId: number;
@@ -24,7 +24,6 @@ export interface TurnIndicators {
 export interface TelegramRuntime {
   readonly bot: Bot;
   readonly config: AnyaConfig;
-  readonly pendingApprovals: Map<string, PendingApproval>;
   readonly pendingChoices: Map<string, PendingChoice>;
   readonly activePolls: Map<string, ActivePoll>;
   readonly paginatedMessages: Map<number, PaginatedMessage>;

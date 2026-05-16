@@ -91,23 +91,21 @@ Hold: keep length, optionally swap **one** dimension (syntax/accent/connected-sp
 1. From `coach_context` + §2.3 credits, decide: tier, length, target weakness, i+1 stretch dimension (or hold), expected subcaps.
 2. Generate the sentence at chosen length/syntax/accent. Compute `prompt_hash` (§State D); regenerate if dedup hits.
 3. `tts` only for the target sentence at 100% speed. No filler audio.
-4. Send voice FIRST: a separate `tg_msg type="voice"` call with the audio `url`. Wait for delivery.
-5. THEN send instruction: a separate `tg_msg type="keyboard"` call (text + buttons only — **never include `url` here**, the keyboard endpoint has no media slot). Never parallel — see Hard Rule 5.
-6. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+4. Send voice + instruction + buttons in **one** `tg_msg type="render"` call. Renders as two bubbles (voice on its own line, then text + buttons) for clean cross-client display — still one tool call.
+5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
 
-Text:
-
-```text
-来，听听这一句。把你听到的英文打出来。
-
-实在听不出可以点开看原文：<tg-spoiler>{correct English sentence}</tg-spoiler>
-```
-
-Buttons:
+Render envelope (all fields at top level, same as `voice`/`keyboard`):
 
 ```json
-[["🐢 慢速播放|dict_slow", "😵 太难了，换简单点|dict_easier"]]
+{
+  "type": "render",
+  "url": "<tts audio path>",
+  "text": "来，听听这一句。把你听到的英文打出来。\n\n实在听不出可以点开看原文：||{correct English sentence}||",
+  "buttons": "[[\"🐢 慢速播放|dict_slow\", \"😵 太难了，换简单点|dict_easier\"]]"
+}
 ```
+
+(`||...||` is the Telegram-spoiler shorthand; the adapter expands it to `<tg-spoiler>` HTML. Optional `react: "<emoji>"` reacts the user's last message in the same call.)
 
 Wait for the typed answer or button tap.
 
@@ -118,7 +116,7 @@ Wait for the typed answer or button tap.
 - Append `🐢 慢速播放` to `ui_feedback`.
 - Brief ack via `tg_msg type="text"`.
 - Same sentence; `tts rate="-10%"`.
-- Send slower voice FIRST, THEN re-send instruction keyboard. Never parallel.
+- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons).
 
 `dict_easier`:
 
@@ -165,7 +163,7 @@ Buttons (always, regardless of accuracy):
 [["🔄 再来一句|dict_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` — see Hard Rule 7. Voice is replayable from chat history, so no dedicated retry button.
+**Critical**: feedback + buttons in **one** `tg_msg type="render"` call (no `url` — feedback has no media). On **perfect** (`accuracy === 1.0`) add `react: "🔥"` to the same call — Telegram reacts the learner's message, no extra tool call. Voice is replayable from chat history, so no dedicated retry button. (See Hard Rule 5.)
 
 ### State D: Persist Evidence
 
@@ -232,6 +230,5 @@ State D persists attempted sentences only. Abandoned rows are written in State B
 2. Diff every word. Don't hide missed articles, plurals, function words, boundaries.
 3. Use `persist` for reads/writes; no raw DB.
 4. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-5. **Voice before keyboard, sequential.** Never `tg_msg type="voice"` and `type="keyboard"` in parallel.
+5. **All Telegram sends go through `tg_msg type="render"`.** Voice + text + buttons + perfect-score `react: "🔥"` (when `accuracy === 1.0`) all fold into one render call. Never split into separate `voice` / `keyboard` / `text` / `react` / `edit` calls.
 6. **Feedback content (not format) required.** State C must always cover: correct sentence, brief translation, specific missed/mistaken words, one-phrase root cause. Format is the LLM's call — no fixed template.
-7. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` to attach buttons. Same for State A's instruction message.

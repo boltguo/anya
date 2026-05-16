@@ -1,19 +1,17 @@
 // adapters/telegram/SessionAdapter.ts — per-turn Adapter for Agent.run
 
-import { isAbsolute } from 'node:path';
 import { Bot, InlineKeyboard, InputFile, Context } from 'grammy';
 import PQueue from 'p-queue';
 import type { Adapter } from '../../agent/types.js';
 import { agentLogger } from '../../lib/logger.js';
 import { markdownToTelegramHtml } from './format.js';
 import { stripMarkdown, splitMarkdownForTelegram } from './markdown.js';
-import type { SendMessageOptions, PendingApproval, PendingChoice } from './types.js';
+import type { SendMessageOptions, PendingChoice } from './types.js';
 
 export class TelegramSessionAdapter implements Adapter {
   readonly platform = 'telegram' as const;
   private ctx: Context;
   private bot: Bot;
-  private pendingApprovals: Map<string, PendingApproval>;
   private pendingChoices: Map<string, PendingChoice>;
   private activePolls: Map<string, { chatId: number; options: string[]; correctIndex: number }>;
   private paginatedMessages: Map<number, { pages: string[]; buttons: string; chatId: number }>;
@@ -36,14 +34,12 @@ export class TelegramSessionAdapter implements Adapter {
     ctx: Context,
     bot: Bot,
     _config: unknown,
-    pendingApprovals: Map<string, PendingApproval>,
     pendingChoices: Map<string, PendingChoice>,
     activePolls?: Map<string, { chatId: number; options: string[]; correctIndex: number }>,
     paginatedMessages?: Map<number, { pages: string[]; buttons: string; chatId: number }>,
   ) {
     this.ctx = ctx;
     this.bot = bot;
-    this.pendingApprovals = pendingApprovals;
     this.pendingChoices = pendingChoices;
     this.activePolls = activePolls ?? new Map();
     this.paginatedMessages = paginatedMessages ?? new Map();
@@ -62,6 +58,20 @@ export class TelegramSessionAdapter implements Adapter {
 
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     return this.outboundQueue.add(fn, { priority: 0 }) as Promise<T>;
+  }
+
+  private buildInlineKeyboard(buttons: string[][]): InlineKeyboard {
+    const keyboard = new InlineKeyboard();
+    for (const row of buttons) {
+      for (const btn of row) {
+        const parts = btn.split('|', 2);
+        const label = (parts[0] || '').trim();
+        const data = (parts.length > 1 ? parts[1] : parts[0]).trim();
+        keyboard.text(label, data);
+      }
+      keyboard.row();
+    }
+    return keyboard;
   }
 
   private resolveMessageId(ref?: number | string): number | undefined {
@@ -312,32 +322,6 @@ export class TelegramSessionAdapter implements Adapter {
     });
   }
 
-  async requestApproval(description: string): Promise<'allow' | 'deny' | 'always'> {
-    const approvalId = `approval_${Date.now()}`;
-
-    const keyboard = new InlineKeyboard()
-      .text('✅ Allow', `${approvalId}:allow`)
-      .text('❌ Deny', `${approvalId}:deny`)
-      .text('🔓 Always', `${approvalId}:always`);
-
-    await this.enqueue(async () => {
-      await this.ctx.reply(
-        `🔐 Approval Required\n\n${description}`,
-        { reply_markup: keyboard },
-      );
-    });
-
-    return new Promise<'allow' | 'deny' | 'always'>((resolve) => {
-      this.pendingApprovals.set(approvalId, { resolve });
-      setTimeout(() => {
-        if (this.pendingApprovals.has(approvalId)) {
-          this.pendingApprovals.delete(approvalId);
-          resolve('deny');
-        }
-      }, 5 * 60 * 1000);
-    });
-  }
-
   async requestChoice(description: string, choices: string[]): Promise<string> {
     const choiceKey = `choice_${Date.now()}`;
     const keyboard = new InlineKeyboard();
@@ -386,24 +370,6 @@ export class TelegramSessionAdapter implements Adapter {
   }
 
 
-  async sendAudio(audio: string, caption?: string, opts?: SendMessageOptions): Promise<number> {
-    return this.enqueue(async () => {
-      const replyTo = this.autoReplyTo(opts?.replyTo);
-      const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'HTML');
-      const source = isAbsolute(audio) || audio.startsWith('.') ? new InputFile(audio) : audio;
-
-      const msg = await this.bot.api.sendAudio(this.chatId, source, {
-        caption: caption || undefined,
-        parse_mode: parseMode as any,
-        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
-      });
-
-      this.trackMessage(msg.message_id, opts?.tag);
-      this.hasSentContent = true;
-      return msg.message_id;
-    });
-  }
-
   // Input file MUST be OGG/Opus to render as native Telegram voice bubble; other formats render as a file
   async sendVoice(voicePath: string, caption?: string, opts?: SendMessageOptions): Promise<number> {
     return this.enqueue(async () => {
@@ -431,16 +397,7 @@ export class TelegramSessionAdapter implements Adapter {
       const replyTo = this.autoReplyTo(opts?.replyTo);
       const parseMode = opts?.parseMode === 'none' ? undefined : (opts?.parseMode || 'HTML');
 
-      const keyboard = new InlineKeyboard();
-      for (const row of buttons) {
-        for (const btn of row) {
-          const parts = btn.split('|', 2);
-          const label = (parts[0] || '').trim();
-          const data = (parts.length > 1 ? parts[1] : parts[0]).trim();
-          keyboard.text(label, data);
-        }
-        keyboard.row();
-      }
+      const keyboard = this.buildInlineKeyboard(buttons);
 
       let msg;
       try {
@@ -491,20 +448,7 @@ export class TelegramSessionAdapter implements Adapter {
       const msgId = typeof messageId === 'string' ? this.taggedMessages.get(messageId) : messageId;
       if (!msgId) throw new Error(`Message not found: ${messageId}`);
 
-      let replyMarkup = undefined;
-      if (buttons) {
-        const keyboard = new InlineKeyboard();
-        for (const row of buttons) {
-          for (const btn of row) {
-            const parts = btn.split('|', 2);
-            const label = (parts[0] || '').trim();
-            const data = (parts.length > 1 ? parts[1] : parts[0]).trim();
-            keyboard.text(label, data);
-          }
-          keyboard.row();
-        }
-        replyMarkup = keyboard;
-      }
+      const replyMarkup = buttons ? this.buildInlineKeyboard(buttons) : undefined;
 
       await this.bot.api.editMessageText(this.chatId, msgId, text, {
         parse_mode: 'HTML',
@@ -517,43 +461,6 @@ export class TelegramSessionAdapter implements Adapter {
     });
   }
 
-
-  async sendDocument(
-    fileUrl: string,
-    opts: { caption?: string; tag?: string; replyTo?: number | string; parseMode?: string } = {},
-  ): Promise<number | null> {
-    return this.enqueue(async () => {
-      const replyTo = this.autoReplyTo(opts.replyTo);
-      const rp = replyTo ? { message_id: replyTo } : undefined;
-      const source = isAbsolute(fileUrl) ? new InputFile(fileUrl) : fileUrl;
-      const msg = await this.bot.api.sendDocument(this.chatId, source, {
-        caption: opts.caption,
-        parse_mode: (opts.parseMode as any) || undefined,
-        reply_parameters: rp,
-      }).catch((err) => {
-        agentLogger.error({ msg: 'tg_send_document_error', error: err?.message });
-        return null;
-      });
-      if (msg) {
-        this.trackMessage(msg.message_id);
-        if (opts.tag) this.taggedMessages.set(opts.tag, msg.message_id);
-        return msg.message_id;
-      }
-      return null;
-    });
-  }
-
-  async deleteMsg(messageId: number | string): Promise<boolean> {
-    return this.enqueue(async () => {
-      const msgId = typeof messageId === 'string'
-        ? this.taggedMessages.get(messageId) ?? Number(messageId)
-        : messageId;
-      if (!msgId || isNaN(msgId)) return false;
-      return this.bot.api.deleteMessage(this.chatId, msgId)
-        .then(() => true)
-        .catch(() => false);
-    });
-  }
 
   async react(messageId: number | string, emoji: string): Promise<void> {
     return this.enqueue(async () => {

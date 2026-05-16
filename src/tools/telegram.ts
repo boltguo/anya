@@ -10,9 +10,11 @@ function renderText(text: string | undefined, parseMode: string | undefined): st
   if (!text) return '';
   const mode = parseMode || 'HTML';
   if (mode !== 'HTML') return text;
+  // ||hidden|| → Telegram spoiler. Applied before markdown detection so the shorthand works everywhere.
+  const withSpoilers = text.replace(/\|\|([^|]+?)\|\|/g, '<tg-spoiler>$1</tg-spoiler>');
   // Detect common markdown markers so pure-HTML input is left untouched.
-  const looksLikeMarkdown = /(^|\n)\s{0,3}#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s+|`{3}/m.test(text);
-  return looksLikeMarkdown ? markdownToTelegramHtml(text) : text;
+  const looksLikeMarkdown = /(^|\n)\s{0,3}#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s+|`{3}/m.test(withSpoilers);
+  return looksLikeMarkdown ? markdownToTelegramHtml(withSpoilers) : withSpoilers;
 }
 
 function getTgAdapter(context: ToolContext): TelegramSessionAdapter {
@@ -52,13 +54,13 @@ function getCaption(args: Record<string, unknown>): string | undefined {
 
 register({
   name: 'tg_msg',
-  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), edit, delete, react, countdown (auto-edit timer with {seconds} placeholder), paginate (multi-page with client-side flipping). Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
+  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, voice (send OGG/Opus), keyboard (inline buttons), quiz (auto-scored poll), edit, react, countdown (auto-edit timer with {seconds} placeholder), paginate (multi-page with client-side flipping), render (atomic envelope combining react + voice + text + buttons in one call — recommended for new skills; uses the same top-level `url`/`text`/`buttons` fields as voice/keyboard, plus optional `react` emoji). Default parse mode is HTML. Use ||spoiler|| or <tg-spoiler>text</tg-spoiler> for hidden/reveal text. Follow the active prompt instructions and skill-specific interaction rules.',
   parameters: {
     type: 'object',
     properties: {
-      type:       { type: 'string', description: 'Message type: text | audio | voice | document | keyboard | quiz | edit | delete | react | countdown | paginate' },
-      text:       { type: 'string', description: 'Message text/caption (HTML format). For countdown: use {seconds} as placeholder. For paginate: pages separated by ---PAGE--- delimiter.' },
-      url:        { type: 'string', description: 'For audio/voice/document: URL or file path of the media to send.' },
+      type:       { type: 'string', description: 'Message type: text | voice | keyboard | quiz | edit | react | countdown | paginate | render' },
+      text:       { type: 'string', description: 'Message text/caption (HTML format). For countdown: use {seconds} as placeholder. For paginate: pages separated by ---PAGE--- delimiter. Ignored for render (use render.text instead).' },
+      url:        { type: 'string', description: 'For voice: file path of the OGG/Opus audio to send.' },
       buttons:    { type: 'string', description: 'JSON 2D array for keyboard: [["label|callback_data",...]].' },
       options:    { type: 'string', description: 'For quiz: JSON array of option strings.' },
       correct:    { type: 'integer', description: 'For quiz: 0-based index of correct answer.' },
@@ -70,6 +72,7 @@ register({
       parse_mode: { type: 'string', description: 'Parse mode: HTML (default), Markdown, MarkdownV2, or none.' },
       seconds:    { type: 'integer', description: 'For countdown: duration in seconds.' },
       expire_text:{ type: 'string', description: 'For countdown: text to show when timer reaches 0.' },
+      react:      { type: 'string', description: 'For type="render": emoji to react the user message (e.g. "👍"). Combines with media+text+buttons.' },
     },
     required: ['type'],
   },
@@ -90,18 +93,6 @@ register({
         const replyTo = resolveReplyTo(args.reply_to, tg);
         const parseMode = (args.parse_mode as string) || 'HTML';
         const msgId = await tg.sendMessage(renderText(args.text as string, parseMode), {
-          replyTo, tag: args.tag as string,
-          parseMode: parseMode as any,
-        });
-        return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
-      }
-
-      case 'audio': {
-        const url = String(args.url || '');
-        if (!url) return JSON.stringify({ ok: false, error: 'url is required for audio type' });
-        const replyTo = resolveReplyTo(args.reply_to, tg);
-        const parseMode = (args.parse_mode as string) || 'HTML';
-        const msgId = await tg.sendAudio(url, renderText(getCaption(args), parseMode), {
           replyTo, tag: args.tag as string,
           parseMode: parseMode as any,
         });
@@ -157,23 +148,6 @@ register({
         return JSON.stringify({ ok: true, sent_content: false });
       }
 
-      case 'document': {
-        const replyTo = resolveReplyTo(args.reply_to, tg);
-        const parseMode = (args.parse_mode as string) || 'HTML';
-        const msgId = await tg.sendDocument(String(args.url || ''), {
-          caption: renderText(getCaption(args), parseMode),
-          replyTo, tag: args.tag as string,
-          parseMode: parseMode as any,
-        });
-        return JSON.stringify({ ok: true, message_id: msgId, sent_content: true });
-      }
-
-      case 'delete': {
-        const ref = args.message_id as string;
-        const deleted = await tg.deleteMsg(isNaN(Number(ref)) ? ref : Number(ref));
-        return JSON.stringify({ ok: deleted });
-      }
-
       case 'react': {
         let ref: number | string = args.message_id as string;
         if (ref === 'user') ref = tg.getUserMessageId()!;
@@ -209,8 +183,41 @@ register({
         return JSON.stringify({ ok: true, message_id: msgId, page_count: pages.length, sent_content: true });
       }
 
+      case 'render': {
+        const explicitReplyTo = resolveReplyTo(args.reply_to, tg);
+        const tag = args.tag as string | undefined;
+        const text = renderText(args.text as string | undefined, 'HTML');
+        const buttons = args.buttons ? parseArray(args.buttons) : undefined;
+        const url = (args.url as string | undefined) || undefined;
+        const react = (args.react as string | undefined) || undefined;
+
+        if (react) {
+          const userMsg = tg.getUserMessageId();
+          if (userMsg) {
+            await tg.react(userMsg, String(react));
+          }
+        }
+
+        const voiceMsgId = url ? await tg.sendVoice(url, undefined, { replyTo: explicitReplyTo }) : undefined;
+        const followReplyTo = voiceMsgId ?? explicitReplyTo;
+
+        let msgId: number | undefined;
+        if (text && buttons) {
+          msgId = await tg.sendKeyboard(text, buttons, { replyTo: followReplyTo, tag });
+        } else if (text) {
+          msgId = await tg.sendMessage(text, { replyTo: followReplyTo, tag });
+        } else if (buttons) {
+          // Rare: buttons without prose. Use a minimal placeholder so Telegram accepts the keyboard.
+          msgId = await tg.sendKeyboard('👇', buttons, { replyTo: followReplyTo, tag });
+        } else if (!url && !react) {
+          return JSON.stringify({ ok: false, error: 'render must include at least url (voice), text, buttons, or react' });
+        }
+
+        return JSON.stringify({ ok: true, message_id: msgId ?? voiceMsgId, sent_content: true });
+      }
+
       default:
-        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, audio, voice, document, keyboard, quiz, edit, delete, react, action, paginate.` });
+        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, voice, keyboard, quiz, edit, react, countdown, paginate, render.` });
     }
   },
 });

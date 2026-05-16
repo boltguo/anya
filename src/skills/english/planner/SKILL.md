@@ -17,9 +17,10 @@ If the learner names a specific mode (e.g. "听写"), match against `references/
 
 ## Workflow
 
-1. If `USER.md` still contains `initialized: false` → hand off to `profile-manager`.
-2. If the user named a specific mode, route via `references/routing-table.md`.
-3. Otherwise:
+Onboarding gating is owned by `/new` (via `config.onboarding.{profile_done,placement_done}`); planner assumes the learner is already onboarded.
+
+1. If the user named a specific mode, route via `references/routing-table.md`.
+2. Otherwise:
    - Call `persist` with `{"action":"coach_context","days":14,"limit":8}`.
    - Call `persist` with `{"action":"session_start","session_key":"<current session id>","platform":"telegram","entrypoint":"planner","plan":"<short summary>"}`.
    - Send **one** `tg_msg(type="keyboard")` with:

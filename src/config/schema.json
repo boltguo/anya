@@ -115,13 +115,7 @@
         "allowed_paths": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Directories the agent can access without approval. Supports ~ for home."
-        },
-        "fence_mode": {
-          "type": "string",
-          "enum": ["ask", "deny", "allow"],
-          "description": "'ask' prompts user, 'deny' blocks, 'allow' permits all.",
-          "default": "deny"
+          "description": "Directories the agent can access. Paths outside this set are denied. Supports ~ for home."
         }
       }
     },

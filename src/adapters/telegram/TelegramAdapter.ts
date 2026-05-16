@@ -26,12 +26,11 @@ import type {
   PaginatedMessage,
   TurnIndicators,
 } from './runtime.js';
-import type { PendingApproval, PendingChoice } from './types.js';
+import type { PendingChoice } from './types.js';
 
 export class TelegramAdapter implements TelegramRuntime {
   readonly bot: Bot;
   readonly config: AnyaConfig;
-  readonly pendingApprovals = new Map<string, PendingApproval>();
   readonly pendingChoices = new Map<string, PendingChoice>();
   readonly activePolls = new Map<string, ActivePoll>();
   readonly paginatedMessages = new Map<number, PaginatedMessage>();
@@ -49,11 +48,6 @@ export class TelegramAdapter implements TelegramRuntime {
 
   cancelPending(): number {
     let count = 0;
-    for (const [, pending] of this.pendingApprovals) {
-      pending.resolve('deny');
-      count++;
-    }
-    this.pendingApprovals.clear();
     for (const [, pending] of this.pendingChoices) {
       pending.resolve('');
       count++;
@@ -99,7 +93,7 @@ export class TelegramAdapter implements TelegramRuntime {
     agentLogger.info({ msg: 'tg_incoming', chatId: ctx.chat!.id, userId, input: input.substring(0, 200) });
 
     const sessionAdapter = new TelegramSessionAdapter(
-      ctx, this.bot, this.config, this.pendingApprovals, this.pendingChoices, this.activePolls, this.paginatedMessages,
+      ctx, this.bot, this.config, this.pendingChoices, this.activePolls, this.paginatedMessages,
     );
     if (preStatusId) sessionAdapter.attachStatusMessage(preStatusId);
     const agent = new Agent(this.config, sessionAdapter);

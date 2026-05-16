@@ -65,10 +65,6 @@ class CronAdapter implements Adapter {
     if (content) this.chunks.push(content);
   }
 
-  async requestApproval(): Promise<'deny'> {
-    return 'deny';
-  }
-
   get content(): string {
     return this.chunks.join('\n\n').trim();
   }

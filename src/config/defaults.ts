@@ -28,7 +28,6 @@ export interface AnyaConfig {
 
   security: {
     allowed_paths: string[];
-    fence_mode: 'ask' | 'deny' | 'allow';
   };
 
   telegram: {
@@ -104,7 +103,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
     web_search: { backend: 'tavily', api_key: '', max_results: 5 },
   },
 
-  security: { allowed_paths: ['~/.anya/'], fence_mode: 'deny' },
+  security: { allowed_paths: ['~/.anya/'] },
   telegram: { enabled: false, bot_token: '', allowed_user_ids: [] },
   cron: {
     enabled: false,

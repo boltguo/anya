@@ -1,13 +1,5 @@
 # Learner Memory — Level & Ability State
 
-## Status
-
-- initialized: false
-- last_active: (not set)
-- total_sessions: 0
-- profile_confidence: (not set)
-- score_source: (not set)
-
 ## Band Snapshot
 
 - Overall: (not set)
