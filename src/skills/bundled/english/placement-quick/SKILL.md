@@ -35,7 +35,7 @@ Per-dimension inference rules in §3.
 
 For each dimension that runs ≥ 3 probes (Listening / Reading; Vocab is exempt because words are domain-neutral):
 
-- **Round 1**: in-domain (tech / AI / programming based on USER.md).
+- **Round 1**: in-domain (derived from the `profile` row read in §1 — `interests` / `daily_english`).
 - **Round 2**: **non-domain — mandatory**. Rotate through `日常生活 / 体育 / 影视剧情 / 旅行 / 食物 / 自然环境`.
 - **Round 3+**: target the level uncertainty — pick whichever domain stresses the boundary.
 

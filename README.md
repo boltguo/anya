@@ -157,7 +157,6 @@ Skills 是 Anya 的教学能力层。每个 skill 用 `SKILL.md` 描述触发条
 
 - Node.js **≥ 22**（依赖实验性的 `node:sqlite`）
 - [pnpm](https://pnpm.io/)（仓库使用 pnpm workspace）
-- 可选：`ffmpeg`（语音转写/合成链路用到）
 
 ### 安装与初始化
 

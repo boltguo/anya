@@ -47,28 +47,12 @@ register({
     agentLogger.info({ msg: 'pron_assess_start', audioPath, language, hasRef: !!referenceText });
 
     try {
-      // Azure pron assessment scores significantly better with WAV than raw OGG/Opus.
       const isOgg = audioPath.endsWith('.ogg') || audioPath.endsWith('.oga');
-      let audioBuffer: Buffer;
-      let contentType: string;
-
-      if (isOgg) {
-        const { convertToWav } = await import('../media/ffmpeg.js');
-        const wavPath = convertToWav(audioPath);
-        if (wavPath) {
-          audioBuffer = readFileSync(wavPath);
-          contentType = 'audio/wav';
-          agentLogger.info({ msg: 'pron_assess_converted', from: 'ogg', to: 'wav', bytes: audioBuffer.length });
-        } else {
-          // Fallback: when ffmpeg is missing, send raw OGG and accept lower scoring quality.
-          audioBuffer = readFileSync(audioPath);
-          contentType = 'audio/ogg; codecs=opus';
-          agentLogger.info({ msg: 'pron_assess_no_ffmpeg', fallback: 'ogg' });
-        }
-      } else {
-        audioBuffer = readFileSync(audioPath);
-        contentType = 'audio/wav';
-      }
+      const audioBuffer = readFileSync(audioPath);
+      const contentType = isOgg
+        ? 'audio/ogg; codecs=opus'
+        : 'audio/wav; codecs=audio/pcm; samplerate=16000';
+      agentLogger.info({ msg: 'pron_assess_audio_loaded', contentType, bytes: audioBuffer.length });
 
       const assessConfig: Record<string, unknown> = {
         GradingSystem: 'HundredMark',
