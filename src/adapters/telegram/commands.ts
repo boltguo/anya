@@ -3,7 +3,7 @@
 import { InlineKeyboard } from 'grammy';
 import { agentLogger } from '../../lib/logger.js';
 import { loadSkills } from '../../skills/loader.js';
-import { createSession } from '../../storage/state/sessions.js';
+import { newOrReuseEmptySession } from '../../storage/state/sessions.js';
 import { handleRestart } from './restartManager.js';
 import { getMainMenu } from './skillMenu.js';
 import type { TelegramRuntime } from './runtime.js';
@@ -59,7 +59,7 @@ function registerNew(rt: TelegramRuntime): void {
   rt.bot.command('new', async (ctx) => {
     const sessionKey = `tg:${ctx.chat.id}`;
     rt.cancelPending();
-    await createSession(sessionKey);
+    await newOrReuseEmptySession(sessionKey);
 
     const { profile_done, placement_done } = rt.config.onboarding;
 
@@ -93,7 +93,7 @@ function registerKill(rt: TelegramRuntime): void {
   rt.bot.command('kill', async (ctx) => {
     const sessionKey = `tg:${ctx.chat.id}`;
     const cancelled = rt.cancelPending();
-    await createSession(sessionKey);
+    await newOrReuseEmptySession(sessionKey);
     const extra = cancelled > 0 ? ` Cancelled ${cancelled} pending task(s).` : '';
     await ctx.reply(`💀 Stopped.${extra}\nSession cleared — send a message to start over.`);
     agentLogger.info({ msg: 'tg_kill', chatId: ctx.chat.id, cancelled });
@@ -170,7 +170,7 @@ function registerSkillCommands(rt: TelegramRuntime, skillCommandMap: Map<string,
     rt.bot.command(cmd, async (ctx) => {
       agentLogger.info({ msg: 'tg_skill_command', chatId: ctx.chat.id, skill: skillName });
       const sessionKey = `tg:${ctx.chat.id}`;
-      await createSession(sessionKey);
+      await newOrReuseEmptySession(sessionKey);
       const input = `[/command: ${skillName}] Run the "${skillName}" skill now.`;
       const { statusMessageId } = await rt.startTurn(ctx);
       rt.enqueuePerChat(ctx.chat.id, () =>

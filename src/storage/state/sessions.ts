@@ -58,6 +58,25 @@ export async function createSession(sessionKey: string, title?: string): Promise
   return id;
 }
 
+// "Start fresh" entry points (/new, /kill, nav:main, skill commands) used to
+// unconditionally INSERT a new sessions row. Tapping those repeatedly without
+// follow-up was leaving dozens of empty rows behind. This idempotent variant
+// reuses the latest empty row when one exists; only inserts when there's a
+// real session to "shed".
+export async function newOrReuseEmptySession(sessionKey: string): Promise<string> {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT id FROM sessions WHERE session_key = ? AND message_count = 0 ORDER BY updated_at DESC, rowid DESC LIMIT 1'
+  ).all(sessionKey) as Array<{ id: string }>;
+  if (rows.length > 0) {
+    await withWriteRetry(() => {
+      db.prepare("UPDATE sessions SET active_skill = NULL, updated_at = datetime('now') WHERE id = ?").run(rows[0].id);
+    });
+    return rows[0].id;
+  }
+  return createSession(sessionKey);
+}
+
 export function loadMessages(sessionId: string): Message[] {
   const db = getDb();
 

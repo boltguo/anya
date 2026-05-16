@@ -2,7 +2,7 @@
 
 import { Agent, type RunResult } from '../../../agent/Agent.js';
 import { agentLogger } from '../../../lib/logger.js';
-import { createSession, setActiveSkill } from '../../../storage/state/sessions.js';
+import { newOrReuseEmptySession, setActiveSkill } from '../../../storage/state/sessions.js';
 import { getSkill } from '../../../skills/loader.js';
 import { TelegramSessionAdapter } from '../SessionAdapter.js';
 import { formatTgError } from '../errors.js';
@@ -133,7 +133,7 @@ async function handleNav(rt: TelegramRuntime, ctx: any, data: string): Promise<v
   // skill click starts clean (no stale tool-call expectations from the prior skill).
   if (data === 'nav:main') {
     rt.cancelPending();
-    await createSession(`tg:${chatId}`);
+    await newOrReuseEmptySession(`tg:${chatId}`);
   }
 
   const sourceKeyboard = ctx.callbackQuery.message?.reply_markup?.inline_keyboard;
@@ -211,9 +211,10 @@ async function handleAgentCallback(rt: TelegramRuntime, ctx: any, data: string):
       await sessionAdapter.sendThinking();
       const runOpts: Record<string, unknown> = { sessionKey };
 
-      // Skill switch → new session so old history is truly shed
+      // Skill switch → fresh session so old history is truly shed (reuses an empty
+      // row from a prior /new tap to avoid leaking yet another empty session).
       if (isSkillSwitch) {
-        const newSid = await createSession(sessionKey);
+        const newSid = await newOrReuseEmptySession(sessionKey);
         await setActiveSkill(newSid, data);
         runOpts.sessionId = newSid;
       }
