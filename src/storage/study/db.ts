@@ -1,40 +1,30 @@
-// storage/study/db.ts — connection pool for skill-owned SQLite databases (e.g. study.db)
+// storage/study/db.ts — connection pool for agent-owned SQLite databases (e.g. study.db)
 
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
-import { join, basename } from 'node:path';
-import { STORE_DIR, SKILLS_DIR } from '../../lib/paths.js';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { join, basename, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { STORE_DIR } from '../../lib/paths.js';
 
 const dbCache = new Map<string, DatabaseSync>();
 
-function autoInitSchema(db: DatabaseSync, dbName: string): void {
-  const schemaFileName = `${dbName}.sql`;
+// Schemas (study.sql, …) ship alongside this module in src/, and postbuild.cjs
+// copies them to dist/storage/study/. tsup bundles into dist/index.js, so
+// `import.meta.url` resolves to dist/ in prod — try both layouts.
+const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
-  function scanDir(dir: string): string | null {
-    try {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const fullPath = join(dir, entry.name);
-        if (entry.isDirectory()) {
-          if (entry.name === 'templates') {
-            const schemaPath = join(fullPath, schemaFileName);
-            if (existsSync(schemaPath)) return schemaPath;
-          }
-          const found = scanDir(fullPath);
-          if (found) return found;
-        }
-      }
-    } catch { /* skip unreadable dirs */ }
-    return null;
-  }
-
-  const schemaPath = scanDir(SKILLS_DIR);
-  if (schemaPath) {
-    const sql = readFileSync(schemaPath, 'utf-8');
-    db.exec(sql);
-  }
+function applySchema(db: DatabaseSync, dbName: string): void {
+  const candidates = [
+    join(MODULE_DIR, `${dbName}.sql`),                              // dev (tsx): src/storage/study/<name>.sql
+    join(MODULE_DIR, 'storage', 'study', `${dbName}.sql`),          // prod, bundled into dist/index.js
+    join(MODULE_DIR, '..', 'storage', 'study', `${dbName}.sql`),    // prod, bundled into dist/bin/anya.js
+  ];
+  const schemaPath = candidates.find(existsSync);
+  if (!schemaPath) return;
+  db.exec(readFileSync(schemaPath, 'utf-8'));
 }
 
-// Sanitizes name to prevent path traversal; auto-applies skill-owned schema on open.
+// Sanitizes name to prevent path traversal; auto-applies the matching schema on open.
 export function getDatabase(name: string): DatabaseSync {
   const safeName = basename(name).replace(/[^a-zA-Z0-9_-]/g, '');
   if (!safeName) throw new Error('Invalid database name');
@@ -52,11 +42,10 @@ export function getDatabase(name: string): DatabaseSync {
   db.exec('PRAGMA foreign_keys = ON');
   db.exec('PRAGMA busy_timeout = 5000');
 
-  // Re-apply schema on open. Skill schemas are expected to be idempotent
-  // (`CREATE TABLE/INDEX IF NOT EXISTS`), so additive tables and indexes are
-  // picked up for existing DBs without raw SQL from skills.
+  // Schemas are idempotent (`CREATE TABLE/INDEX IF NOT EXISTS`), so additive
+  // tables and indexes are picked up for existing DBs on every open.
   try {
-    autoInitSchema(db, safeName);
+    applySchema(db, safeName);
   } catch {
     if (isNew) throw new Error(`Failed to initialize schema for ${safeName}`);
   }

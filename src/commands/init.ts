@@ -101,6 +101,14 @@ export async function runInit(): Promise<void> {
     console.log(chalk.yellow('  [warn] bundled skills not found'));
   }
 
+  // Eager-create both DBs so schemas are applied before any feature touches
+  // them. Avoids lazy ensureSchema scattered across modules.
+  const { getDb } = await import('../storage/state/db.js');
+  const { getDatabase } = await import('../storage/study/db.js');
+  getDb();
+  getDatabase('study');
+  console.log(chalk.dim('  [ok] state.db + study.db'));
+
   console.log();
   console.log(chalk.bold.green('✓ Init complete'));
   console.log();

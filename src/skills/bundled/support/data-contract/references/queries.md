@@ -1,8 +1,8 @@
 # Typed Persist Recipes
 
 Skills should not issue raw SQL against `study.db`. Use `persist` actions.
-The underlying tables remain documented in `templates/study.sql`, but normal
-English workflows should treat `persist` as the data gateway.
+The schema is owned by the agent at `src/storage/study/study.sql` (skills do
+not need to read it); treat `persist` as the data gateway.
 
 ## Practice Evidence
 

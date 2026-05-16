@@ -5,7 +5,7 @@ description: "[SUPPORT] Canonical schema + query recipes for the single unified 
 
 # Study DB — Data Contract
 
-One SQLite file (`study.db`) holds the English learning loop: learner profile, study sessions, daily plan, practice samples, concrete errors, recurring weakness patterns, subcap scores, vocabulary, SRS reviews, IELTS-style band trends, daily activity, and weekly progress snapshots. Conversation history stays in `state.db`. Schema is in `templates/study.sql` — regenerate the `.db` from template when the schema changes (no migrations).
+One SQLite file (`study.db`) holds the English learning loop: learner profile, study sessions, daily plan, practice samples, concrete errors, recurring weakness patterns, subcap scores, vocabulary, SRS reviews, IELTS-style band trends, daily activity, and weekly progress snapshots. Conversation history stays in `state.db`. Schema is owned by the agent at `src/storage/study/study.sql` and applied automatically on DB open — skills should never read or modify it directly.
 
 Markdown files constrain the agent; tables store learner data. `SOUL.md` defines Anya's identity, `RULES.md` defines behavior/tool rules, `USER.md` stores stable user facts plus behavior/preferences, and `MEMORY.md` stores the learner's long-running level and ability state. Durable practice evidence must be persisted in `study.db`, then summarized back into markdown when useful.
 
@@ -18,7 +18,6 @@ Never user-facing. This skill is a reference, not a workflow.
 
 ## Resources
 
-- `templates/study.sql` — full schema (tables + indexes)
 - `references/queries.md` — common query recipes (reads, writes, joins)
 - `references/prompt-hash.md` — canonical `samples.prompt_hash` rule (used by every writer)
 - `references/post-practice-protocol.md` — mandatory post-practice write protocol using the `persist` tool (structured parameters, no raw SQL)
@@ -51,5 +50,5 @@ Never user-facing. This skill is a reference, not a workflow.
 5. **Subcap + error keys are canonical.** Error keys: `references/error-keys.md`. Subcap keys must use the skill-documented `<domain>.<capability>` format, e.g. `writing.argument_depth`, `listening.connected_speech`.
 6. **Record every session** — even abandoned ones (`completed=0`; `persist` will use safe placeholders if response/feedback is unavailable).
 7. **`prompt_hash` is load-bearing.** See `references/prompt-hash.md` before writing it.
-8. **Schema changes = regenerate during early development.** Delete `study.db`, recreate from `templates/study.sql`. No migration scripts until real user data must be preserved.
+8. **Schema changes = regenerate during early development.** Delete `study.db`; the next agent open re-applies `src/storage/study/study.sql`. No migration scripts until real user data must be preserved.
 9. **`feedback` must be natural language.** See `references/post-practice-protocol.md` for the per-type spec.

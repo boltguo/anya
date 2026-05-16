@@ -1,81 +1,31 @@
-// lib/usage.ts — API usage tracking
+// lib/usage.ts — API usage tracking (schema lives in storage/state/state.sql)
 
 import { getDb } from '../storage/state/db.js';
-
-let _schemaReady = false;
-
-function ensureSchema(): void {
-  if (_schemaReady) return;
-  const db = getDb();
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS usage_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      month TEXT NOT NULL,
-      day TEXT NOT NULL,
-      service TEXT NOT NULL,
-      provider TEXT NOT NULL DEFAULT '',
-      calls INTEGER NOT NULL DEFAULT 1,
-      input_tokens INTEGER NOT NULL DEFAULT 0,
-      output_tokens INTEGER NOT NULL DEFAULT 0,
-      cached_tokens INTEGER NOT NULL DEFAULT 0,
-      chars INTEGER NOT NULL DEFAULT 0,
-      duration_sec REAL NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_usage_month ON usage_events(month, service);
-  `);
-  // Migration: add provider column for tables created before it existed
-  try { db.exec(`ALTER TABLE usage_events ADD COLUMN provider TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
-  _schemaReady = true;
-}
 
 export interface DailySttUsage {
   calls: number;
   duration_sec: number;
 }
 
-export interface MonthlyUsage {
+export interface UsageBucket {
+  llm: { calls: number; input_tokens: number; output_tokens: number; cached_tokens: number };
+  tts: { calls: number; chars: number; duration_sec: number };
+  stt: { calls: number; duration_sec: number };
+  pron_assess: { calls: number; duration_sec: number };
+  web_search: { calls: number };
+  vision: { calls: number };
+}
+
+export interface MonthlyUsage extends UsageBucket {
   month: string;
-
-  llm: {
-    calls: number;
-    input_tokens: number;
-    output_tokens: number;
-    cached_tokens: number;
-  };
-
   llm_by_provider: Record<string, {
     calls: number;
     input_tokens: number;
     output_tokens: number;
     cached_tokens: number;
   }>;
-
-  tts: {
-    calls: number;
-    chars: number;
-    duration_sec: number;
-  };
-
-  stt: {
-    calls: number;
-    duration_sec: number;
-  };
-
-  pron_assess: {
-    calls: number;
-    duration_sec: number;
-  };
-
-  web_search: {
-    calls: number;
-  };
-
-  vision: {
-    calls: number;
-  };
-
   stt_daily: Record<string, DailySttUsage>;
+  today: UsageBucket;
 }
 
 function currentMonth(): string {
@@ -115,28 +65,67 @@ export function countBillableChars(text: string, ssml?: string): number {
   return count;
 }
 
-function emptyUsage(month: string): MonthlyUsage {
+function emptyBucket(): UsageBucket {
   return {
-    month,
     llm: { calls: 0, input_tokens: 0, output_tokens: 0, cached_tokens: 0 },
-    llm_by_provider: {},
     tts: { calls: 0, chars: 0, duration_sec: 0 },
     stt: { calls: 0, duration_sec: 0 },
     pron_assess: { calls: 0, duration_sec: 0 },
     web_search: { calls: 0 },
     vision: { calls: 0 },
-    stt_daily: {},
   };
 }
 
+function aggregateInto(bucket: UsageBucket, rows: Array<{
+  service: string;
+  total_calls: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cached_tokens: number;
+  total_chars: number;
+  total_duration_sec: number;
+}>): void {
+  for (const row of rows) {
+    const calls = Number(row.total_calls);
+    switch (row.service) {
+      case 'llm':
+        bucket.llm.calls += calls;
+        bucket.llm.input_tokens += Number(row.total_input_tokens);
+        bucket.llm.output_tokens += Number(row.total_output_tokens);
+        bucket.llm.cached_tokens += Number(row.total_cached_tokens);
+        break;
+      case 'tts':
+        bucket.tts.calls += calls;
+        bucket.tts.chars += Number(row.total_chars);
+        bucket.tts.duration_sec += Number(row.total_duration_sec);
+        break;
+      case 'stt':
+        bucket.stt.calls += calls;
+        bucket.stt.duration_sec += Number(row.total_duration_sec);
+        break;
+      case 'pron_assess':
+        bucket.pron_assess.calls += calls;
+        bucket.pron_assess.duration_sec += Number(row.total_duration_sec);
+        break;
+      case 'web_search':
+        bucket.web_search.calls += calls;
+        break;
+      case 'vision':
+        bucket.vision.calls += calls;
+        break;
+    }
+  }
+}
+
 export function loadUsage(month?: string): MonthlyUsage {
-  ensureSchema();
   const m = month || currentMonth();
+  const today = currentDay();
   const db = getDb();
 
-  const usage = emptyUsage(m);
+  const monthlyBucket = emptyBucket();
+  const todayBucket = emptyBucket();
 
-  const rows = db.prepare(`
+  const baseGroupSql = `
     SELECT service,
            SUM(calls) AS total_calls,
            SUM(input_tokens) AS total_input_tokens,
@@ -145,68 +134,26 @@ export function loadUsage(month?: string): MonthlyUsage {
            SUM(chars) AS total_chars,
            SUM(duration_sec) AS total_duration_sec
     FROM usage_events
-    WHERE month = ?
-    GROUP BY service
-  `).all(m) as Array<{
-    service: string;
-    total_calls: number;
-    total_input_tokens: number;
-    total_output_tokens: number;
-    total_cached_tokens: number;
-    total_chars: number;
-    total_duration_sec: number;
-  }>;
+  `;
 
-  for (const row of rows) {
-    switch (row.service) {
-      case 'llm':
-        usage.llm.calls += Number(row.total_calls);
-        usage.llm.input_tokens += Number(row.total_input_tokens);
-        usage.llm.output_tokens += Number(row.total_output_tokens);
-        usage.llm.cached_tokens += Number(row.total_cached_tokens);
-        break;
-      case 'tts':
-        usage.tts = {
-          calls: Number(row.total_calls),
-          chars: Number(row.total_chars),
-          duration_sec: Number(row.total_duration_sec),
-        };
-        break;
-      case 'stt':
-        usage.stt = {
-          calls: Number(row.total_calls),
-          duration_sec: Number(row.total_duration_sec),
-        };
-        break;
-      case 'pron_assess':
-        usage.pron_assess = {
-          calls: Number(row.total_calls),
-          duration_sec: Number(row.total_duration_sec),
-        };
-        break;
-      case 'web_search':
-        usage.web_search = { calls: Number(row.total_calls) };
-        break;
-      case 'vision':
-        usage.vision = { calls: Number(row.total_calls) };
-        break;
-    }
+  aggregateInto(monthlyBucket, db.prepare(`${baseGroupSql} WHERE month = ? GROUP BY service`).all(m) as any);
+  // Today's bucket only meaningful when viewing the current month.
+  if (m === currentMonth()) {
+    aggregateInto(todayBucket, db.prepare(`${baseGroupSql} WHERE month = ? AND day = ? GROUP BY service`).all(m, today) as any);
   }
 
+  const stt_daily: Record<string, DailySttUsage> = {};
   const dailyRows = db.prepare(`
     SELECT day, SUM(calls) AS total_calls, SUM(duration_sec) AS total_duration
     FROM usage_events
     WHERE month = ? AND service = 'stt'
     GROUP BY day
   `).all(m) as Array<{ day: string; total_calls: number; total_duration: number }>;
-
   for (const row of dailyRows) {
-    usage.stt_daily[row.day] = {
-      calls: Number(row.total_calls),
-      duration_sec: Number(row.total_duration),
-    };
+    stt_daily[row.day] = { calls: Number(row.total_calls), duration_sec: Number(row.total_duration) };
   }
 
+  const llm_by_provider: MonthlyUsage['llm_by_provider'] = {};
   const providerRows = db.prepare(`
     SELECT provider,
            SUM(calls) AS total_calls,
@@ -223,20 +170,25 @@ export function loadUsage(month?: string): MonthlyUsage {
     total_output: number;
     total_cached: number;
   }>;
-
   for (const row of providerRows) {
-    usage.llm_by_provider[row.provider] = {
+    llm_by_provider[row.provider] = {
       calls: Number(row.total_calls),
       input_tokens: Number(row.total_input),
       output_tokens: Number(row.total_output),
       cached_tokens: Number(row.total_cached),
     };
   }
-  return usage;
+
+  return {
+    month: m,
+    ...monthlyBucket,
+    llm_by_provider,
+    stt_daily,
+    today: todayBucket,
+  };
 }
 
 export function trackLlm(inputTokens: number, outputTokens: number, cachedTokens = 0, provider = ''): void {
-  ensureSchema();
   getDb().prepare(`
     INSERT INTO usage_events (month, day, service, provider, calls, input_tokens, output_tokens, cached_tokens)
     VALUES (?, ?, 'llm', ?, 1, ?, ?, ?)
@@ -244,7 +196,6 @@ export function trackLlm(inputTokens: number, outputTokens: number, cachedTokens
 }
 
 export function trackTts(chars: number, durationSec: number): void {
-  ensureSchema();
   getDb().prepare(`
     INSERT INTO usage_events (month, day, service, calls, chars, duration_sec)
     VALUES (?, ?, 'tts', 1, ?, ?)
@@ -252,7 +203,6 @@ export function trackTts(chars: number, durationSec: number): void {
 }
 
 export function trackPronAssess(durationSec: number): void {
-  ensureSchema();
   getDb().prepare(`
     INSERT INTO usage_events (month, day, service, calls, duration_sec)
     VALUES (?, ?, 'pron_assess', 1, ?)
@@ -260,7 +210,6 @@ export function trackPronAssess(durationSec: number): void {
 }
 
 export function trackStt(durationSec: number): void {
-  ensureSchema();
   getDb().prepare(`
     INSERT INTO usage_events (month, day, service, calls, duration_sec)
     VALUES (?, ?, 'stt', 1, ?)
@@ -268,7 +217,6 @@ export function trackStt(durationSec: number): void {
 }
 
 export function trackWebSearch(): void {
-  ensureSchema();
   getDb().prepare(`
     INSERT INTO usage_events (month, day, service, calls)
     VALUES (?, ?, 'web_search', 1)
@@ -276,7 +224,6 @@ export function trackWebSearch(): void {
 }
 
 export function trackVision(): void {
-  ensureSchema();
   getDb().prepare(`
     INSERT INTO usage_events (month, day, service, calls)
     VALUES (?, ?, 'vision', 1)

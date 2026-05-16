@@ -104,24 +104,24 @@ function registerUsage(rt: TelegramRuntime): void {
   rt.bot.command('usage', async (ctx) => {
     const { loadUsage } = await import('../../lib/usage.js');
     const usage = loadUsage();
+    const today = usage.today;
     const fmtNum = (n: number) => n.toLocaleString();
     const fmtDuration = (sec: number) => {
       if (sec < 60) return `${Math.round(sec)}s`;
       if (sec < 3600) return `${Math.floor(sec / 60)}m ${Math.round(sec % 60)}s`;
       return `${Math.floor(sec / 3600)}h ${Math.round((sec % 3600) / 60)}m`;
     };
+    // "<month> (T <today>)" — month is the headline, today bracketed.
+    const pair = (monthly: string, todayVal: string) => `<code>${monthly}</code> <i>(T ${todayVal})</i>`;
 
     const AZURE_FREE_CHARS = 500_000;
     const AZURE_FREE_SPEECH_HOURS = 5;
 
-    const cacheHitPct = usage.llm.input_tokens > 0
-      ? Math.round((usage.llm.cached_tokens / usage.llm.input_tokens) * 100)
-      : 0;
     let llmSection = `🧠 <b>LLM</b> (${rt.config.provider.backend})\n` +
-      `├ Calls: <code>${fmtNum(usage.llm.calls)}</code>\n` +
-      `├ Input: <code>${fmtNum(usage.llm.input_tokens)}</code>\n` +
-      `├ Output: <code>${fmtNum(usage.llm.output_tokens)}</code>\n` +
-      `└ Cached: <code>${fmtNum(usage.llm.cached_tokens)}</code> (${cacheHitPct}% hit)`;
+      `├ Calls:  ${pair(fmtNum(usage.llm.calls), fmtNum(today.llm.calls))}\n` +
+      `├ Input:  ${pair(fmtNum(usage.llm.input_tokens), fmtNum(today.llm.input_tokens))}\n` +
+      `├ Output: ${pair(fmtNum(usage.llm.output_tokens), fmtNum(today.llm.output_tokens))}\n` +
+      `└ Cached: ${pair(fmtNum(usage.llm.cached_tokens), fmtNum(today.llm.cached_tokens))}`;
 
     const providers = Object.entries(usage.llm_by_provider);
     if (providers.length > 1) {
@@ -134,19 +134,19 @@ function registerUsage(rt: TelegramRuntime): void {
     const text = `📊 <b>Anya Usage — ${usage.month}</b>\n\n` +
       llmSection + `\n\n` +
       `📢 <b>TTS (Azure)</b>\n` +
-      `├ Calls: <code>${fmtNum(usage.tts.calls)}</code>\n` +
-      `├ Chars: <code>${fmtNum(usage.tts.chars)}</code> / ${fmtNum(AZURE_FREE_CHARS)}\n` +
-      `└ Dur: <code>${fmtDuration(usage.tts.duration_sec)}</code>\n\n` +
+      `├ Calls: ${pair(fmtNum(usage.tts.calls), fmtNum(today.tts.calls))}\n` +
+      `├ Chars: ${pair(`${fmtNum(usage.tts.chars)} / ${fmtNum(AZURE_FREE_CHARS)}`, fmtNum(today.tts.chars))}\n` +
+      `└ Dur:   ${pair(fmtDuration(usage.tts.duration_sec), fmtDuration(today.tts.duration_sec))}\n\n` +
       `🗣️ <b>Pronunciation (Azure)</b>\n` +
-      `├ Calls: <code>${fmtNum(usage.pron_assess.calls)}</code>\n` +
-      `└ Dur: <code>${fmtDuration(usage.pron_assess.duration_sec)}</code> / ${AZURE_FREE_SPEECH_HOURS}h\n\n` +
+      `├ Calls: ${pair(fmtNum(usage.pron_assess.calls), fmtNum(today.pron_assess.calls))}\n` +
+      `└ Dur:   ${pair(`${fmtDuration(usage.pron_assess.duration_sec)} / ${AZURE_FREE_SPEECH_HOURS}h`, fmtDuration(today.pron_assess.duration_sec))}\n\n` +
       `🎤 <b>STT (Groq Whisper)</b>\n` +
-      `├ Calls: <code>${fmtNum(usage.stt.calls)}</code>\n` +
-      `└ Dur: <code>${fmtDuration(usage.stt.duration_sec)}</code>\n\n` +
+      `├ Calls: ${pair(fmtNum(usage.stt.calls), fmtNum(today.stt.calls))}\n` +
+      `└ Dur:   ${pair(fmtDuration(usage.stt.duration_sec), fmtDuration(today.stt.duration_sec))}\n\n` +
       `🔍 <b>Web Search</b>\n` +
-      `└ Calls: <code>${fmtNum(usage.web_search.calls)}</code>\n\n` +
+      `└ Calls: ${pair(fmtNum(usage.web_search.calls), fmtNum(today.web_search.calls))}\n\n` +
       `👀 <b>Vision</b>\n` +
-      `└ Calls: <code>${fmtNum(usage.vision.calls)}</code>`;
+      `└ Calls: ${pair(fmtNum(usage.vision.calls), fmtNum(today.vision.calls))}`;
 
     await ctx.reply(text, { parse_mode: 'HTML' });
     agentLogger.info({ msg: 'tg_usage_command', chatId: ctx.chat.id });
