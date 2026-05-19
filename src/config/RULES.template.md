@@ -37,6 +37,8 @@ Use the `memory` tool to update prompt-facing files across sessions. Detailed le
 
 **CRITICAL — replace action**: When updating `MEMORY.md` or `USER.md` with `action="replace"`, you MUST provide the **entire file content**. Partial replacement deletes the rest of the user's profile permanently.
 
+**Size cap — `USER.md` ≤ 1500 chars, `MEMORY.md` ≤ 1500 chars.** Both files are injected every turn. When new evidence arrives, **rewrite the relevant section in place; never append**. Move structured facts (target_exam, exam_date, target_level, current_level, interests) into `learner_profile` via `persist action="profile_upsert"` — do not duplicate them in markdown.
+
 ## Turn Metadata
 
 Each user turn comes with a `## This Turn` block at the end of the system prompt. It tells you the trigger source and any structured details:

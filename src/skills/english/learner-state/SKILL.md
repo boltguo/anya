@@ -26,13 +26,14 @@ Execute the following actions:
    - `α = min(0.6, n / 10)`
    - `new_score = α × db_avg + (1 - α) × memory_score`
    - If `memory_score` is missing, use `db_avg` directly.
-2. **Write to MEMORY.md**: Use the `memory` tool (`action=replace`) to update:
-   - `Calibration`: confidence (low/med/high based on `n`), update date.
-   - `Core Capabilities`: The newly computed scores for Listening, Speaking, Reading, Writing.
-   - `Weak Spots`: merge weakest subcaps + recurring errors into a single section (replaces the old separate "Weak Dimensions", "Top Errors", and "Error Tendencies" sections).
-   - `Coaching & Adaptive Controls`: merge coaching strategy + adaptive training parameters into one section.
-   - `Study Consistency`: recent minutes, active days, reviewed words, and planned tasks from `coach_context.summary.activity` / `coach_context.due_tasks`.
-   - **Compact-write rules**: omit fields with value "n/a", "not tested", 0, or "none". Per-skill profiles: max 4 lines each. Do not duplicate info across sections.
+2. **Write to MEMORY.md** with `memory` tool (`action=replace`). The file has exactly four sections — `Calibration`, `Capabilities`, `Coaching Strategy`, `Metacognition`. Write only these:
+   - `Calibration`: confidence (low/med/high based on `n`), last_updated.
+   - `Capabilities`: `overall` cefr; per-skill `score (0–100) · cefr` for listening/speaking/reading/writing; for vocabulary write receptive/productive levels only; for grammar write mastered/weak/unstable_under_pressure tags (short comma list).
+   - `Coaching Strategy`: recommended_difficulty (CEFR range), what_works, what_to_avoid, redo_priority (the few subcaps to drill next), best_topic_hooks.
+   - `Metacognition`: self_prediction_gap, self_attribution_accuracy.
+   - **Do NOT duplicate `learner_profile` fields** (target_exam, target_level, exam_date, current_level, etc.) — they live in `study.db` and are read via `coach_context` when needed.
+   - **Do NOT add sections** like `Level`, `Weak Spots`, `Study Consistency`, `Strong Dimensions`, per-skill `Listening/Speaking/Reading/Writing Profile`. Activity counts, weakest-subcap examples, and target dates are live data — pull from `coach_context` at delivery time.
+   - **Compact-write rules**: omit any field whose value would be "n/a", "not tested", 0, or "none". One line per bullet; no paragraphs.
 3. **Weekly Snapshot**: If this is a manual progress report, weekly cron run, or meaningful state refresh, compute the snapshot fields from `coach_context`, `progress_trend`, and MEMORY, then call `persist action="progress_snapshot"` with the computed values:
    - `current_level`, four skill scores, vocabulary counts, total minutes, active days, sample/session counts, due-word count, weakest subcaps JSON, top errors JSON, and notes.
    - This writes `progress_snapshots`. `persist` only upserts the provided values; it does not decide scores or learner state.

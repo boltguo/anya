@@ -1,21 +1,19 @@
 # User Profile
 
-## About the User
+> **Size cap: ≤ 1500 characters.** This file is injected every turn — keep it tight. When new evidence arrives, **rewrite the relevant section in place; never append**. Move structured facts (target_exam, exam_date, target_level, current_level, interests) into `learner_profile` via `persist action="profile_upsert"` instead of duplicating here.
 
-(empty)
+## Background
 
-## Learning Goals
+Industry, role, and the concrete English-use scenarios. One paragraph. Specific > vague.
 
-(empty)
+## Goal
 
-## Current Background
+What the user wants to accomplish in English, and roughly by when (only if the user named a date). One paragraph.
 
-(empty)
+## Interests & Media
 
-## Study Preferences & Habits
+Hobbies + the platforms / shows / channels they actually consume. Short comma list or 2–3 bullets.
 
-(empty)
+## Preferences
 
-## Personalization Notes
-
-(empty)
+Observed style: session length, feedback tone (direct vs gentle), topic balance (work vs hobby), language mix. Filled in over time from interactions, not asked upfront.

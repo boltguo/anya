@@ -64,7 +64,7 @@ These phrases in user replies are **signals, not answers**. Recognise them:
 1. Each dimension runs **≥ 3 probes** (Speaking ≥ 2, Writing 1) before settling.
 2. Never tell the user they "got it wrong". If they struggle, drop difficulty and re-probe.
 3. **Execute exactly ONE probe per turn.** After sending the probe, **STOP** and wait for the user's reply.
-4. **No difficulty self-rating buttons.** The answer alone drives adaptation. Only buttons in this skill: State 0 kickoff.
+4. **No difficulty self-rating buttons.** The answer alone drives adaptation. This skill never emits a kickoff / start button — it chains straight from State 0 into the first probe.
 5. **Domain rotation Round 2 is non-negotiable** — skipping it forces `confidence = low` for that dimension.
 6. **ALL replies MUST use `tg_msg type="render"`.** Never return a bare text response, and never split into separate `text` / `voice` / `keyboard` / `react` calls. Every message to the user — probes, feedback, transitions, the final report — MUST go through a single `tg_msg type="render"` call. Render dispatches internally to voice (`url`), keyboard (`buttons`), text-only, or reaction (`react`) based on which fields are present.
 
@@ -126,11 +126,8 @@ Reply containing `不认识 / 不会` is treated as `k = 0`.
 
 ### State 0 — Initialization
 
-1. Send a short spy-themed kickoff covering: scope (5 dimensions × ~3 probes ≈ 8–12 min), no dictionaries, voice required for speaking, **题目会在熟悉领域和陌生领域之间切换**。
-2. `tg_msg(type="render")`:
-   - `text`: kickoff message
-   - `buttons`: `[["🚀 出发！开始体检|start_vocab"]]`
-3. **WAIT** for the `start_vocab` callback.
+1. Read the `profile` row (already loaded in §1). If `current_level` is set, use it as the starting `level` for every dimension instead of the default B1.
+2. Emit a **one-line** spy-themed intro in the SAME `tg_msg(type="render")` call as the first Vocabulary probe (State 1): "5 维侦察启动 🛰️ · 题目会在熟悉 / 陌生领域间切换 · 5–8 分钟搞定". Do NOT send a separate kickoff message and do NOT wait for any "start" button — chain straight into State 1.
 
 ### State 1 — Vocabulary (≥ 3 rounds)
 

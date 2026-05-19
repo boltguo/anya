@@ -38,74 +38,78 @@ Owner of the `learner_profile` row in `study.db`. Builds or corrects a short str
    - 1 trailing call-to-action (👇 / 直接告诉我吧 / etc).
 5. If the user's reply is too vague (e.g. "IT"、"打游戏"、"考试"), ask **one** follow-up before moving on.
 
-### Bundle 1 — 💼 职业与生存语境
+### Bundle 1 — 📍 英语起点
 
 `tg_msg(type="render")` (text only, no `url`/`buttons`) 文案：
 
 ```
-Boss！为了以后能给你派发最对味儿的间谍任务，我们先建个专属档案 🕵️‍♀️
+先建个间谍档案 🕵️‍♀️ 共 4 题。
 
-第 1 题（共 4 题）：你目前的具体行业 / 岗位是什么？平时在哪些场景最需要英语？
+第 1 题：你英语大概什么水平？描述一下日常实际用英语的感觉就行。
 
-💡 Anya 提示：越具体越好哦~
-• "前端开发，每天读 React 文档、给海外同事 review PR"
-• "跨境电商运营，主要给中东客户回邮件 + 处理售后"
-• "在校研究生，要读 paper、写组会报告"
+💡 选一条最接近的，怎么补充都行——
+• 基本看不懂、几乎不会说
+• 中学/大学学过，能蹦几个词，平时基本不用
+• 简单技术文档 / 邮件能看懂大半，开口磕磕巴巴
+• 能比较流利地读 / 听 / 写工作内容，开口偶尔卡顿
+• 日常工作生活都能用英语，想再精进
+• 有的话可以顺手报一下：四六级 X 分 / 雅思 X / 托福 X / BEC X
 
 直接打字告诉我吧 👇
 ```
 
 → **WAIT**
 
-### Bundle 2 — 🎯 近期想搞定的具体目标
-
-`tg_msg(type="render")` (text only, no `url`/`buttons`) 文案（**注意：无按钮，纯自由文本**）：
-
-```
-收到！第 2 题（共 4 题）：未来 3 个月里，你最想用英语搞定的一件具体事情是什么？
-
-💡 Anya 提示：可以参考这些方向（也欢迎完全自己写）——
-• 📝 备考类：雅思 7 / 托福 100 / 四六级 / BEC 中高级
-• 💼 职业类：全英文面试、跨国会议发言、写英文周报、英文 PR / Code Review
-• 🌍 生活类：欧美旅游能点餐问路、看脱口秀不依赖字幕、听播客 / 读原版小说
-• 📚 学术类：读懂 paper、写英文论文摘要、做学术 presentation
-
-如果是考试，最好顺手报一下目标分数；如果是工作，写清楚使用频率（例如"每周 2 次站会"）。直接打字告诉我吧 👇
-```
-
-→ **WAIT**
-
-### Bundle 3 — 🎮 狂热爱好与多巴胺源
+### Bundle 2 — 💼 职业与英语场景
 
 `tg_msg(type="render")` (text only, no `url`/`buttons`) 文案：
 
 ```
-太棒了，目标已锁定 🎯 第 3 题（共 4 题）：周末或下班后，你最愿意把时间花在什么事物上？
+收到！第 2 题：你目前的具体行业 / 岗位是什么？平时在哪些场景最需要英语？
 
-⚠️ 注意：要够具体，泛泛而谈我接不住~
-• ❌ "打游戏" → ✅ "沉迷《黑神话·悟空》和《艾尔登法环》"
-• ❌ "看书" → ✅ "硬核科幻 + 历史非虚构，最近在啃《三体》英文版"
-• ❌ "看剧" → ✅ "美剧迷，最爱《Severance》《True Detective》"
+💡 越具体越好，最好把"行业 + 岗位 + 高频场景"都说清楚——
+• "前端开发，每天读 React 文档、给海外同事 review PR、每周 1 次英文站会"
+• "跨境电商运营，主要给中东客户回邮件 + 处理售后，每天 30+ 邮件"
+• "在校研究生（计算机视觉方向），要读 paper、写组会汇报、偶尔投会议"
+• "外贸业务员，跟欧美客户每天微信 + 月度 zoom 会议"
 
-把训练任务变成你喜欢的东西，学起来才不痛苦 😎 直接打字告诉我吧 👇
+直接打字告诉我吧 👇
 ```
 
 → **WAIT**
 
-### Bundle 4 — 📺 信息摄入偏好
+### Bundle 3 — 🎯 学习目标
 
-`tg_msg(type="render")` (text only, no `url`/`buttons`) 文案（同样改为纯自由文本，跟前 3 题统一）：
+`tg_msg(type="render")` (text only, no `url`/`buttons`) 文案：
 
 ```
-记下来啦！最后一题（4/4）：你平时主要通过哪种方式消磨碎片时间？常去哪些平台？关注哪类博主 / 频道？
+明白了！第 3 题：你最想用英语搞定的一件事情是什么？什么时间想搞定？
 
-💡 Anya 提示：这能决定我以后怎么给你"投喂"训练材料~
-• 📺 视频："B 站看何同学数码评测 + YouTube 看 Fireship 编程"
-• 🎙️ 音频："上下班路上听《Hardcore History》和《无人知晓》"
-• 📖 图文："小红书刷穿搭 + Twitter 看 AI 圈快讯"
-• 📚 长文："Medium 看产品设计 + 推理小说"
+💡 自己怎么想就怎么写，不必套时间——
+• 📝 备考：要考雅思 / 托福 / 四六级 / BEC，目标分数 + 大概打算几月考
+• 💼 工作：通过全英文面试、能独立开英文会、能写英文周报…
+• 🌍 生活：欧美旅游能聊起来、看美剧不依赖字幕、追原版播客…
+• 📚 兴趣：能读原版小说 / paper，能跟海外朋友长聊…
 
-挑你最常用的写就行，多个也可以。直接打字告诉我吧 👇
+直接打字告诉我吧 👇
+```
+
+→ **WAIT**
+
+### Bundle 4 — 🎮 兴趣 & 信息摄入
+
+`tg_msg(type="render")` (text only, no `url`/`buttons`) 文案：
+
+```
+最后一题（4/4）：你下班 / 周末喜欢什么？平时常在哪些 App、关注哪类博主 / 频道？
+
+💡 兴趣 + 平台一起说，越具体越好（材料就从这里挑）——
+• 🎮 "沉迷《黑神话·悟空》《艾尔登法环》，B 站常看游戏解说"
+• 🎬 "美剧迷《Severance》《True Detective》；
+• 🎙️ "通勤听《Hardcore History》《无人知晓》； Twitter 看 AI 圈快讯"
+• 📚 "硬核科幻 + 历史非虚构；Medium 看产品设计"
+
+直接打字告诉我吧 👇
 ```
 
 → **WAIT**
@@ -116,24 +120,25 @@ Boss！为了以后能给你派发最对味儿的间谍任务，我们先建个�
 
 Once all 4 bundles are collected, write the profile via **one** `persist action="profile_upsert"` call. Map bundles into the structured columns:
 
-| Bundle                       | Persist field    | Notes                                                                       |
-| ---------------------------- | ---------------- | --------------------------------------------------------------------------- |
-| 1 — Profession context       | `daily_english`  | Concise sentence: industry / role + concrete English use cases.             |
-| 2 — Learning goal            | `target_level` + `target_exam` + `exam_date` + `notes` | Fill the structured fields when the user mentioned an exam / score / timeframe; otherwise put the goal sentence in `notes`. |
-| 3 — Personal interests       | `interests`      | JSON array of short tags (e.g. `["黑神话·悟空","艾尔登法环","硬核科幻"]`) or comma-separated text. |
-| 4 — Media consumption        | `notes`          | Append after the goal; one short paragraph the planner can use to pick material. |
+| Bundle                  | Persist field                                              | Notes                                                                                                 |
+| ----------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1 — English starting level | `current_level` + `notes`                               | Map to a CEFR-equivalent guess (e.g. CET-4 → A2+, CET-6 → B1, IELTS 6 → B1+, IELTS 7 → B2+). Put the user's raw answer in `notes` for traceability. |
+| 2 — Profession context  | `daily_english`                                            | Concise sentence: industry + role + concrete English use cases + frequency.                           |
+| 3 — Learning goal       | `target_level` + `target_exam` + `exam_date` + `notes`     | Fill the structured fields when the user mentioned an exam / score / timeframe; otherwise put the goal sentence in `notes`. |
+| 4 — Interests & media   | `interests`                                                | JSON array of short tags covering both hobby content AND platforms (e.g. `["黑神话·悟空","Severance","Fireship","B站","小红书"]`). |
 
 Also set `initialized=1`. Example call shape:
 
 ```
 persist action="profile_upsert"
   initialized=1
-  daily_english="Frontend dev at a SaaS startup; daily reading of React/Node docs and reviewing PRs for overseas teammates."
-  target_level="B2"   // optional
-  target_exam="IELTS" // optional, default IELTS
-  exam_date="2026-08-01" // optional
-  interests='["黑神话·悟空","艾尔登法环","硬核科幻"]'
-  notes="Goal: pass an all-English technical interview in ~3 months.\nMedia: Fireship on YouTube, 何同学 on B站, Hardcore History podcast on commute.\nTopic rotation: half work-themed, half hobby-themed."
+  current_level="B1"
+  daily_english="Frontend dev at a SaaS startup; daily reading of React/Node docs and reviewing PRs for overseas teammates; weekly English standup."
+  target_level="B2"
+  target_exam="IELTS"
+  exam_date="2026-08-01"
+  interests='["黑神话·悟空","艾尔登法环","Severance","Fireship","B站","Hardcore History"]'
+  notes="Start: CET-6 502 (2022). Goal: pass an all-English technical interview; IELTS 6.5 as reference."
 ```
 
 After `profile_upsert`, mark onboarding step complete:
@@ -150,7 +155,7 @@ Then send the completion message and **immediately** chain into `placement-quick
 
 ```
 档案建立完成 ✅
-Boss 的喜好已经全部进入 Anya 加密档案库 🗂️
+情报已经全部进入 Anya 加密档案库 🗂️
 
 接下来直接进入极速摸底体检，5–8 分钟搞定 ✨
 ```
