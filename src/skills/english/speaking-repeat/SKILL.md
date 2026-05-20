@@ -229,7 +229,6 @@ Error keys: `info_loss`, `paraphrase_parroting`, `register_mismatch`, `register_
 
 - `planner`: routes here when `speaking.interaction` / paraphrasing / Part-2 structure is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running retell ability, updates `MEMORY.md`.
-- `planner`: (proactive nudge) uses errors/subcap scores to explain paraphrase patterns and pivot detection.
 - `vocab-harvest`: turns auto-harvested upgrades into review items.
 - `speaking-azure-score`: optional `pron_assess` if pronunciation flagged weak.
 - `support/data-contract`: defines the `persist` write protocol.

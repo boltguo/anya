@@ -116,8 +116,8 @@ Wait for the user's voice message or button tap.
 
 - Append `🐢 慢速播放` to `metadata.button_taps` (mandatory).
 - Brief ack via `tg_msg type="render"` (text only).
-- Same passage; `tts rate="-10%"`.
-- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons).
+- Same passage; `tts rate="-10%"`. **Keep the original-speed TTS path in memory** — that's the one State D will persist.
+- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path for this delivery only, same text + buttons).
 
 `shadow_hard`:
 
@@ -243,6 +243,8 @@ Minimum payload:
 
 `metadata.button_taps` mandatory whenever any 🐢/😵 button was tapped, even on `fluency ≥ 80`.
 
+`audio_path` **MUST be the original-speed (State A) TTS path**, never the `-10%` slowed version generated in `shadow_slow`, and never the State C low-score coaching TTS. The slowed clip and the coaching demo are transient scaffolds; their existence is already signaled via `metadata.button_taps` (`🐢 慢速播放` / `🎯 发音示范`). Persisting the original anchors `pron_assess` re-runs and Revenge replays on the actual challenge.
+
 State D persists fully-attempted clips only (with or without slow-down). Abandoned-on-too-hard rows are written by State B.
 
 ### State E: Continue (`shadow_next`)
@@ -270,7 +272,6 @@ When the user sends another voice message after a sub-pass evaluation (no button
 
 - `planner`: routes here when listening rhythm / connected-speech / chunking is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running tempo state, updates `MEMORY.md`.
-- `planner`: (proactive nudge) uses errors/subcap scores to explain rhythm/linking patterns.
 - `speaking-shadowing`: complementary phoneme-focused skill (see §1 disambiguation).
 - `support/data-contract`: defines the `persist` write protocol.
 

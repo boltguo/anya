@@ -229,7 +229,6 @@ End-of-batch buttons:
 
 - `planner`: routes here ahead of a writing-essay prompt to seed the lexical bank.
 - `learner-state`: reads `samples` rows + per-word `word_reviews`; updates `MEMORY.md` `Vocabulary Profile.topic_coverage`.
-- `planner`: (proactive nudge) uses topic coverage to recommend rotation (don't keep drilling 'education' if `environment` is at 0% coverage and exams are coming).
 - `vocab-review`: companion for due-flow (vocab-topic seeds new items into the queue).
 - `writing-essay` / `speaking-freetalk`: downstream consumers — once the bundle lands in mastery, prompts on that topic become accessible.
 - `support/data-contract`: defines the `persist` write protocol.

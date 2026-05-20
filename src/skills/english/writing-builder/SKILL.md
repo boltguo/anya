@@ -99,6 +99,11 @@ Hold: keep tier and constraint family; swap target word / vocab to probe the sam
 
 ### State A: Prepare And Deliver
 
+**0. Follow-up handoff check** (do this BEFORE generating a fresh task). Look at `recent_practice.rows[0]`:
+- If it's a `writing.essay` row whose `metadata.followup.target === "writing-builder"`, this is a grammar-dominant low-band-essay handoff. Use `metadata.followup.reason` to pick the target structure (e.g. `verb_form_error` → drill verb-form pattern; `sentence_fragment` → drill clause completion). If `metadata.followup.focus_excerpt` is present, lift 1–2 source clauses **from that excerpt verbatim** and frame the micro-task around fixing the pattern that actually broke there.
+- Otherwise: proceed with steps 1–2 (fresh task generation from coach_context errors).
+- Tag the persisted row's `parent_sample_id` with the parent essay's `id`.
+
 1. From `coach_context` + §2.3 credits, decide: tier, target structure, target word(s), expected subcaps.
 2. Generate the micro-task (e.g. "用 `Despite` 和 `fluctuate` 把这两句话连起来：The economy is recovering. Energy prices are rising fast."). Compute `prompt_hash`; regenerate on dedup hit.
 3. Send a single `tg_msg type="render"` call (text + buttons, no `url`):
@@ -210,7 +215,6 @@ State D persists attempted sentences only. Abandoned rows are written in State B
 
 - `planner`: routes here when `writing.grammar_accuracy` / `writing.cohesion` is the highest-value drill.
 - `learner-state`: reads persisted evidence; updates `MEMORY.md`.
-- `planner`: (proactive nudge) uses errors / subcap scores to explain next steps and surface lingering verb-form / fragment issues.
 - `vocab-harvest`: when the Native Polish introduces a teachable chunk (collocation / phrasal verb), auto-call to save it.
 - `writing-rewrite`: graduates here once a learner can produce single sentences cleanly and is ready for paragraph upgrade.
 - `support/data-contract`: defines the `persist` write protocol.

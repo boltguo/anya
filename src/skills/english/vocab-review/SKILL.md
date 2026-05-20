@@ -145,7 +145,6 @@ End-of-batch buttons (after State D persist returns):
 
 - `planner`: routes here when SRS due-count is the strongest signal.
 - `learner-state`: reads `samples` rows; updates `MEMORY.md` `Vocabulary Profile`.
-- `planner`: (proactive nudge) uses `vocab.recall` subcap to recommend rebalancing (more reading-deepdive harvests, less new vocab-topic, etc.).
 - `vocab-harvest`: feeds new items into the queue (`origin="practice_harvest"`) — vocab-review pulls them in due order.
 - `vocab-topic`: alternative route when due-count is low.
 - `support/data-contract`: defines the `persist` write protocol.

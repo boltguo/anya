@@ -115,8 +115,8 @@ Hold: keep length, optionally swap **one** dimension (target phoneme / linking /
 
 - Append `🐢 慢速示范` to `metadata.button_taps` (mandatory).
 - Brief ack via `tg_msg type="render"` (text only).
-- Same sentence; `tts rate="-10%"`.
-- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons).
+- Same sentence; `tts rate="-10%"`. **Keep the original-speed TTS path in memory** — that's the one State D will persist.
+- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path for this delivery only, same text + buttons).
 
 `speak_hard`:
 
@@ -232,6 +232,8 @@ Minimum payload:
 
 `metadata.button_taps` mandatory whenever any 🐢 / 😵 / 🎯 marker was added, even on `accuracy=1.0`.
 
+`audio_path` **MUST be the original-speed (State A) demo TTS path**, never the `-10%` slowed version from `speak_slow`, and never the State C low-score phoneme-coaching TTS. The slowed demo and coaching audio are transient scaffolds; their existence is already signaled via `metadata.button_taps` (`🐢 慢速示范` / `🎯 发音示范`). Persisting the original demo anchors any later `pron_assess` re-runs on the canonical target.
+
 State D persists fully-attempted sentences only (with or without slow-down). Abandoned-on-too-long rows are written by State B.
 
 Error keys: `pronunciation_vowel`, `pronunciation_consonant`, `pronunciation_stress`, `consonant_cluster`, `connected_speech_fail`, `intonation` (see `speaking-azure-score` taxonomy).
@@ -269,7 +271,6 @@ When the user sends another voice message after a sub-pass evaluation (no button
 
 - `planner`: routes here when phoneme accuracy is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running pronunciation state, updates `MEMORY.md`.
-- `planner`: (proactive nudge) uses errors/subcap scores to explain articulation patterns.
 - `listening-shadowing`: complementary rhythm-focused skill (see §1 disambiguation).
 - `speaking-azure-score`: defines the `pron_assess` request/response contract and error taxonomy.
 - `support/data-contract`: defines the `persist` write protocol.

@@ -115,8 +115,8 @@ Wait for the typed answer or button tap.
 
 - Append `🐢 慢速播放` to `metadata.button_taps`.
 - Brief ack via `tg_msg type="render"` (text only).
-- Same sentence; `tts rate="-10%"`.
-- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons).
+- Same sentence; `tts rate="-10%"`. **Keep the original-speed TTS path in memory** — that's the one State D will persist.
+- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path for this delivery only, same text + buttons).
 
 `dict_easier`:
 
@@ -196,6 +196,8 @@ Minimum payload:
 
 `metadata.button_taps` mandatory if any button was tapped, even on `accuracy=1.0`.
 
+`audio_path` **MUST be the original-speed (State A) TTS path**, never the `-10%` slowed version generated in `dict_slow`. The slow version is a transient scaffold; its existence is already signaled via `metadata.button_taps`. Persisting the original keeps Revenge / replay anchored on the actual challenge.
+
 State D persists attempted sentences only. Abandoned rows are written in State B. Use `response`, never `raw_content`.
 
 ### State E: Continue (`dict_next`)
@@ -209,7 +211,6 @@ State D persists attempted sentences only. Abandoned rows are written in State B
 
 - `planner`: routes here when listening/detail/connected-speech is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running listening state, updates `MEMORY.md`.
-- `planner`: (proactive nudge) uses errors/subcap scores to explain next steps.
 - `vocab-harvest` / `vocab-review`: turn repeated missed chunks into review items.
 - `support/data-contract`: defines the `persist` write protocol.
 

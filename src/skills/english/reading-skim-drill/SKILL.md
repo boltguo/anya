@@ -235,7 +235,6 @@ State D persists fully-attempted passages only. Abandoned rows are written in St
 
 - `planner`: routes here when `reading.pace` / `reading.gist` is the highest-value drill.
 - `learner-state`: reads persisted evidence; updates `MEMORY.md`.
-- `planner`: (proactive nudge) uses errors / subcap scores to explain why they fell for the keyword trap or missed the pivot.
 - `vocab-harvest`: post-passage, optionally extract 1-2 high-value collocations (don't go beyond — this skill is about pace, not vocab).
 - `reading-deepdive`: graduates here once the user wants to slow down and parse syntax.
 - `support/data-contract`: defines the `persist` write protocol.

@@ -241,7 +241,6 @@ Before sending, write the handoff intent onto the just-persisted sample via `met
 
 - `planner`: routes here when long-form writing has stalled and the user needs full-length practice.
 - `learner-state`: reads persisted band evidence; updates `MEMORY.md` band snapshot.
-- `planner`: (proactive nudge) uses 4-axis subcap scores to explain which dimension is the bottleneck.
 - `writing-rewrite`: handoff target after a low-band essay — pick one paragraph and rewrite it as the next round.
 - `writing-builder`: handoff for sentence-level mechanics if grammar errors dominate.
 - `vocab-harvest` / `vocab-review`: optional auto-call when the Native Polish introduces a teachable chunk.

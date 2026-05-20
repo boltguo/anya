@@ -32,11 +32,11 @@ Execute the following actions:
    - **Do NOT duplicate `learner_profile` fields** (target_exam, target_level, exam_date, current_level, etc.) — they live in `study.db` and are read via `coach_context` when needed.
    - **Do NOT add sections** like `Level`, `Weak Spots`, `Study Consistency`, `Strong Dimensions`, per-skill `Listening/Speaking/Reading/Writing Profile`. Activity counts, weakest-subcap examples, and target dates are live data — pull from `coach_context` at delivery time.
    - **Compact-write rules**: omit any field whose value would be "n/a", "not tested", 0, or "none". One line per bullet; no paragraphs.
-3. **Weekly Snapshot**: If this is a manual progress report, weekly cron run, or meaningful state refresh, call `persist action="progress_snapshot"`. You can either:
-   - **Pass only the non-score fields** (`current_level`, vocab counts, minutes, active days, weak_subcaps JSON, top_errors JSON, notes). Persist will fall back to the same `learner_state_scores` EMA for the four section scores. **This is the recommended path.**
-   - **Pass explicit scores** only if you have an out-of-band reason to override (e.g. placement just finished).
-   - Either way, `persist` writes `progress_snapshots`. Do not let ordinary practice skills write this table.
-4. Do not use the `db` tool. `band_trend` is maintained incrementally by `persist action="practice"`; `progress_snapshots` is maintained by `learner-state`; MEMORY is the prompt-facing summary.
+3. **Weekly Snapshot**: If this is a manual progress report, weekly cron run, or meaningful state refresh, call `persist action="progress_snapshot"`. The v3 snapshot row carries **5 fields only**: `week` (auto from current ISO week if omitted), `current_level`, `listening_score`, `speaking_score`, `reading_score`, `writing_score`, `notes`. Two paths:
+   - **Recommended**: pass only `current_level` (+ optional `notes`). Persist falls back to the same `learner_state_scores` EMA for the four section scores.
+   - **Override**: pass explicit `{listening,speaking,reading,writing}_score` only if you have an out-of-band reason (e.g. placement just finished).
+   - Vocab counts / activity / weak_subcaps / top_errors are **derived at read time** from `samples` + `subcap_scores` and live in `coach_context.summary` — they are NOT snapshot fields and must NOT be passed in. Do not let ordinary practice skills write this table.
+4. Do not use the `db` tool. `progress_snapshots` is owned by this skill; `samples` / `subcap_scores` / `errors` are written by practice skills and read on demand via `coach_context`. MEMORY is the prompt-facing summary.
 
 ### State C: Delivery (UI)
 
@@ -58,6 +58,8 @@ Use `tg_msg(type="render")` (text + buttons, no `url`) to present a **compact, s
 
 🔥 最近 {active_days} 天 · {total_minutes} 分钟 · {samples_count} 次练习
 ```
+
+`active_days`, `total_minutes`, `samples_count` are derived from `coach_context.summary.activity` (one row per date with `samples_count` + `minutes_total`). Sum them in the LLM at delivery time — they are NOT snapshot fields. If `activity` is empty, omit the 🔥 line entirely (don't render `0 天 · 0 分钟`).
 
 **Rules for the report**:
 - Scores use the **0-100 scale** on one line, no bullet list.

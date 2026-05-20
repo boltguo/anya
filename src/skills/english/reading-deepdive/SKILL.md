@@ -219,7 +219,6 @@ In **parallel** to this practice persist, call `word_upsert` for each harvested 
 
 - `planner`: routes here when `reading.syntax_parsing` / `reading.gist` is the highest-value drill.
 - `learner-state`: reads persisted evidence; updates `MEMORY.md`.
-- `planner`: (proactive nudge) uses errors / subcap scores to explain pivot misses.
 - `vocab-harvest` / `vocab-review`: auto-called in State C to seed the SRS queue with passage chunks.
 - `reading-skim-drill`: graduates to skim once syntax is no longer the bottleneck.
 - `writing-rewrite`: hand off if a paragraph in the passage is upgrade-worthy.

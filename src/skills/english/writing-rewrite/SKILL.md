@@ -92,6 +92,11 @@ Hold: keep tier source/target; swap topic family.
 
 ### State A: Prepare And Deliver
 
+**0. Follow-up handoff check** (do this BEFORE generating a fresh paragraph). Look at `recent_practice.rows[0]`:
+- If it's a `writing.essay` row whose `metadata.followup.target === "writing-rewrite"`, this is a low-band-essay handoff. Use `metadata.followup.focus_excerpt` **verbatim** as the source paragraph (no generation). Set `source_band` ≈ the parent essay's `band_overall`, `target_band` = source + 1.0, mark 1–2 weak spots tied to `metadata.followup.reason`. Skip steps 1–2 below.
+- Otherwise: proceed with steps 1–2 (fresh source generation).
+- Tag the persisted row's `parent_sample_id` with the parent essay's `id` so the chain is queryable.
+
 1. From §2.3 + `coach_context`, decide tier → source band, target band, source length.
 2. Generate the source paragraph at the chosen band. Compute `prompt_hash`; regenerate on dedup hit. Mark 1–2 weak spots with `~...~`.
 3. Send a **single** `tg_msg type="render"` (text + buttons, no `url`) containing task + buttons:
@@ -227,7 +232,6 @@ State D persists fully-attempted rewrites only. Abandoned rows are written in St
 
 - `planner`: routes here when `writing.lexical_sophistication` / `writing.cohesion_logic` is the weakest writing subcap.
 - `learner-state`: reads persisted band evidence; updates `MEMORY.md` band snapshot.
-- `planner`: (proactive nudge) uses 4-axis subcap scores to explain which dimension is the bottleneck.
 - `vocab-harvest` / `vocab-review`: auto-called for the takeaway chunk in State C.
 - `writing-builder`: fallback when learner stuck below tier floor (sentence-level mechanics need work first).
 - `writing-essay`: graduates here once the learner can hold target band on rewrites consistently — apply same techniques to original prompts.
