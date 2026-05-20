@@ -1,168 +1,166 @@
-// domain/practice.ts — practice samples, daily tasks, recent practice
-
 import type { DatabaseSync } from 'node:sqlite';
 import {
   type ErrorEntry, type SubcapEntry,
   withTransaction, optionalNumber, normalizeRowId, normalizeJsonString,
-  inferSection, severityScore, parseJsonList, upsertActivity, upsertBandTrend,
-  clampInt,
+  inferSection, severityScore, parseJsonList,
+  isValidErrorKey, clampInt,
 } from './helpers.js';
+import { ensureActiveStudySession } from './session.js';
+
+const ABANDONED_PROMPT = '[abandoned]';
+const ABANDONED_RESPONSE = '[abandoned]';
+const ABANDONED_FEEDBACK = 'Session abandoned before evaluation.';
+
+const VALID_ASSISTANCE = new Set(['none', 'hint', 'outline', 'sos', 'redo']);
+const VALID_MODES = new Set(['study', 'placement']);
 
 export function logPractice(db: DatabaseSync, args: Record<string, unknown>): unknown {
   const skillType = String(args.skill_type || '');
-  const completed = Number(args.completed ?? 1);
-  const prompt = String(args.prompt || (completed === 0 ? '[abandoned]' : ''));
-  const response = String(args.response ?? args.raw_content ?? (completed === 0 ? '[abandoned]' : ''));
-  const feedback = String(args.feedback || (completed === 0 ? 'Session abandoned before evaluation.' : ''));
-
   if (!skillType) return { error: 'Missing skill_type' };
+
+  const completed = Number(args.completed ?? 1);
+
+  const placeholderOk = completed === 0;
+  const rawPrompt = String(args.prompt ?? '').trim();
+  const rawResponse = String(args.response ?? args.raw_content ?? '').trim();
+  const rawFeedback = String(args.feedback ?? '').trim();
+
+  const prompt = rawPrompt || (placeholderOk ? ABANDONED_PROMPT : '');
+  const response = rawResponse || (placeholderOk ? ABANDONED_RESPONSE : '');
+  const feedback = rawFeedback || (placeholderOk ? ABANDONED_FEEDBACK : '');
+
   if (!prompt) return { error: 'Missing prompt' };
   if (!response) return { error: 'Missing response' };
   if (!feedback) return { error: 'Missing feedback' };
 
   const sessionId = String(args.session_id || '');
+  let studySessionId = optionalNumber(args.study_session_id);
+  if (studySessionId === null && sessionId) {
+    studySessionId = ensureActiveStudySession(db, sessionId, 'auto');
+  }
   const accuracy = optionalNumber(args.accuracy);
   const rawScore = optionalNumber(args.raw_score);
   const maxScore = optionalNumber(args.max_score);
-  const loadScore = Number(args.load_score ?? 2);
   const audioPath = args.audio_path ? String(args.audio_path) : null;
-  const imagePath = args.image_path ? String(args.image_path) : null;
-  const sourceUrl = String(args.source_url || '');
-  const mode = String(args.mode || 'study');
+  const modeRaw = String(args.mode || 'study');
+  const mode = VALID_MODES.has(modeRaw) ? modeRaw : 'study';
   const section = String(args.section || inferSection(skillType));
-  const domain = String(args.domain || section);
   const minutes = Number(args.minutes ?? 1);
-  const durationSeconds = Number(args.duration_seconds ?? minutes * 60);
   const bandOverall = optionalNumber(args.band_overall);
-  const wordsReviewed = args.words_reviewed !== undefined ? Number(args.words_reviewed) : null;
-  const errors = parseJsonList<ErrorEntry>(args.errors, 'errors');
-  const subcaps = parseJsonList<SubcapEntry>(args.subcap_scores, 'subcap_scores');
+  const assistanceRaw = String(args.assistance_level || 'none').toLowerCase();
+  const assistance = VALID_ASSISTANCE.has(assistanceRaw) ? assistanceRaw : 'none';
+
+  const rawErrors = parseJsonList<ErrorEntry>(args.errors, 'errors');
+  const rawSubcaps = parseJsonList<SubcapEntry>(args.subcap_scores, 'subcap_scores');
+
+  // Validate error keys against the canonical whitelist before opening
+  // a transaction; failing fast gives the caller a clear error message.
+  const unknownKeys: string[] = [];
+  const validErrors: ErrorEntry[] = [];
+  for (const e of rawErrors) {
+    const key = String(e.key || '').trim();
+    if (!key) continue;
+    if (!isValidErrorKey(db, key)) {
+      unknownKeys.push(key);
+      continue;
+    }
+    validErrors.push({ ...e, key });
+  }
 
   return withTransaction(db, () => {
     const sampleStmt = db.prepare(`
       INSERT INTO samples (
-        created_at, skill_type, domain, section, prompt, response,
-        accuracy, raw_score, max_score, session_id, feedback, mode, completed,
-        load_score, audio_path, image_path, source_url, minutes, duration_seconds,
-        band_task, band_coherence, band_lexical, band_grammar, band_pronunciation, band_overall,
-        ui_feedback, translation, parent_sample_id, redo_count, prompt_hash, metadata
+        created_at, session_id, study_session_id,
+        skill_type, section, prompt, response,
+        accuracy, raw_score, max_score, feedback, mode, completed,
+        audio_path, minutes, band_overall,
+        parent_sample_id, assistance_level, prompt_hash, metadata
       ) VALUES (
-        datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `);
     const sampleResult = sampleStmt.run(
-      skillType, domain, section, prompt, response,
-      accuracy, rawScore, maxScore, sessionId, feedback, mode, completed,
-      loadScore, audioPath, imagePath, sourceUrl, minutes, durationSeconds,
-      optionalNumber(args.band_task), optionalNumber(args.band_coherence),
-      optionalNumber(args.band_lexical), optionalNumber(args.band_grammar),
-      optionalNumber(args.band_pronunciation), bandOverall,
-      String(args.ui_feedback || ''), String(args.translation || ''),
-      optionalNumber(args.parent_sample_id), Number(args.redo_count ?? 0),
+      sessionId, studySessionId,
+      skillType, section, prompt, response,
+      accuracy, rawScore, maxScore, feedback, mode, completed,
+      audioPath, minutes, bandOverall,
+      optionalNumber(args.parent_sample_id), assistance,
       String(args.prompt_hash || ''), normalizeJsonString(args.metadata),
     );
     const sampleId = normalizeRowId(sampleResult.lastInsertRowid);
 
+    // Errors → errors + error_patterns (incremental counters only).
     const errorStmt = db.prepare(`
       INSERT INTO errors (sample_id, recurrence_key, category, severity, original_phrase, correction, rule_note)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     const patternStmt = db.prepare(`
       INSERT INTO error_patterns (
-        recurrence_key, category, severity_score, seen_count,
-        last_seen_at, last_sample_id, last_original, last_correction, rule_note
-      ) VALUES (?, ?, ?, 1, datetime('now'), ?, ?, ?, ?)
+        recurrence_key, category, severity_score, seen_count, last_seen_at, rule_note
+      ) VALUES (?, ?, ?, 1, datetime('now'), ?)
       ON CONFLICT(recurrence_key) DO UPDATE SET
         category = excluded.category,
         severity_score = MAX(error_patterns.severity_score, excluded.severity_score),
         seen_count = error_patterns.seen_count + 1,
         last_seen_at = excluded.last_seen_at,
-        last_sample_id = excluded.last_sample_id,
-        last_original = excluded.last_original,
-        last_correction = excluded.last_correction,
         rule_note = excluded.rule_note
     `);
-    for (const e of errors) {
-      const key = String(e.key || '');
-      if (!key) continue;
+    for (const e of validErrors) {
+      const key = e.key;
       const category = String(e.category || section);
       const severity = String(e.severity || 'medium');
-      const original = String(e.original || '');
-      const correction = String(e.correction || '');
-      const note = String(e.note || '');
-      errorStmt.run(sampleId, key, category, severity, original, correction, note);
-      patternStmt.run(key, category, severityScore(severity), sampleId, original, correction, note);
+      errorStmt.run(
+        sampleId, key, category, severity,
+        String(e.original || ''), String(e.correction || ''), String(e.note || ''),
+      );
+      patternStmt.run(key, category, severityScore(severity), String(e.note || ''));
     }
 
+    // Subcaps on canonical 0-10 scale. Nothing derived stored here.
     const subcapStmt = db.prepare(`
-      INSERT INTO subcap_scores (sample_id, subcap_key, score, evidence, created_at)
+      INSERT INTO subcap_scores (sample_id, subcap_key, value, evidence, created_at)
       VALUES (?, ?, ?, ?, datetime('now'))
     `);
-    for (const s of subcaps) {
-      const key = String(s.key || '');
+    for (const s of rawSubcaps) {
+      const key = String(s.key || '').trim();
       if (!key) continue;
-      subcapStmt.run(sampleId, key, Number(s.score ?? 0), String(s.evidence || ''));
+      const value = Number(s.value ?? s.score ?? 0);
+      subcapStmt.run(sampleId, key, Number.isFinite(value) ? value : 0, String(s.evidence || ''));
     }
 
-    upsertActivity(db, minutes, section, wordsReviewed ?? 0, 0);
-    if (bandOverall !== null) upsertBandTrend(db, section, bandOverall, skillType);
-
-    return { ok: true, action: 'practice', sample_id: sampleId, errors_count: errors.length, subcaps_count: subcaps.length };
+    return {
+      ok: true,
+      action: 'practice',
+      sample_id: sampleId,
+      errors_count: validErrors.length,
+      subcaps_count: rawSubcaps.length,
+      ...(unknownKeys.length > 0 ? { unknown_error_keys: unknownKeys } : {}),
+    };
   });
 }
 
-export function taskUpsert(db: DatabaseSync, args: Record<string, unknown>): unknown {
-  const skill = String(args.skill || args.callback || '').trim();
-  if (!skill) return { error: 'Missing skill' };
-  const date = String(args.date || 'now');
-  const result = db.prepare(`
-    INSERT INTO daily_tasks (
-      date, domain, task_type, skill, mode, callback, reason, load_score, planned_minutes
-    ) VALUES (
-      CASE WHEN ? = 'now' THEN date('now') ELSE ? END, ?, ?, ?, ?, ?, ?, ?, ?
-    )
-  `).run(
-    date, date,
-    String(args.domain || args.section || inferSection(skill)),
-    String(args.task_type || 'primary'),
-    skill,
-    String(args.mode || 'study'),
-    String(args.callback || skill),
-    String(args.reason || ''),
-    Number(args.load_score ?? 0),
-    Number(args.planned_minutes ?? args.minutes ?? 0),
-  );
-  return { ok: true, action: 'task_upsert', task_id: normalizeRowId(result.lastInsertRowid) };
-}
-
-export function dueTasks(db: DatabaseSync, args: Record<string, unknown>): unknown {
-  const date = String(args.date || 'now');
-  const rows = db.prepare(`
-    SELECT id, date, domain, task_type, skill, mode, callback, reason,
-           planned_minutes, load_score, completed, sample_id
-    FROM daily_tasks
-    WHERE date = CASE WHEN ? = 'now' THEN date('now') ELSE ? END
-    ORDER BY completed ASC,
-      CASE task_type WHEN 'primary' THEN 1 WHEN 'review' THEN 2 WHEN 'consolidation' THEN 3 ELSE 4 END,
-      id ASC
-  `).all(date, date);
-  return { ok: true, action: 'due_tasks', rows, count: rows.length };
-}
-
-// Surfaces short-term self-state (i+1 streak gating, prompt_hash dedup) without polluting agent chat context.
 export function recentPractice(db: DatabaseSync, args: Record<string, unknown>): unknown {
+  const scopeRaw = String(args.scope || 'session').toLowerCase();
+  const scope = scopeRaw === 'global' ? 'global' : 'session';
   const sessionId = String(args.session_id || '');
-  if (!sessionId) return { error: 'Missing session_id' };
-
   const skillType = String(args.skill_type || '');
   const limit = clampInt(Number(args.limit ?? 5), 1, 50);
+  const days = clampInt(Number(args.days ?? (scope === 'global' ? 30 : 365)), 1, 365);
   const includeAbandoned = args.include_abandoned === undefined
     ? true
     : Number(args.include_abandoned) === 1 || args.include_abandoned === true;
 
-  const where: string[] = ['session_id = ?'];
-  const params: (string | number)[] = [sessionId];
+  if (scope === 'session' && !sessionId) return { error: 'Missing session_id for scope=session' };
+
+  const where: string[] = [];
+  const params: (string | number)[] = [];
+  if (scope === 'session') {
+    where.push('session_id = ?');
+    params.push(sessionId);
+  } else {
+    where.push("created_at >= datetime('now', ?)");
+    params.push(`-${days} days`);
+  }
   if (skillType) {
     where.push('skill_type = ?');
     params.push(skillType);
@@ -172,7 +170,8 @@ export function recentPractice(db: DatabaseSync, args: Record<string, unknown>):
 
   const rows = db.prepare(`
     SELECT id, created_at, skill_type, completed, accuracy, raw_score, max_score,
-           prompt, prompt_hash, ui_feedback, parent_sample_id, redo_count, metadata
+           prompt, prompt_hash, parent_sample_id, assistance_level, mode,
+           band_overall, metadata
     FROM samples
     WHERE ${where.join(' AND ')}
     ORDER BY created_at DESC, id DESC
@@ -195,19 +194,9 @@ export function recentPractice(db: DatabaseSync, args: Record<string, unknown>):
   return {
     ok: true,
     action: 'recent_practice',
+    scope,
     rows: decoded,
     count: decoded.length,
     recent_prompt_hashes,
   };
-}
-
-export function taskComplete(db: DatabaseSync, args: Record<string, unknown>): unknown {
-  const taskId = optionalNumber(args.task_id);
-  if (taskId === null) return { error: 'Missing task_id' };
-  const result = db.prepare(`
-    UPDATE daily_tasks
-    SET completed = 1, completed_at = datetime('now'), sample_id = COALESCE(?, sample_id)
-    WHERE id = ?
-  `).run(optionalNumber(args.sample_id), taskId);
-  return { ok: true, action: 'task_complete', changes: Number(result.changes) };
 }

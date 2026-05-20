@@ -59,7 +59,7 @@ Fallback chain when fewer than `ACC_WINDOW` rows: 14-day mean from `coach_contex
 ### 2.3 Credit gating
 
 ```
-promotion_credit = walk recent_practice.rows newest→oldest (skip redo_count>0):
+promotion_credit = walk recent_practice.rows newest→oldest (skip rows with parent_sample_id IS NOT NULL):
   count consecutive accuracy ≥ PASS; reset on any fail (< FAIL or completed=0); holds ([FAIL, PASS)) pass through.
 demotion_credit = mirror: count consecutive fail; reset on any pass; holds pass through.
 abandoned (completed=0) = 1 fail.
@@ -73,7 +73,7 @@ abandoned (completed=0) = 1 fail.
 | `demotion_credit ≥ STREAK` inside tier (length > min) | Length **−1**; reset `demotion_credit`. |
 | `dict_easier` tap | Persists abandoned row (State B); surfaces as fail next call. |
 
-Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
+Redo rows (`parent_sample_id IS NOT NULL`) skipped from credit; still count for dedup.
 
 Hold: keep length, optionally swap **one** dimension (syntax/accent/connected-speech) to probe a weakness from `coach_context.summary.errors`.
 
@@ -92,7 +92,7 @@ Hold: keep length, optionally swap **one** dimension (syntax/accent/connected-sp
 2. Generate the sentence at chosen length/syntax/accent. Compute `prompt_hash` (§State D); regenerate if dedup hits.
 3. `tts` only for the target sentence at 100% speed. No filler audio.
 4. Send voice + instruction + buttons in **one** `tg_msg type="render"` call. Renders as two bubbles (voice on its own line, then text + buttons) for clean cross-client display — still one tool call.
-5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+5. Init empty `metadata.button_taps` accumulator; every button tap appends its exact label.
 
 Render envelope (all fields at top level, same as `voice`/`keyboard`):
 
@@ -113,7 +113,7 @@ Wait for the typed answer or button tap.
 
 `dict_slow`:
 
-- Append `🐢 慢速播放` to `ui_feedback`.
+- Append `🐢 慢速播放` to `metadata.button_taps`.
 - Brief ack via `tg_msg type="render"` (text only).
 - Same sentence; `tts rate="-10%"`.
 - Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons).
@@ -125,11 +125,11 @@ Wait for the typed answer or button tap.
    ```
    completed=0, accuracy=0, response="",
    feedback="Learner tapped '😵 太难了，换简单点' before answering. Treat as negative evidence at this difficulty/dimension.",
-   ui_feedback="😵 太难了，换简单点", load_score=0, minutes=0,
-   metadata={"abandoned_reason":"too_hard","sentence_words":<n>,"i_plus_one_dimension":"<dim>"}
+   minutes=0,
+   metadata={"button_taps":["😵 太难了，换简单点"],"abandoned_reason":"too_hard","sentence_words":<n>,"i_plus_one_dimension":"<dim>"}
    ```
 
-   After `persist` returns, reset `ui_feedback`.
+   After `persist` returns, reset `metadata.button_taps`.
 
 2. **Replacement.** Apply demotion/length-down (§2.3). Show the previous sentence inside `<tg-spoiler>`. One short note explaining why it was hard. Generate a new simpler sentence → State A.
 
@@ -176,7 +176,7 @@ Minimum payload:
   "skill_type": "listening.dictation",
   "session_id": "<session>",
   "prompt": "<correct sentence>",
-  "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
+  "prompt_hash": "<sha1(normalized prompt) first 12 hex chars>",
   "response": "<user typed answer>",
   "accuracy": 0.75,
   "raw_score": 6,
@@ -184,27 +184,24 @@ Minimum payload:
   "feedback": "<IN ENGLISH for DB / learner-state — the user-facing UI uses the Chinese feedback in §3 State C> The learner missed the weak form 'to' and substituted 'software' with 'soft wear'. This suggests weak word-boundary parsing under connected speech, while the main sentence frame was understood.",
   "audio_path": "<tts file path>",
   "section": "listening",
-  "domain": "listening",
-  "load_score": 1,
   "minutes": 1,
   "mode": "study",
-  "ui_feedback": "<comma-joined exact button labels tapped this round, e.g. '🐢 慢速播放' — empty if none>",
   "metadata": "{\"target_weakness\":\"function_word_miss\",\"i_plus_one_dimension\":\"connected_speech\",\"sentence_words\":8,\"tier\":\"intermediate\",\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
   "errors": "[{\"key\":\"function_word_miss\",\"category\":\"listening\",\"severity\":\"medium\",\"original\":\"\",\"correction\":\"to\",\"note\":\"Missed weak function word in connected speech.\"}]",
   "subcap_scores": "[{\"key\":\"listening.detail_accuracy\",\"score\":6.75,\"evidence\":\"6 of 8 tokens correct.\"},{\"key\":\"listening.connected_speech\",\"score\":5.0,\"evidence\":\"Missed weak form and boundary.\"}]"
 }
 ```
 
-`prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
+`prompt_hash` = first 12 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
 
-`ui_feedback` mandatory if any button was tapped, even on `accuracy=1.0`.
+`metadata.button_taps` mandatory if any button was tapped, even on `accuracy=1.0`.
 
 State D persists attempted sentences only. Abandoned rows are written in State B. Use `response`, never `raw_content`.
 
 ### State E: Continue (`dict_next`)
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
-- Apply §2.3 (skip `redo_count > 0`) before generating.
+- Apply §2.3 before generating.
 - **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next sentence (State A step 2 — incl. dedup).
 

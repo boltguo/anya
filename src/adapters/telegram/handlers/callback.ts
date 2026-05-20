@@ -199,6 +199,7 @@ async function handleAgentCallback(rt: TelegramRuntime, ctx: any, data: string):
 
   // Post thinking status immediately so the click feels responsive
   const statusMsg = await rt.bot.api.sendMessage(chatId, '🧠 Thinking...').catch(() => null);
+  if (statusMsg) rt.trackStatus(chatId, statusMsg.message_id);
 
   rt.enqueuePerChat(chatId, async () => {
     const sessionAdapter = new TelegramSessionAdapter(

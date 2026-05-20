@@ -251,7 +251,7 @@ async function runAgentForJob(config: AnyaConfig, job: CronJob): Promise<string>
     sessionKey: `cron:${job.id}:${Date.now()}`,
     newSession: true,
     toolPolicy: {
-      deny: ['cron', 'tg_msg', 'clarify'],
+      deny: ['cron', 'tg_msg'],
     },
     turnMeta: {
       trigger: 'cron',

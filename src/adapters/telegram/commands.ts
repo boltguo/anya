@@ -151,7 +151,7 @@ function registerRestartCmd(rt: TelegramRuntime): void {
       await ctx.reply('⛔ Unauthorized.');
       return;
     }
-    await handleRestart(ctx, rt.bot);
+    await handleRestart(ctx, rt);
   });
 }
 

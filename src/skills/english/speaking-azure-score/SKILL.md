@@ -13,8 +13,8 @@ Never user-facing. Documents the request/response contract for the `pron_assess`
 | ------ | ------------ |
 | `speaking-shadowing` | Every repeat (first + second) |
 | `speaking-repeat` | Only if pronunciation flagged weak |
-| `speaking-roleplay` | Only on long turns AND pronunciation flagged weak |
-| `speaking-freetalk` | Usually skipped |
+| `speaking-freetalk` (scenario mode) | Only on long turns AND pronunciation flagged weak |
+| `speaking-freetalk` (open mode) | Usually skipped |
 
 ## Request
 

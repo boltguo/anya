@@ -58,7 +58,7 @@ When triggered by cron (not user), evaluate nudge triggers. Most runs should pro
 2. Evaluate triggers in `references/triggers.md` in priority order.
 3. If none fire, output `[SILENT]` and stop.
 4. If one fires, send a short message (≤ 4 sentences) with exactly one action button via `tg_msg type="render"` (text + buttons, no `url`).
-5. Record the push with `persist action="practice"`, `skill_type="planner.proactive"`, `section="coaching"`, `completed=1`, `load_score=0`.
+5. Record the push with `persist action="practice"`, `skill_type="planner.proactive"`, `section="coaching"`, `completed=1`.
 
 **Nudge rules**:
 - **One Focus**: exactly one high-ROI task per nudge. No laundry list.

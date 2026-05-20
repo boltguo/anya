@@ -58,11 +58,6 @@ export async function createSession(sessionKey: string, title?: string): Promise
   return id;
 }
 
-// "Start fresh" entry points (/new, /kill, nav:main, skill commands) used to
-// unconditionally INSERT a new sessions row. Tapping those repeatedly without
-// follow-up was leaving dozens of empty rows behind. This idempotent variant
-// reuses the latest empty row when one exists; only inserts when there's a
-// real session to "shed".
 export async function newOrReuseEmptySession(sessionKey: string): Promise<string> {
   const db = getDb();
   const rows = db.prepare(

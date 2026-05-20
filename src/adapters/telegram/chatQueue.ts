@@ -17,4 +17,14 @@ export class ChatQueue {
       }
     });
   }
+
+  // Wait for all currently-queued tasks to finish, or until timeoutMs elapses.
+  // Returns true if all chains drained cleanly, false on timeout.
+  async drain(timeoutMs: number): Promise<boolean> {
+    const pending = [...this.queues.values()];
+    if (pending.length === 0) return true;
+    const done = Promise.allSettled(pending).then(() => true);
+    const timer = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeoutMs));
+    return Promise.race([done, timer]);
+  }
 }

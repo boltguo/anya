@@ -127,7 +127,8 @@ Reply containing `不认识 / 不会` is treated as `k = 0`.
 ### State 0 — Initialization
 
 1. Read the `profile` row (already loaded in §1). If `current_level` is set, use it as the starting `level` for every dimension instead of the default B1.
-2. Emit a **one-line** spy-themed intro in the SAME `tg_msg(type="render")` call as the first Vocabulary probe (State 1): "5 维侦察启动 🛰️ · 题目会在熟悉 / 陌生领域间切换 · 5–8 分钟搞定". Do NOT send a separate kickoff message and do NOT wait for any "start" button — chain straight into State 1.
+2. **Working state lives in the LLM's reasoning between turns** — no separate state table. Track per dimension across turns: `level`, `signal_history`, `domain_used` (`in`/`non`), `flags` (chinese_dominant / copy_paste / opt_out / replay_used / limited_evidence). If compacted mid-test, read prior `samples` (mode='placement') to rebuild. If user abandons, the test re-runs.
+3. Emit a **one-line** spy-themed intro in the SAME `tg_msg(type="render")` call as the first Vocabulary probe (State 1): "5 维侦察启动 🛰️ · 题目会在熟悉 / 陌生领域间切换 · 5–8 分钟搞定". Do NOT send a separate kickoff message and do NOT wait for any "start" button — chain straight into State 1.
 
 ### State 1 — Vocabulary (≥ 3 rounds)
 
@@ -336,11 +337,41 @@ After the report, call `persist action="onboarding_done" step="placement"` to fl
 
 End the turn after sending the report. Do not auto-chain to `planner`.
 
+### Per-probe persistence (mandatory)
+
+Every probe — vocab batch, listening sentence, speaking prompt, reading passage,
+writing prompt — must be written as its own `samples` row so the placement
+result is auditable and so future `learner-state` runs can rebuild the baseline
+without re-testing.
+
+After receiving the user's reply on each probe:
+
+1. Compute the signal per §3 and update working state (in your own reasoning, between turns).
+2. **Persist the probe as a sample** via `persist action="practice"` with:
+
+   | Field | Value |
+   |-------|-------|
+   | `skill_type` | `placement.vocab` / `placement.listening` / `placement.speaking` / `placement.reading` / `placement.writing` |
+   | `mode` | `"placement"` |
+   | `prompt` | the probe content (English sentence / audio script / passage / scenario) |
+   | `response` | the user's raw reply (Chinese gist + EN keywords for listening; STT transcript for speaking) |
+   | `feedback` | one-line English diagnostic (e.g. "Caught gist; missed both content words.") |
+   | `accuracy` | for vocab: `k/5`; for others: signal-derived (up=1.0, hold-up=0.75, hold-down=0.5, down=0.25) |
+   | `metadata` | JSON `{"signal":"up","level":"B1","domain":"in","round":1,"flags":[]}` — including the working state slice that mattered to this probe |
+
+   `study_session_id` is auto-resolved from `session_id` if you don't pass it.
+
+   This is what makes the placement evidence reusable. If you skip these writes, the only artifact is the final report — non-auditable, non-redoable.
+
+3. After all 5 dimensions settle, write `profile_upsert` + `progress_snapshot` + `onboarding_done`. The placement samples already in DB carry full evidence; no extra "close" step needed.
+
+If the user abandons mid-test: no special action needed. The probe samples already in DB are partial evidence; on next placement run we ignore them and start fresh. Placement is short enough (8–12 min) that "re-test on abort" is the right tradeoff vs. carrying state.
+
 ## 5. Anti-Hallucination Reminders
 
 - Execute **one state action per turn**, then STOP. Wait for the user.
 - Never simulate / pre-fill the user's reply.
-- Track per dimension across turns: `level`, `signal_history`, `domain_used` (`in / non`), `flags` (chinese_dominant / copy_paste / opt_out / replay_used / limited_evidence). Do not lose them between probes.
+- **State lives in your reasoning between turns + the placement samples you've already written.** If chat history gets compacted, you can read recent `samples WHERE mode='placement'` via `recent_practice` to reconstruct what's been asked.
 - The 3-round minimum is non-negotiable for Vocab / Listening / Reading.
 - **Domain rotation Round 2 is mandatory** for Listening / Speaking / Reading. Skipping forces `confidence = low`.
 - Output schema MUST be the 3-tuple `{general_level, domain_level, confidence}` per dimension. Do not collapse to a single CEFR when writing the `notes` field in `profile_upsert`; per-dimension granularity must survive.

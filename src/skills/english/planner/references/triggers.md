@@ -92,4 +92,4 @@ Build a 2-week rotation from weak dims + exam proximity. Present as a short tabl
 
 - Use `tg_msg(type:"text")` for all pushes.
 - Everything else is a plain message.
-- Record the push with `skill_type='coach.proactive'`, `prompt=<trigger>`, `load_score=0`.
+- Record the push with `skill_type='coach.proactive'`, `prompt=<trigger>`.

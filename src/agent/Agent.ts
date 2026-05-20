@@ -183,7 +183,11 @@ export class Agent {
         messages.push(assistantMsg);
         newMessages.push(assistantMsg);
 
-        for (const toolCall of response.toolCalls) {
+        let terminalTg = false;
+        const lastIndex = response.toolCalls.length - 1;
+
+        for (let i = 0; i < response.toolCalls.length; i++) {
+          const toolCall = response.toolCalls[i];
           if (this.config.ui.show_tool_calls && this.adapter.showToolCall) {
             this.adapter.showToolCall(toolCall.name, toolCall.args);
           }
@@ -200,6 +204,7 @@ export class Agent {
               const parsed = JSON.parse(result.content);
               if (parsed.ok && parsed.sent_content) {
                 tgSent = true;
+                if (i === lastIndex) terminalTg = true;
               }
             } catch { /* non-JSON result — don't set tgSent */ }
           }
@@ -216,6 +221,16 @@ export class Agent {
           };
           messages.push(toolMsg);
           newMessages.push(toolMsg);
+        }
+
+        // Short-circuit: if the last tool call was tg_msg that successfully sent
+        // user-visible content, end the turn — no point invoking the LLM again
+        // just to generate trailing ack text that the adapter would discard.
+        if (terminalTg) {
+          agentLogger.info({ msg: 'agent_terminal_tg', sessionId, loop, totalToolCalls });
+          const degraded = degradeForStorage(newMessages);
+          await saveMessages(sessionId, degraded);
+          return { content: '', sessionId, toolCallCount: totalToolCalls, tgSent };
         }
 
         continue;

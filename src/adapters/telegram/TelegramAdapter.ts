@@ -35,6 +35,7 @@ export class TelegramAdapter implements TelegramRuntime {
   readonly pendingChoices = new Map<string, PendingChoice>();
   readonly activePolls = new Map<string, ActivePoll>();
   readonly paginatedMessages = new Map<number, PaginatedMessage>();
+  readonly liveStatusMessages = new Map<number, number>();
 
   private readonly chatQueue = new ChatQueue();
 
@@ -61,8 +62,26 @@ export class TelegramAdapter implements TelegramRuntime {
     this.chatQueue.enqueue(chatId, task);
   }
 
-  startTurn(ctx: Context, initialText?: string): Promise<TurnIndicators> {
-    return startTurn(ctx, initialText);
+  drainQueue(timeoutMs: number): Promise<boolean> {
+    return this.chatQueue.drain(timeoutMs);
+  }
+
+  trackStatus(chatId: number, messageId: number): void {
+    this.liveStatusMessages.set(chatId, messageId);
+  }
+
+  clearStatus(chatId: number, messageId: number): void {
+    if (this.liveStatusMessages.get(chatId) === messageId) {
+      this.liveStatusMessages.delete(chatId);
+    }
+  }
+
+  async startTurn(ctx: Context, initialText?: string): Promise<TurnIndicators> {
+    const out = await startTurn(ctx, initialText);
+    if (out.statusMessageId && ctx.chat) {
+      this.trackStatus(ctx.chat.id, out.statusMessageId);
+    }
+    return out;
   }
 
   async sendProactiveMessage(chatId: number, text: string): Promise<void> {

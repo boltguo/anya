@@ -1,4 +1,4 @@
-// domain/helpers.ts — shared domain types and SQL utilities
+// storage/study/helpers.ts — shared domain types and SQL utilities
 
 import type { DatabaseSync } from 'node:sqlite';
 
@@ -13,7 +13,10 @@ export interface ErrorEntry {
 
 export interface SubcapEntry {
   key: string;
-  score: number;
+  // Skills write on the canonical 0-10 scale. Legacy `score` is accepted as an
+  // alias for `value` and treated identically (no rescaling).
+  value?: number;
+  score?: number;
   evidence?: string;
 }
 
@@ -29,7 +32,6 @@ export interface WordEntry {
   topics?: string;
   example_en?: string;
   example_cn?: string;
-  audio_path?: string;
   mastery?: string;
   origin?: string;
   source_sample_id?: number;
@@ -112,6 +114,7 @@ export function inferSection(skillType: string): string {
   if (skillType.startsWith('writing')) return 'writing';
   if (skillType.startsWith('reading')) return 'reading';
   if (skillType.startsWith('vocab')) return 'vocab';
+  if (skillType.startsWith('placement')) return 'placement';
   return 'other';
 }
 
@@ -123,32 +126,21 @@ export function severityScore(severity: string): number {
   }
 }
 
-export function upsertActivity(db: DatabaseSync, minutes: number, section: string, wordsReviewed: number, newWordsAdded: number): void {
-  db.prepare(`
-    INSERT INTO activity_log (date, sessions_count, minutes_total, sections_touched, words_reviewed, new_words_added)
-    VALUES (date('now'), ?, ?, ?, ?, ?)
-    ON CONFLICT(date) DO UPDATE SET
-      sessions_count = activity_log.sessions_count + excluded.sessions_count,
-      minutes_total = activity_log.minutes_total + excluded.minutes_total,
-      words_reviewed = activity_log.words_reviewed + excluded.words_reviewed,
-      new_words_added = activity_log.new_words_added + excluded.new_words_added,
-      sections_touched = CASE
-        WHEN excluded.sections_touched = '' THEN activity_log.sections_touched
-        WHEN activity_log.sections_touched = '' THEN excluded.sections_touched
-        WHEN INSTR(activity_log.sections_touched, excluded.sections_touched) > 0 THEN activity_log.sections_touched
-        ELSE activity_log.sections_touched || ',' || excluded.sections_touched
-      END
-  `).run(minutes > 0 ? 1 : 0, Math.max(0, minutes), section, wordsReviewed, newWordsAdded);
+// ─── Error-key whitelist validation ───────────────────────────────────────
+
+const _errorKeyCache = new Set<string>();
+let _errorKeyCacheLoaded = false;
+
+export function isValidErrorKey(db: DatabaseSync, key: string): boolean {
+  if (!_errorKeyCacheLoaded) {
+    const rows = db.prepare('SELECT key FROM error_keys').all() as Array<{ key: string }>;
+    for (const r of rows) _errorKeyCache.add(r.key);
+    _errorKeyCacheLoaded = true;
+  }
+  return _errorKeyCache.has(key);
 }
 
-// Incremental running mean: avg' = (avg*n + x) / (n+1)
-export function upsertBandTrend(db: DatabaseSync, section: string, bandOverall: number, source: string): void {
-  db.prepare(`
-    INSERT INTO band_trend (date, section, band_estimate, sample_count, source)
-    VALUES (date('now'), ?, ?, 1, ?)
-    ON CONFLICT(date, section) DO UPDATE SET
-      band_estimate = ROUND((band_trend.band_estimate * band_trend.sample_count + excluded.band_estimate) / (band_trend.sample_count + 1), 2),
-      sample_count = band_trend.sample_count + 1,
-      source = excluded.source
-  `).run(section, bandOverall, source);
+export function _invalidateErrorKeyCache(): void {
+  _errorKeyCache.clear();
+  _errorKeyCacheLoaded = false;
 }

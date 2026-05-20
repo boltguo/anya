@@ -28,6 +28,8 @@ export interface TelegramRuntime {
   readonly pendingChoices: Map<string, PendingChoice>;
   readonly activePolls: Map<string, ActivePoll>;
   readonly paginatedMessages: Map<number, PaginatedMessage>;
+  // chatId → latest live status message id (orphan-cleanup target on restart)
+  readonly liveStatusMessages: Map<number, number>;
 
   enqueuePerChat(chatId: number, task: () => Promise<void>): void;
   startTurn(ctx: Context, initialText?: string): Promise<TurnIndicators>;
@@ -40,4 +42,7 @@ export interface TelegramRuntime {
   ): Promise<void>;
   cancelPending(): number;
   sendProactiveMessage(chatId: number, text: string): Promise<void>;
+  drainQueue(timeoutMs: number): Promise<boolean>;
+  trackStatus(chatId: number, messageId: number): void;
+  clearStatus(chatId: number, messageId: number): void;
 }

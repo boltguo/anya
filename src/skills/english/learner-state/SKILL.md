@@ -18,14 +18,12 @@ Data-driven MEMORY refresh and long-arc learning-state owner. Uses `persist acti
 ### State A: Data Extraction
 Execute the following actions:
 1. Call `persist` with `{"action":"coach_context","days":14,"limit":8}`.
-2. Call `persist` with `{"action":"progress_trend","limit":8}` when comparing against previous frozen weeks.
-3. Use `memory` tool (`target="memory"`, `action="read"`) to get the current baseline.
+2. Call `persist` with `{"action":"learner_state_scores","days":14}` — **this is the canonical EMA**. Returns `scores.{listening,speaking,reading,writing}` already EMA-blended against the previous frozen snapshot, plus `confidence` (high/medium/low) and `sample_counts`. **Do NOT recompute EMA in the LLM** — that path is removed; the server math is authoritative.
+3. Call `persist` with `{"action":"progress_trend","limit":8}` when comparing against previous frozen weeks.
+4. Use `memory` tool (`target="memory"`, `action="read"`) to get the current baseline.
 
 ### State B: Computation & Persistence
-1. **EMA Computation**: For each skill from Q1, compute the new score (0-100 scale). 
-   - `α = min(0.6, n / 10)`
-   - `new_score = α × db_avg + (1 - α) × memory_score`
-   - If `memory_score` is missing, use `db_avg` directly.
+1. **Use the scores from `learner_state_scores`**. The four 0–100 scores, the confidence label, and the previous-snapshot baseline are already on the response. The only LLM job here is to **write narrative** around them, not to do arithmetic.
 2. **Write to MEMORY.md** with `memory` tool (`action=replace`). The file has exactly four sections — `Calibration`, `Capabilities`, `Coaching Strategy`, `Metacognition`. Write only these:
    - `Calibration`: confidence (low/med/high based on `n`), last_updated.
    - `Capabilities`: `overall` cefr; per-skill `score (0–100) · cefr` for listening/speaking/reading/writing; for vocabulary write receptive/productive levels only; for grammar write mastered/weak/unstable_under_pressure tags (short comma list).
@@ -34,10 +32,10 @@ Execute the following actions:
    - **Do NOT duplicate `learner_profile` fields** (target_exam, target_level, exam_date, current_level, etc.) — they live in `study.db` and are read via `coach_context` when needed.
    - **Do NOT add sections** like `Level`, `Weak Spots`, `Study Consistency`, `Strong Dimensions`, per-skill `Listening/Speaking/Reading/Writing Profile`. Activity counts, weakest-subcap examples, and target dates are live data — pull from `coach_context` at delivery time.
    - **Compact-write rules**: omit any field whose value would be "n/a", "not tested", 0, or "none". One line per bullet; no paragraphs.
-3. **Weekly Snapshot**: If this is a manual progress report, weekly cron run, or meaningful state refresh, compute the snapshot fields from `coach_context`, `progress_trend`, and MEMORY, then call `persist action="progress_snapshot"` with the computed values:
-   - `current_level`, four skill scores, vocabulary counts, total minutes, active days, sample/session counts, due-word count, weakest subcaps JSON, top errors JSON, and notes.
-   - This writes `progress_snapshots`. `persist` only upserts the provided values; it does not decide scores or learner state.
-   - Do not let ordinary practice skills write this table.
+3. **Weekly Snapshot**: If this is a manual progress report, weekly cron run, or meaningful state refresh, call `persist action="progress_snapshot"`. You can either:
+   - **Pass only the non-score fields** (`current_level`, vocab counts, minutes, active days, weak_subcaps JSON, top_errors JSON, notes). Persist will fall back to the same `learner_state_scores` EMA for the four section scores. **This is the recommended path.**
+   - **Pass explicit scores** only if you have an out-of-band reason to override (e.g. placement just finished).
+   - Either way, `persist` writes `progress_snapshots`. Do not let ordinary practice skills write this table.
 4. Do not use the `db` tool. `band_trend` is maintained incrementally by `persist action="practice"`; `progress_snapshots` is maintained by `learner-state`; MEMORY is the prompt-facing summary.
 
 ### State C: Delivery (UI)
@@ -78,7 +76,7 @@ Use `tg_msg(type="render")` (text + buttons, no `url`) to present a **compact, s
 
 ## 3. Hard Rules
 1. **No Advice**: You are a data analyst, not a coach. Do not tell them *how* to fix the errors. Just report the data with concrete examples.
-2. **Compute, Don't Guess**: Use the EMA formula. Do not make up numbers.
+2. **Numbers come from `learner_state_scores`**, not LLM arithmetic. The server has the EMA formula and the previous-snapshot baseline; trust it. If you find yourself multiplying or rounding scores by hand, you've gone off-script.
 3. **Own Learning State**: Durable ability summaries, weekly snapshots, and MEMORY level records belong here. Other practice skills only write evidence through `persist action="practice"`.
 4. **Compact output**: The entire report should fit in ~10 lines. No paragraphs, no numbered sub-lists under each weakness. One line per item.
 5. **No raw keys**: Never expose database column names or error keys to the user. Always translate to Chinese.

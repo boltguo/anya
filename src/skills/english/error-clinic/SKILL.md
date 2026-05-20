@@ -80,4 +80,4 @@ The `drill_callback` in trailing buttons should route to the **first page's** re
 5. **Empathetic tone.** Treat errors as normal learning signals. Brief encouragement on page 1 (1 line max).
 6. Use `persist` for reads; no raw DB. This skill is **read-only** — do not write any data.
 7. **`---PAGE---` delimiter.** Pages MUST be separated by exactly `---PAGE---` (3 dashes, PAGE, 3 dashes). No other delimiter.
-8. **`paginate` is the only non-render type in this skill.** The empty-state fallback uses `tg_msg type="render"`. `paginate` stays separate because it owns multi-page client-side flipping that render can't replicate.
+8. **`paginate` for the multi-page report; `render` for the empty-state fallback.**

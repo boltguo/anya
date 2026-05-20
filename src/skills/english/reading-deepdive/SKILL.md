@@ -70,7 +70,7 @@ Fallback chain when fewer than `ACC_WINDOW` rows: 14-day mean from `coach_contex
 ### 2.3 Credit gating
 
 ```
-promotion_credit = walk recent_practice.rows newest→oldest (skip redo_count>0):
+promotion_credit = walk recent_practice.rows newest→oldest (skip rows with parent_sample_id IS NOT NULL):
   count consecutive accuracy ≥ PASS; reset on any fail (< FAIL or completed=0); holds ([FAIL, PASS)) pass through.
 demotion_credit = mirror.
 abandoned (completed=0) = 1 fail.
@@ -84,11 +84,11 @@ abandoned (completed=0) = 1 fail.
 | `demotion_credit ≥ STREAK` inside tier | Words **−30** (clamped to tier min); reduce embedded clauses; reset `demotion_credit`. |
 | `dd_abandon` tap | Persists abandoned row (State B); surfaces as fail next call. |
 
-Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
+Redo rows (`parent_sample_id IS NOT NULL`) skipped from credit; still count for dedup.
 
 Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptive within the tier's allowed range).
 
-`dd_help` taps do NOT change credit (they're scaffolds, not signals of failure). They are recorded in `ui_feedback` so a "got the logic only after help" attempt is visible to `learner-state`.
+`dd_help` taps do NOT change credit (they're scaffolds, not signals of failure). They are recorded in `metadata.button_taps` so a "got the logic only after help" attempt is visible to `learner-state`.
 
 ### 2.4 Generation
 
@@ -97,6 +97,7 @@ Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptiv
 - Reject any passage whose `prompt_hash` ∈ `recent_practice.recent_prompt_hashes`.
 - Don't repeat the same genre family for 2+ consecutive rounds.
 - Each passage MUST have at least one **killer sentence** (long subordinate / inverted / heavily nominalized) so `dd_help` has something to operate on.
+- **i+1 lexical guard**: aim for ~95% of content words to come from items the user has already encountered. The `coach_context` response carries `summary.vocab` mastery counts plus recent harvested chunks; lean on those before introducing new vocabulary. **At most 3 truly new words per passage** — and those 3 should be the ones you intend to auto-harvest at the end. If you find yourself wanting more, the passage is above i+1; drop one dimension instead of stretching vocabulary.
 
 ## 3. Flow
 
@@ -119,14 +120,14 @@ Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptiv
    [["🆘 看不太懂|dd_help", "🛑 太难了换一篇|dd_abandon"]]
    ```
 
-5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+5. Init empty `metadata.button_taps` accumulator; every button tap appends its exact label.
 6. Wait for user's typed answer or button tap. The user reads at their own pace.
 
 ### State B: Button Handling (before answering)
 
 `dd_help`:
 
-- Append `🆘 看不太懂` to `ui_feedback`.
+- Append `🆘 看不太懂` to `metadata.button_taps`.
 - Send **text-only** scaffolding via `tg_msg type="render"` (text only, no `url`/`buttons`) combining:
   - **生词**: 3 hardest words with IPA + Chinese gloss + in-passage usage
   - **长难句**: break down the killer sentence (Subject → Verb → Object → modifiers)
@@ -140,8 +141,8 @@ Hold: keep length / tier; swap genre (narrative ↔ argumentative ↔ descriptiv
    ```
    completed=0, accuracy=0, response="",
    feedback="Learner tapped '🛑 太难了换一篇'. Treat as strong negative evidence at this tier/genre.",
-   ui_feedback="<accumulated labels including 🛑 太难了换一篇>", load_score=0, minutes=0,
-   metadata={"abandoned_reason":"too_hard","tier":"<beginner|intermediate|advanced>","words":<n>,"genre":"<genre>"}
+   minutes=0,
+   metadata={"button_taps":["<accumulated labels including 🛑 太难了换一篇>"],"abandoned_reason":"too_hard","tier":"<beginner|intermediate|advanced>","words":<n>,"genre":"<genre>"}
    ```
 
 2. **Replacement.** Apply demotion (§2.3). Brief Chinese ack via `tg_msg type="render"` (text only), generate a shorter / easier passage → State A.
@@ -155,7 +156,7 @@ When the user submits their logic recap:
 3. Compute subcap scores:
    - `reading.gist` (0–10) ≈ `accuracy * 10` refined with one-line evidence.
    - `reading.syntax_parsing` (0–10) — set lower if `dd_help` was tapped (means killer-sentence wasn't self-parseable).
-4. **Auto Vocabulary Harvest**: extract 2–3 high-value collocations / chunks from the passage (not single common words). For each, call `persist action="word_upsert"` with `mastery="queued_new"`, `is_user_word=0`, `origin="reading.deepdive"`, plus the exact in-passage sentence as `example_sentence`.
+4. **Auto Vocabulary Harvest**: extract 2–3 high-value collocations / chunks from the passage (not single common words). For each, call `persist action="word_upsert"` with `mastery="queued_new"`, `is_user_word=0`, `origin="reading.deepdive"`, plus the exact in-passage sentence as `example_en`.
 5. **Persist FIRST, THEN feedback**. Sequential.
 
 Feedback message must include:
@@ -184,27 +185,24 @@ Minimum payload:
   "skill_type": "reading.deepdive",
   "session_id": "<session>",
   "prompt": "<the full passage text>",
-  "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
+  "prompt_hash": "<sha1(normalized prompt) first 12 hex chars>",
   "response": "<user's logic recap, exactly as typed>",
   "accuracy": 0.70,
   "raw_score": 0.70,
   "max_score": 1,
   "feedback": "<IN ENGLISH for DB / learner-state> Captured the main claim (renewable energy adoption is uneven across regions) but missed the pivot — the passage's argument is that this unevenness is mostly driven by policy, not technology. Killer sentence (line 3) had a fronted concessive clause that scaffolding helped them parse.",
   "section": "reading",
-  "domain": "reading",
-  "load_score": 2,
   "minutes": 4,
   "mode": "study",
-  "ui_feedback": "<comma-joined exact button labels tapped this round, e.g. '🆘 看不太懂' — empty if none>",
   "metadata": "{\"tier\":\"intermediate\",\"words\":180,\"genre\":\"argumentative\",\"killer_sentence_idx\":2,\"harvested_chunks\":[\"uneven adoption\",\"policy-driven\"],\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
   "errors": "[{\"key\":\"inference_error\",\"category\":\"reading\",\"severity\":\"medium\",\"original\":\"\",\"correction\":\"\",\"note\":\"Attributed the unevenness to technology gap; passage's pivot was that policy is the actual driver.\"}]",
   "subcap_scores": "[{\"key\":\"reading.gist\",\"score\":7.0,\"evidence\":\"Main claim correct; pivot direction missed.\"},{\"key\":\"reading.syntax_parsing\",\"score\":6.0,\"evidence\":\"Used dd_help scaffold — fronted concessive needed help.\"}]"
 }
 ```
 
-`prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace.
+`prompt_hash` = first 12 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace.
 
-`ui_feedback` mandatory if any button was tapped (including the read-aid scaffolds).
+`metadata.button_taps` mandatory if any button was tapped (including the read-aid scaffolds).
 
 State D persists fully-attempted passages only. Abandoned rows are written in State B.
 
@@ -213,7 +211,7 @@ In **parallel** to this practice persist, call `word_upsert` for each harvested 
 ### State E: Continue (`dd_next`)
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup.
-- Apply §2.3 (skip `redo_count > 0`) before generating.
+- Apply §2.3 before generating.
 - **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next passage (State A step 2 — incl. dedup). Respect "no same genre family twice in a row" (§2.4).
 
@@ -240,7 +238,7 @@ In **parallel** to this practice persist, call `word_upsert` for each harvested 
 2. **The "Why" rule.** When parsing a killer sentence, do NOT just translate. Explain *how* the grammar holds the sentence together (which clause modifies which, why the verb is fronted, etc.).
 3. **One killer sentence parsed every round** — even on `accuracy=1.0`. The deep-dive's value is the syntax lesson, not just the score.
 4. **Auto-harvest 2-3 chunks per passage.** Single common words don't count — must be collocations / phrasal verbs / discourse markers / domain phrases.
-5. **Scaffolds aren't penalties.** `dd_help` taps are recorded in `ui_feedback` but do NOT lower `accuracy` directly. The rubric grades the recap, not the path to it.
+5. **Scaffolds aren't penalties.** `dd_help` taps are recorded in `metadata.button_taps` but do NOT lower `accuracy` directly. The rubric grades the recap, not the path to it.
 6. **No forced keyboard.** The user reads at their own pace.
 7. Use `persist` for reads/writes; no raw DB.
 8. Don't update `MEMORY.md`; `learner-state` owns durable ability state.

@@ -16,7 +16,7 @@ Trigger when:
 
 Required context before generating:
 
-1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.podcast","limit":20}` (`limit` int, not `"DEDUP_WINDOW"` string — `Number()` would NaN it). Returns rows with `accuracy` (rubric 0..1), `prompt_hash`, `ui_feedback`, decoded `metadata` + flat `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup.
+1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.podcast","limit":20}` (`limit` int, not `"DEDUP_WINDOW"` string — `Number()` would NaN it). Returns rows with `accuracy` (rubric 0..1), `prompt_hash`, decoded `metadata` (incl. `button_taps`) + flat `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup.
 2. `persist {"action":"coach_context","days":14,"limit":8}` for subcaps / errors / due tasks. Slow signal — only re-call when tier changes.
 3. `MEMORY.md` / `USER.md` only as fallback. No raw `study.db` access.
 
@@ -71,7 +71,7 @@ Fallback chain when fewer than `ACC_WINDOW` rows: 14-day `listening.gist` averag
 ### 2.3 Credit gating
 
 ```
-promotion_credit = walk recent_practice.rows newest→oldest (skip redo_count>0):
+promotion_credit = walk recent_practice.rows newest→oldest (skip rows with parent_sample_id IS NOT NULL):
   count consecutive accuracy ≥ PASS; reset on any fail (< FAIL or completed=0); holds ([FAIL, PASS)) pass through.
 demotion_credit = mirror: count consecutive fail; reset on any pass; holds pass through.
 abandoned (completed=0, written by `pod_hard`) = 1 fail.
@@ -85,7 +85,7 @@ abandoned (completed=0, written by `pod_hard`) = 1 fail.
 | `demotion_credit ≥ STREAK` inside tier | Length **−15s** (clamped to tier min); reset `demotion_credit`. |
 | `pod_hard` tap | Persists abandoned row (State B); surfaces as fail next call. |
 
-Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
+Redo rows (`parent_sample_id IS NOT NULL`) skipped from credit; still count for dedup.
 
 Hold: keep length, optionally swap **one** dimension (topic / filler density / accent) to probe a different weakness.
 
@@ -104,7 +104,7 @@ Hold: keep length, optionally swap **one** dimension (topic / filler density / a
 1. From §2.3, decide tier and script length. Generate the script at chosen length / topic / register / filler density. Compute `prompt_hash` (§State D); regenerate on dedup hit.
 2. `tts` only for the target script at 100% speed. No filler audio (filler is in the script, not assistant chatter).
 3. Send voice + instruction + buttons in **one** `tg_msg type="render"` call. Renders as two bubbles (voice on its own line, then text + buttons) for clean cross-client display — still one tool call.
-4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+4. Init empty `metadata.button_taps` accumulator; every button tap appends its exact label.
 
 Render envelope (all fields at top level, same as `voice`/`keyboard`):
 
@@ -125,7 +125,7 @@ Wait for the user's typed Chinese summary or button tap.
 
 `pod_slow`:
 
-- Append `🐢 慢速播放` to `ui_feedback` (mandatory).
+- Append `🐢 慢速播放` to `metadata.button_taps` (mandatory).
 - Brief ack via `tg_msg type="render"` (text only).
 - Same script; `tts rate="-10%"`.
 - Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons). Wait.
@@ -142,21 +142,18 @@ Wait for the user's typed Chinese summary or button tap.
      "completed": 0,
      "accuracy": 0,
      "prompt": "<the original English script that was abandoned>",
-     "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
-     "response": "",
+     "prompt_hash": "<sha1(normalized prompt) first 12 hex chars>",
+     "response": "[abandoned]",
      "feedback": "Learner tapped '完全听不懂' before answering. Treat as strong negative evidence at the current tier.",
      "audio_path": "<tts file path of the abandoned audio>",
-     "ui_feedback": "😵 完全听不懂",
      "section": "listening",
-     "domain": "listening",
-     "load_score": 0,
      "minutes": 0,
      "mode": "study",
      "metadata": "{\"abandoned_reason\":\"too_hard\",\"tier\":\"<beginner|intermediate|advanced>\",\"script_seconds\":<approx>}"
    }
    ```
 
-   After `persist` returns, reset `ui_feedback`.
+   After `persist` returns, reset `metadata.button_taps`.
 
 2. **Replacement.** Apply demotion / length-down (§2.3). Brief ack via `tg_msg type="render"` (text only), briefly explain the topic in Chinese for context, generate a new shorter / simpler script → State A.
 
@@ -193,7 +190,7 @@ Minimum payload:
   "skill_type": "listening.podcast",
   "session_id": "<session>",
   "prompt": "<the podcast script>",
-  "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
+  "prompt_hash": "<sha1(normalized prompt) first 12 hex chars>",
   "response": "<user's Chinese summary>",
   "accuracy": 0.70,
   "raw_score": 0.70,
@@ -201,25 +198,22 @@ Minimum payload:
   "feedback": "<IN ENGLISH: did they grasp the gist? what was the pivot? what carried the main idea?>",
   "audio_path": "<tts file path>",
   "section": "listening",
-  "domain": "listening",
-  "load_score": 2,
   "minutes": 1,
-  "ui_feedback": "<comma-joined exact labels of every button tapped this round, e.g. '🐢 慢速播放' — empty if no button tapped>",
   "metadata": "{\"tier\":\"intermediate\",\"script_seconds\":60,\"topic\":\"daily_life\",\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
   "subcap_scores": "[{\"key\":\"listening.gist\",\"score\":7.0,\"evidence\":\"<IN ENGLISH: e.g. Understood main topic but missed the pivot at 'However'>\"}]"
 }
 ```
 
-`prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
+`prompt_hash` = first 12 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
 
-`ui_feedback` mandatory whenever any 🐢/😵 button was tapped, even on a high `accuracy`.
+`metadata.button_taps` mandatory whenever any 🐢/😵 button was tapped, even on a high `accuracy`.
 
 State D persists fully-attempted scripts only (with or without slow-down). Abandoned rows are written in State B.
 
 ### State E: Continue (`pod_next`)
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
-- Apply §2.3 (skip `redo_count > 0`) before generating.
+- Apply §2.3 before generating.
 - **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next script (State A step 1 — incl. dedup). Respect "no more than 2 consecutive same topic family" (§2.4).
 

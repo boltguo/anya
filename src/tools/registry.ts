@@ -14,7 +14,6 @@ export async function registerAllTools(): Promise<void> {
     import('../tools/webSearch.js'),
     import('../tools/memory.js'),
     import('../tools/skill.js'),
-    import('../tools/clarify.js'),
     import('../tools/telegram.js'),
     import('../tools/tts.js'),
     import('../tools/pronAssess.js'),

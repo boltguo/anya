@@ -60,7 +60,7 @@ Fallback chain when fewer than `ACC_WINDOW` rows: 14-day mean from `coach_contex
 ### 2.3 Credit gating
 
 ```
-promotion_credit = walk recent_practice.rows newest→oldest (skip redo_count>0):
+promotion_credit = walk recent_practice.rows newest→oldest (skip rows with parent_sample_id IS NOT NULL):
   count consecutive accuracy ≥ PASS; reset on any fail (< FAIL or completed=0); holds ([FAIL, PASS)) pass through.
 demotion_credit = mirror: count consecutive fail; reset on any pass; holds pass through.
 abandoned (completed=0) = 1 fail.
@@ -74,7 +74,7 @@ abandoned (completed=0) = 1 fail.
 | `demotion_credit ≥ STREAK` inside tier | Words **−50** (clamped to tier min); skim window relaxed (+5s); reset `demotion_credit`. |
 | `skim_hard` tap | Persists abandoned row (State B); surfaces as fail next call. |
 
-Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
+Redo rows (`parent_sample_id IS NOT NULL`) skipped from credit; still count for dedup.
 
 Hold: keep word count + skim window, swap topic family to probe a different weakness.
 
@@ -116,7 +116,7 @@ Hold: keep word count + skim window, swap topic family to probe a different weak
    [["🆘 看不太懂|skim_help", "✅ 准备好了|skim_ready", "🛑 太难了|skim_hard"]]
    ```
 
-5. Init empty `ui_feedback` accumulator.
+5. Init empty `metadata.button_taps` accumulator.
 6. Wait for `skim_ready` tap, timer expiry, or other button tap.
 
 ### State B: Answering
@@ -130,7 +130,7 @@ When the user taps `✅ 准备好了` (`skim_ready`), the timer expires, or taps
 
 `skim_help`:
 
-- Append `🆘 看不太懂` to `ui_feedback`.
+- Append `🆘 看不太懂` to `metadata.button_taps`.
 - Send **text-only** scaffolding via `tg_msg type="render"` (text only, no `url`/`buttons`):
   - 3 hardest words with Chinese gloss
   - 1-line structural hint: "注意第二段的转折"
@@ -143,8 +143,8 @@ When the user taps `✅ 准备好了` (`skim_ready`), the timer expires, or taps
    ```
    completed=0, accuracy=0, response="",
    feedback="Learner tapped '🛑 太难了' before answering. Treat as strong negative evidence at this tier/topic.",
-   ui_feedback="🛑 太难了", load_score=0, minutes=0,
-   metadata={"abandoned_reason":"too_hard","tier":"<beginner|intermediate|advanced>","words":<n>,"topic":"<topic>"}
+   minutes=0,
+   metadata={"button_taps":["🛑 太难了"],"abandoned_reason":"too_hard","tier":"<beginner|intermediate|advanced>","words":<n>,"topic":"<topic>"}
    ```
 
 2. **Replacement.** Apply demotion (§2.3). Brief Chinese ack via `tg_msg type="render"` (text only), generate a shorter / easier passage → State A.
@@ -203,34 +203,31 @@ Minimum payload:
   "skill_type": "reading.skim",
   "session_id": "<session>",
   "prompt": "<the full passage text>",
-  "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
+  "prompt_hash": "<sha1(normalized prompt) first 12 hex chars>",
   "response": "<the user's answers, structured: e.g. 'gist=讲气候政策的折衷; q1=B; q2=C; q3=A; trap=B'>",
   "accuracy": 0.80,
   "raw_score": 4,
   "max_score": 5,
   "feedback": "<IN ENGLISH for DB / learner-state> Got the main idea + 3 of 4 paragraph functions; fell for the keyword trap on the detail MCQ. WPM 285 in a 75s window — pace is healthy at this tier.",
   "section": "reading",
-  "domain": "reading",
-  "load_score": 2,
   "minutes": 2,
   "mode": "study",
-  "ui_feedback": "<comma-joined exact button labels tapped this round, e.g. '▶️ 开始计时' — empty if none>",
   "metadata": "{\"tier\":\"intermediate\",\"words\":510,\"skim_window_sec\":75,\"actual_skim_sec\":70,\"wpm\":285,\"topic\":\"climate_policy\",\"trap_category\":\"keyword_match\",\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
   "errors": "[{\"key\":\"keyword_matching_error\",\"category\":\"reading\",\"severity\":\"medium\",\"original\":\"\",\"correction\":\"\",\"note\":\"Picked the answer whose phrasing literally matched the passage rather than the answer matching the passage's meaning.\"}]",
   "subcap_scores": "[{\"key\":\"reading.gist\",\"score\":8.0,\"evidence\":\"Main idea captured precisely.\"},{\"key\":\"reading.pace\",\"score\":7.5,\"evidence\":\"WPM 285 in a 75s window for an intermediate-tier passage.\"},{\"key\":\"reading.argument_structure\",\"score\":7.0,\"evidence\":\"3 of 4 paragraph functions correct.\"}]"
 }
 ```
 
-`prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace.
+`prompt_hash` = first 12 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace.
 
-`ui_feedback` mandatory if any button was tapped.
+`metadata.button_taps` mandatory if any button was tapped.
 
 State D persists fully-attempted passages only. Abandoned rows are written in State B.
 
 ### State E: Continue (`skim_next`)
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup.
-- Apply §2.3 (skip `redo_count > 0`) before generating.
+- Apply §2.3 before generating.
 - **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next passage (State A step 1 — incl. dedup). Respect "no same topic family twice in a row" (§2.4).
 

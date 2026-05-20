@@ -17,7 +17,7 @@ Trigger when:
 
 Required context before generating:
 
-1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"speaking.shadowing","limit":20}` (`limit` int, not `"DEDUP_WINDOW"` string — `Number()` would NaN it). Returns rows with `accuracy` (= pron accuracy/100), `prompt_hash`, `ui_feedback`, decoded `metadata` + flat `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup.
+1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"speaking.shadowing","limit":20}` (`limit` int, not `"DEDUP_WINDOW"` string — `Number()` would NaN it). Returns rows with `accuracy` (= pron accuracy/100), `prompt_hash`, decoded `metadata` (incl. `button_taps`) + flat `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup.
 2. `persist {"action":"coach_context","days":14,"limit":8}` for subcaps / errors / due phonemes. Slow signal — only re-call when tier changes.
 3. `MEMORY.md` / `USER.md` only as fallback. No raw `study.db` access.
 
@@ -61,7 +61,7 @@ Fallback chain when fewer than `ACC_WINDOW` rows: 14-day mean from `coach_contex
 ### 2.3 Credit gating
 
 ```
-promotion_credit = walk recent_practice.rows newest→oldest (skip redo_count>0):
+promotion_credit = walk recent_practice.rows newest→oldest (skip rows with parent_sample_id IS NOT NULL):
   count consecutive accuracy ≥ PASS; reset on any fail (< FAIL or completed=0); holds ([FAIL, PASS)) pass through.
 demotion_credit = mirror: count consecutive fail; reset on any pass; holds pass through.
 abandoned (completed=0, written by `speak_hard`) = 1 fail.
@@ -75,7 +75,7 @@ abandoned (completed=0, written by `speak_hard`) = 1 fail.
 | `demotion_credit ≥ STREAK` inside tier | Length **−2**; reset `demotion_credit`. |
 | `speak_hard` tap | Persists abandoned row (State B); surfaces as fail next call. |
 
-Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
+Redo rows (`parent_sample_id IS NOT NULL`) skipped from credit; still count for dedup.
 
 Hold: keep length, optionally swap **one** dimension (target phoneme / linking / stress) to probe a different weakness from `coach_context.summary.errors`.
 
@@ -106,14 +106,14 @@ Hold: keep length, optionally swap **one** dimension (target phoneme / linking /
 
    (`||...||` is the Telegram-spoiler shorthand; the adapter expands it to `<tg-spoiler>` HTML. Optional `react: "<emoji>"` reacts the user's last message in the same call.)
 
-4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+4. Init empty `metadata.button_taps` accumulator; every button tap appends its exact label.
 5. Wait for the user's voice message or button tap.
 
 ### State B: Button Handling (before recording)
 
 `speak_slow`:
 
-- Append `🐢 慢速示范` to `ui_feedback` (mandatory).
+- Append `🐢 慢速示范` to `metadata.button_taps` (mandatory).
 - Brief ack via `tg_msg type="render"` (text only).
 - Same sentence; `tts rate="-10%"`.
 - Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons).
@@ -134,17 +134,15 @@ Hold: keep length, optionally swap **one** dimension (target phoneme / linking /
      "response": "",
      "feedback": "Learner tapped '😵 太长了，换短句' before recording. Treat as negative evidence at the current tier.",
      "audio_path": "<tts file path of the abandoned audio>",
-     "ui_feedback": "😵 太长了，换短句",
      "section": "speaking",
      "domain": "speaking",
-     "load_score": 0,
      "minutes": 0,
      "mode": "study",
-     "metadata": "{\"abandoned_reason\":\"too_long\",\"tier\":\"<beginner|intermediate|advanced>\",\"sentence_words\":<n>,\"target_phoneme\":\"<phoneme>\"}"
+     "metadata": "{\"button_taps\":[\"😵 太长了，换短句\"],\"abandoned_reason\":\"too_long\",\"tier\":\"<beginner|intermediate|advanced>\",\"sentence_words\":<n>,\"target_phoneme\":\"<phoneme>\"}"
    }
    ```
 
-   After `persist` returns, reset the round (fresh `ui_feedback` accumulator).
+   After `persist` returns, reset the round (fresh `metadata.button_taps` accumulator).
 
 2. **Replacement.** Apply the demotion / length-down rule from §2.3 (the abandoned row will surface as one fail in the next `recent_practice` call). Brief ack via `tg_msg type="render"` (text only), generate a new shorter sentence → State A.
 
@@ -200,7 +198,7 @@ Example call (one item — `/θ/`):
 }
 ```
 
-Append `🎯 发音示范` to `ui_feedback` so State D records that coaching was given.
+Append `🎯 发音示范` to `metadata.button_taps` so State D records that coaching was given.
 
 ### State D: Persist Evidence
 
@@ -222,11 +220,9 @@ Minimum payload:
   "audio_path": "<tts file path>",
   "section": "speaking",
   "domain": "speaking",
-  "load_score": 2,
   "minutes": 1,
   "mode": "study",
-  "ui_feedback": "<comma-joined exact labels of every button tapped this round, e.g. '🐢 慢速示范' — empty if none>",
-  "metadata": "{\"tier\":\"intermediate\",\"sentence_words\":12,\"target_phoneme\":\"/θ/\",\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
+  "metadata": "{\"button_taps\":[\"🐢 慢速示范\"],\"tier\":\"intermediate\",\"sentence_words\":12,\"target_phoneme\":\"/θ/\",\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
   "errors": "[{\"key\":\"pronunciation_consonant\",\"category\":\"speaking\",\"severity\":\"medium\",\"original\":\"sink\",\"correction\":\"think\",\"note\":\"Substituted /s/ for /θ/ in 'think'.\"}]",
   "subcap_scores": "[{\"key\":\"speaking.pronunciation\",\"score\":8.2,\"evidence\":\"Azure pron accuracy 82; /θ/ failed in 'think'.\"},{\"key\":\"speaking.fluency\",\"score\":7.5,\"evidence\":\"Slight pauses but rhythm preserved.\"}]"
 }
@@ -234,7 +230,7 @@ Minimum payload:
 
 `prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
 
-`ui_feedback` mandatory whenever any 🐢 / 😵 / 🎯 marker was added, even on `accuracy=1.0`.
+`metadata.button_taps` mandatory whenever any 🐢 / 😵 / 🎯 marker was added, even on `accuracy=1.0`.
 
 State D persists fully-attempted sentences only (with or without slow-down). Abandoned-on-too-long rows are written by State B.
 
@@ -243,7 +239,7 @@ Error keys: `pronunciation_vowel`, `pronunciation_consonant`, `pronunciation_str
 ### State E: Continue (`speak_next`)
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
-- Apply §2.3 (skip `redo_count > 0`) before generating.
+- Apply §2.3 before generating.
 - **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next sentence (State A step 1 — incl. dedup, topic rotation per §2.4).
 
@@ -253,7 +249,7 @@ When the user sends another voice message after a sub-pass evaluation (no button
 
 **⚡ Retry cost budget: 2-3 tool calls MAX per retry turn.** Do NOT re-call `recent_practice` or `coach_context` — tier cannot change mid-retry and the prompt is already known.
 
-1. **Recover parent sample** from chat memory (`id`, `prompt`, `prompt_hash`, `audio_path`, `redo_count`). These are all available in the current conversation context — do NOT call `persist` to retrieve them. Only if the session was compacted and chat memory is truly empty, fall back to `persist {"action":"recent_practice","session_id":"<session>","skill_type":"speaking.shadowing","limit":1}`.
+1. **Recover parent sample** from chat memory (`id`, `prompt`, `prompt_hash`, `audio_path`). These are all available in the current conversation context — do NOT call `persist` to retrieve them. Only if the session was compacted and chat memory is truly empty, fall back to `persist {"action":"recent_practice","session_id":"<session>","skill_type":"speaking.shadowing","limit":1}`.
 2. Run `pron_assess` with the recovered `prompt` as `reference_text` and the user's new audio. **(Tool call 1)**
 3. Persist via State D (overrides below) **(Tool call 2)**.
 4. Deliver feedback in **one** `tg_msg type="render"` call **(Tool call 3)**:
@@ -262,7 +258,6 @@ When the user sends another voice message after a sub-pass evaluation (no button
 
    Persist overrides:
    - `parent_sample_id` = previous round's sample `id`
-   - `redo_count` = `(previous.redo_count ?? 0) + 1` (null/missing → 0; first retry → 1)
    - `prompt_hash` = same as previous (intentional collision — same item)
    - `metadata` includes `"is_redo": true` and `"parent_accuracy": <previous accuracy>`
 5. **Coaching TTS rules**:

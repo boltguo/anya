@@ -1,26 +1,42 @@
 // adapters/telegram/restartManager.ts — `/restart` spawn-self logic
 
 import path from 'node:path';
-import type { Bot, Context } from 'grammy';
+import type { Context } from 'grammy';
 import { agentLogger } from '../../lib/logger.js';
+import type { TelegramRuntime } from './runtime.js';
+
+const DRAIN_TIMEOUT_MS = 8000;
 
 // Stop polling, ACK the /restart update so the new child doesn't re-read it,
-// then spawn a detached replacement and exit. The new child reaps any stray
-// gateway processes before claiming the pid file.
-export async function handleRestart(ctx: Context, bot: Bot): Promise<void> {
+// drain in-flight per-chat tasks (with timeout) so we don't kill mid-response,
+// edit any leftover status messages so they don't sit as orphan spinners,
+// then spawn a detached replacement and exit. The new child reaps stray gateways.
+export async function handleRestart(ctx: Context, rt: TelegramRuntime): Promise<void> {
   const updateId = ctx.update.update_id;
   agentLogger.info({ msg: 'tg_restart_command', chatId: ctx.chat?.id, userId: ctx.from?.id, updateId });
   const statusMsg = await ctx.reply('🔄 Restarting gateway...');
 
-  // CRITICAL: stop polling and explicitly ACK this /restart update past Telegram's queue BEFORE
-  // we exit. Otherwise the new child re-reads the same /restart update on its first getUpdates
-  // (offset never advanced) and we loop forever. bot.stop() halts the in-flight long-poll so the
-  // explicit getUpdates below doesn't 409 against ourselves.
+  // CRITICAL: stop polling and ACK this /restart update so the new child doesn't re-read it.
+  // bot.stop() halts the in-flight long-poll so the explicit getUpdates below doesn't 409.
   try {
-    await bot.stop();
-    await bot.api.getUpdates({ offset: updateId + 1, limit: 1, timeout: 0 });
+    await rt.bot.stop();
+    await rt.bot.api.getUpdates({ offset: updateId + 1, limit: 1, timeout: 0 });
   } catch (err) {
     agentLogger.error({ msg: 'tg_restart_ack_failed', error: (err as Error).message });
+  }
+
+  // Let in-flight per-chat tasks finish so we don't kill a half-sent practice question.
+  const drained = await rt.drainQueue(DRAIN_TIMEOUT_MS);
+  agentLogger.info({ msg: 'tg_restart_drain', drained, timeoutMs: DRAIN_TIMEOUT_MS });
+
+  // Anything still in liveStatusMessages = orphan spinner that the user is staring at.
+  // Edit each to a clear "restarted" notice so they don't sit forever as "Thinking...".
+  // Failures (message already deleted by a clean cleanupStatus) are swallowed.
+  for (const [chatId, messageId] of rt.liveStatusMessages) {
+    if (chatId === ctx.chat?.id && messageId === statusMsg.message_id) continue; // skip our own restart banner
+    await rt.bot.api
+      .editMessageText(chatId, messageId, '⚠️ 已被 /restart 打断，重新发条消息继续。')
+      .catch(() => {});
   }
 
   // Clear pid file; the new child will overwrite after reaping any orphan.
@@ -49,7 +65,7 @@ export async function handleRestart(ctx: Context, bot: Bot): Promise<void> {
   agentLogger.info({ msg: 'tg_restart_spawned', newPid: child.pid, updateId });
 
   try {
-    await bot.api.editMessageText(
+    await rt.bot.api.editMessageText(
       ctx.chat!.id,
       statusMsg.message_id,
       `✅ Gateway restarted (PID ${child.pid}).`,

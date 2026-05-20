@@ -20,7 +20,7 @@ function applySchema(db: DatabaseSync, dbName: string): void {
     join(MODULE_DIR, '..', 'storage', 'study', `${dbName}.sql`),    // prod, bundled into dist/bin/anya.js
   ];
   const schemaPath = candidates.find(existsSync);
-  if (!schemaPath) return;
+  if (!schemaPath) throw new Error(`Schema file ${dbName}.sql not found in any of: ${candidates.join(', ')}`);
   db.exec(readFileSync(schemaPath, 'utf-8'));
 }
 
@@ -36,19 +36,12 @@ export function getDatabase(name: string): DatabaseSync {
   }
 
   const dbPath = join(STORE_DIR, `${safeName}.db`);
-  const isNew = !existsSync(dbPath);
   const db = new DatabaseSync(dbPath);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
   db.exec('PRAGMA busy_timeout = 5000');
 
-  // Schemas are idempotent (`CREATE TABLE/INDEX IF NOT EXISTS`), so additive
-  // tables and indexes are picked up for existing DBs on every open.
-  try {
-    applySchema(db, safeName);
-  } catch {
-    if (isNew) throw new Error(`Failed to initialize schema for ${safeName}`);
-  }
+  applySchema(db, safeName);
 
   dbCache.set(safeName, db);
   return db;

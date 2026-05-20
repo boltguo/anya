@@ -41,7 +41,6 @@ export class ContextCompressor implements ContextEngine {
     const threshold = contextLimit * this.thresholdRatio;
     if (estimatedTokens > threshold) return true;
 
-    // Economic cap: large-context models would otherwise never hit the ratio trigger.
     const ECONOMIC_TOKEN_CEILING = 25_000;
     const ECONOMIC_MESSAGE_FLOOR = 20;
     if (estimatedTokens > ECONOMIC_TOKEN_CEILING && messages.length > ECONOMIC_MESSAGE_FLOOR) return true;

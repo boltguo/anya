@@ -153,7 +153,6 @@ export class TelegramSessionAdapter implements Adapter {
     web_search: '🌐 Searching web',
     memory: '🧠 Updating memory',
     skill_view: '🎓 Loading skill',
-    clarify: '💬 Asking question',
     tg_msg: '',  // suppress — the actual message arrives immediately after
     tts: '🔊 Generating audio',
     pron_assess: '🗣️ Assessing pronunciation',

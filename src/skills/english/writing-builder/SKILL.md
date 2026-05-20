@@ -70,7 +70,7 @@ Fallback chain when fewer than `ACC_WINDOW` rows: 14-day mean from `coach_contex
 ### 2.3 Credit gating
 
 ```
-promotion_credit = walk recent_practice.rows newest→oldest (skip redo_count>0):
+promotion_credit = walk recent_practice.rows newest→oldest (skip rows with parent_sample_id IS NOT NULL):
   count consecutive accuracy ≥ PASS; reset on any fail (< FAIL or completed=0); holds ([FAIL, PASS)) pass through.
 demotion_credit = mirror: count consecutive fail; reset on any pass; holds pass through.
 abandoned (completed=0) = 1 fail.
@@ -84,7 +84,7 @@ abandoned (completed=0) = 1 fail.
 | `demotion_credit ≥ STREAK` inside tier | Swap to an easier constraint within the same tier; reset `demotion_credit`. |
 | `wb_easier` tap | Persists abandoned row (State B); surfaces as fail next call. |
 
-Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
+Redo rows (`parent_sample_id IS NOT NULL`) skipped from credit; still count for dedup.
 
 Hold: keep tier and constraint family; swap target word / vocab to probe the same structure with a different lexical load.
 
@@ -115,14 +115,14 @@ Hold: keep tier and constraint family; swap target word / vocab to probe the sam
    [["🆘 我卡壳了|wb_sos", "💡 换个简单的|wb_easier"]]
    ```
 
-4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+4. Init empty `metadata.button_taps` accumulator; every button tap appends its exact label.
 5. Wait for the user's typed sentence.
 
 ### State B: Button Handling (before typing)
 
 `wb_sos`:
 
-- Append `🆘 我卡壳了` to `ui_feedback`.
+- Append `🆘 我卡壳了` to `metadata.button_taps`.
 - Reply via `tg_msg type="render"` (text + same `buttons` as State A, no `url`) with a **sentence starter only** (e.g. "你可以这样开头：`Despite the fact that energy prices...`"). Do NOT write the full target sentence. The same buttons stay available so the user can still tap `wb_easier` if the starter wasn't enough.
 - Wait again. SOS does NOT change the score envelope; it only assists.
 
@@ -133,11 +133,11 @@ Hold: keep tier and constraint family; swap target word / vocab to probe the sam
    ```
    completed=0, accuracy=0, response="",
    feedback="Learner tapped '💡 换个简单的' before answering. Treat as negative evidence at this constraint type.",
-   ui_feedback="💡 换个简单的", load_score=0, minutes=0,
-   metadata={"abandoned_reason":"too_hard","constraint_type":"<connector|relative|inversion|...>","i_plus_one_dimension":"<dim>"}
+   minutes=0,
+   metadata={"button_taps":["💡 换个简单的"],"abandoned_reason":"too_hard","constraint_type":"<connector|relative|inversion|...>","i_plus_one_dimension":"<dim>"}
    ```
 
-   After `persist` returns, reset `ui_feedback`.
+   After `persist` returns, reset `metadata.button_taps`.
 
 2. **Replacement.** Apply demotion / constraint-down (§2.3). Show the previous task's target sentence as a model via `tg_msg type="render"` (text only — not as evidence the user "should have known", but as a teaching example). Generate a new simpler micro-task → State A.
 
@@ -178,34 +178,31 @@ Minimum payload:
   "skill_type": "writing.builder",
   "session_id": "<session>",
   "prompt": "<the micro-task as shown to the user, including target words>",
-  "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
+  "prompt_hash": "<sha1(normalized prompt) first 12 hex chars>",
   "response": "<the user's typed sentence>",
   "accuracy": 0.70,
   "raw_score": 0.70,
   "max_score": 1,
   "feedback": "<IN ENGLISH for DB / learner-state — the user-facing UI uses the Chinese feedback in §3 State C> Constraint met (used 'Despite + noun phrase'), but the verb 'fluctuate' was treated as a noun. Native polish swapped to 'Despite the fluctuating prices, the economy is recovering.'",
   "section": "writing",
-  "domain": "writing",
-  "load_score": 2,
   "minutes": 1,
   "mode": "study",
-  "ui_feedback": "<comma-joined exact button labels tapped this round, e.g. '🆘 我卡壳了' — empty if none>",
   "metadata": "{\"target_constraint\":\"despite_clause\",\"target_word\":\"fluctuate\",\"i_plus_one_dimension\":\"connector\",\"tier\":\"intermediate\",\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
   "errors": "[{\"key\":\"word_form_error\",\"category\":\"writing\",\"severity\":\"medium\",\"original\":\"prices fluctuate\",\"correction\":\"the fluctuating prices\",\"note\":\"Used the verb form where a participle adjective was needed inside a 'Despite' phrase.\"}]",
   "subcap_scores": "[{\"key\":\"writing.grammar_accuracy\",\"score\":7.0,\"evidence\":\"Constraint met; one verb-form slip.\"},{\"key\":\"writing.cohesion\",\"score\":7.5,\"evidence\":\"Connector chosen correctly; clause boundary clear.\"}]"
 }
 ```
 
-`prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
+`prompt_hash` = first 12 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
 
-`ui_feedback` mandatory if any button was tapped, even on `accuracy=1.0`.
+`metadata.button_taps` mandatory if any button was tapped, even on `accuracy=1.0`.
 
 State D persists attempted sentences only. Abandoned rows are written in State B. Use `response`, never `raw_content`.
 
 ### State E: Continue (`wb_next`)
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
-- Apply §2.3 (skip `redo_count > 0`) before generating.
+- Apply §2.3 before generating.
 - **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next micro-task (State A step 2 — incl. dedup). Respect "no same connector twice in a row" (§2.4).
 

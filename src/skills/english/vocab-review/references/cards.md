@@ -96,4 +96,4 @@ tg_msg(type:"quiz", text:"现在看，哪个是正确的？", options:"[\"{{wron
 下次到期: {{next_due}}
 ```
 
-Keyboard: `[🔁 继续复习|vocab-review]  [🧠 考考我|vocab-testme]  [📖 题源抽词|vocab-contextual]  [🏠 主菜单|nav:main]`
+Keyboard: `[🔁 继续复习|vocab-review]  [🏠 主菜单|nav:main]`

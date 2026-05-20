@@ -24,20 +24,14 @@ Use the `memory` tool to update prompt-facing files across sessions. Detailed le
 | `USER.md` | Stable user profile, goals, schedule, interests, preferences, behavior patterns. |
 | `MEMORY.md` | Long-running learner state: bands, ability profile, weak dimensions, coaching strategy. |
 
-**Save immediately when:**
-- User shares personal facts, goals, interests, schedule, preferences, constraints, motivation, or behavior habits → update `USER.md`; also update `learner_profile` when a skill supports it.
-- Practice produces scores, errors, subcap evidence, or vocabulary evidence → write to `study.db` through the correct skill/tool first.
-- A durable level/ability conclusion is ready → `learner-state` or placement skills update `MEMORY.md`.
-- A durable coaching preference emerges from repeated interactions → summarize it in `USER.md` if it describes the user, or `MEMORY.md` if it describes learning state/strategy.
+**Where to write:**
+- Personal facts (goals, interests, schedule, preferences) → `USER.md` + mirror to `learner_profile` when the skill supports it.
+- Practice evidence (samples, errors, subcap scores) → `study.db` via `persist`. **Training skills never write bands/scores to `MEMORY.md`** — only `learner-state` and `placement-*` may.
+- Coaching strategy / ability picture → `MEMORY.md` (via learner-state/placement only).
 
-**⚠️ Bands/scores exception:**
-- Training skills must **not** update `MEMORY.md` bands, scores, or weak dimensions directly.
-- Training skills must write evidence to `study.db` with `persist`.
-- Only `learner-state` and `placement-*` skills may rewrite level records in `MEMORY.md`.
+**CRITICAL — `action="replace"`** rewrites the whole file. Always send the full content; partial replacement deletes the rest.
 
-**CRITICAL — replace action**: When updating `MEMORY.md` or `USER.md` with `action="replace"`, you MUST provide the **entire file content**. Partial replacement deletes the rest of the user's profile permanently.
-
-**Size cap — `USER.md` ≤ 1500 chars, `MEMORY.md` ≤ 1500 chars.** Both files are injected every turn. When new evidence arrives, **rewrite the relevant section in place; never append**. Move structured facts (target_exam, exam_date, target_level, current_level, interests) into `learner_profile` via `persist action="profile_upsert"` — do not duplicate them in markdown.
+**Size cap — `USER.md` ≤ 1500 chars, `MEMORY.md` ≤ 1500 chars.** Both inject every turn — rewrite sections in place, never append. Exam date, current/target level, and target_exam live in `learner_profile`; read via `coach_context`, don't echo in markdown.
 
 ## Turn Metadata
 

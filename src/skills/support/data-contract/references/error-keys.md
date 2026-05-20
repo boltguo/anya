@@ -1,7 +1,9 @@
 # Canonical Error Keys
 
-Every `errors.recurrence_key` **must** come from this list.  
-Do NOT invent new keys. If an error doesn't fit, use the closest match + explain in `rule_note`.
+Every `errors.recurrence_key` **must** come from this list. The canonical source
+is the `error_keys` table in `study.db`, seeded from `src/storage/study/study.sql`.
+Skills that send unknown keys: the `persist` tool drops them and returns the
+rejected keys in `unknown_error_keys` — fix the skill, do not invent variants.
 
 ## Listening
 
@@ -31,13 +33,8 @@ Do NOT invent new keys. If an error doesn't fit, use the closest match + explain
 
 | Key | Description |
 |-----|-------------|
-| `article_usage` | Incorrect or missing a/an/the |
-| `verb_form_error` | Wrong tense, aspect, or subject-verb agreement |
-| `preposition_error` | Wrong preposition choice |
 | `sentence_fragment` | Incomplete sentence |
 | `run_on_sentence` | Two independent clauses without proper conjunction |
-| `word_form_error` | Wrong part of speech (e.g. noun instead of adjective) |
-| `collocation_error` | Unnatural word combination |
 | `coherence_gap` | Missing or weak logical connector between ideas |
 | `register_mismatch` | Tone too informal/formal for the task |
 | `task_incomplete` | Did not address all parts of the prompt |
@@ -50,9 +47,20 @@ Do NOT invent new keys. If an error doesn't fit, use the closest match + explain
 | `self_correction_loop` | Repeated self-corrections disrupting flow |
 | `l1_transfer` | Mother-tongue grammar pattern in English |
 | `pronunciation_error` | Systematic mispronunciation |
-| `register_mismatch` | Tone inappropriate for the scenario |
+| `pronunciation_vowel` | Vowel articulation unstable |
+| `pronunciation_consonant` | Consonant / word-final articulation unclear |
+| `pronunciation_stress` | Word- or sentence-stress placed incorrectly |
+| `consonant_cluster` | Consonant cluster simplified or mispronounced |
+| `intonation` | Intonation contour wrong for the utterance type |
 | `vocabulary_repetition` | Reused the same word/phrase excessively |
 | `response_too_short` | Answer lacked development or detail |
+| `info_loss` | Key information dropped in retell / paraphrase |
+| `paraphrase_parroting` | Echoed source verbatim instead of paraphrasing |
+| `role_break` | Stepped out of the assigned role in roleplay |
+| `register_too_formal` | Register too formal for the scenario |
+| `register_too_casual` | Register too casual for the scenario |
+| `politeness_error` | Politeness marker missing or mis-pitched |
+| `function_incomplete` | Conversational function not completed (apology missing the actual apology, etc.) |
 
 ## Grammar (cross-skill)
 
@@ -62,6 +70,7 @@ Do NOT invent new keys. If an error doesn't fit, use the closest match + explain
 | `verb_form_error` | Tense, agreement, gerund/infinitive |
 | `preposition_error` | Wrong preposition |
 | `plural_miss` | Singular/plural confusion |
+| `word_form_error` | Wrong part of speech |
 | `word_order_error` | Non-standard word order |
 | `relative_clause_error` | Incorrect who/which/that usage |
 

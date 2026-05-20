@@ -96,9 +96,7 @@ When the callback arrives (`srs:easy:<word>` / `srs:hard:<word>` / `srs:again:<w
 
 4. **Proceed**: if more words remain in the batch (including any `Again` re-tests), loop back to State A with the next word. If all done, go to State D for the batch sample row, then State E.
 
-### State C (skipped — covered by State B)
-
-This skill folds State C into State B (the rating *is* the evaluation; the reveal is the feedback). State C is intentionally left as a header to keep the skeleton aligned with other skills.
+### State C (folded into State B)
 
 ### State D: Persist Evidence (batch close)
 
@@ -118,11 +116,8 @@ Minimum payload:
   "max_score": 7,
   "feedback": "<IN ENGLISH for DB / learner-state> 5 of 7 retests landed easy or hard. 'elaborate' needed two passes. 'fluctuate' shaky on collocation. Suggest seeing 'fluctuate' inside a chart-description prompt next.",
   "section": "vocab",
-  "domain": "vocab",
-  "load_score": 2,
   "minutes": 4,
   "mode": "study",
-  "ui_feedback": "<comma-joined exact button labels tapped this batch, capturing per-word ratings — e.g. '🎯 秒懂 (Easy),🤔 模糊 (Hard),❌ 忘了 (Again),🤔 模糊 (Hard)'>",
   "metadata": "{\"batch_size\":7,\"easy_count\":2,\"hard_count\":3,\"again_count\":1,\"retest_count\":1,\"weakest_word\":\"elaborate\"}",
   "subcap_scores": "[{\"key\":\"vocab.recall\",\"score\":6.0,\"evidence\":\"5 of 7 retests successful; one word required a second pass.\"}]"
 }
@@ -152,7 +147,7 @@ End-of-batch buttons (after State D persist returns):
 - `learner-state`: reads `samples` rows; updates `MEMORY.md` `Vocabulary Profile`.
 - `planner`: (proactive nudge) uses `vocab.recall` subcap to recommend rebalancing (more reading-deepdive harvests, less new vocab-topic, etc.).
 - `vocab-harvest`: feeds new items into the queue (`origin="practice_harvest"`) — vocab-review pulls them in due order.
-- `vocab-topic` / `vocab-testme`: alternative routes when due-count is low.
+- `vocab-topic`: alternative route when due-count is low.
 - `support/data-contract`: defines the `persist` write protocol.
 
 ## 5. Failure And Fallbacks

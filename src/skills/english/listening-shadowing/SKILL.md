@@ -17,7 +17,7 @@ Trigger when:
 
 Required context before generating:
 
-1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.shadowing","limit":20}` (`limit` int, not `"DEDUP_WINDOW"` string — `Number()` would NaN it). Returns rows with `accuracy` (= fluency/100), `prompt_hash`, `ui_feedback`, decoded `metadata` + flat `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup.
+1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.shadowing","limit":20}` (`limit` int, not `"DEDUP_WINDOW"` string — `Number()` would NaN it). Returns rows with `accuracy` (= fluency/100), `prompt_hash`, decoded `metadata` (incl. `button_taps`) + flat `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup.
 2. `persist {"action":"coach_context","days":14,"limit":8}` for subcaps / errors. Slow signal — only re-call when tier changes.
 3. `MEMORY.md` / `USER.md` only as fallback. No raw `study.db` access.
 
@@ -61,7 +61,7 @@ Fallback chain when fewer than `ACC_WINDOW` rows: 14-day mean from `coach_contex
 ### 2.3 Credit gating
 
 ```
-promotion_credit = walk recent_practice.rows newest→oldest (skip redo_count>0):
+promotion_credit = walk recent_practice.rows newest→oldest (skip rows with parent_sample_id IS NOT NULL):
   count consecutive accuracy ≥ PASS; reset on any fail (< FAIL or completed=0); holds ([FAIL, PASS)) pass through.
 demotion_credit = mirror: count consecutive fail; reset on any pass; holds pass through.
 abandoned (completed=0, written by `shadow_hard`) = 1 fail.
@@ -75,7 +75,7 @@ abandoned (completed=0, written by `shadow_hard`) = 1 fail.
 | `demotion_credit ≥ STREAK` inside tier | Length **−2**; reset `demotion_credit`. |
 | `shadow_hard` tap | Persists abandoned row (State B); surfaces as fail next call. |
 
-Retry rows (`redo_count > 0`) skipped from credit; still count for dedup.
+Redo rows (`parent_sample_id IS NOT NULL`) skipped from credit; still count for dedup.
 
 Hold: keep length, optionally swap **one** dimension (syntax / connected-speech / accent) to probe a different weakness from `coach_context.summary.errors`.
 
@@ -93,7 +93,7 @@ Hold: keep length, optionally swap **one** dimension (syntax / connected-speech 
 1. From §2.3 credits, decide tier and clip length. Generate the passage at chosen length/syntax/accent. Compute `prompt_hash` (§State D); regenerate on dedup hit.
 2. `tts` only for the target passage at 100% speed. No filler audio.
 3. Send voice + instruction + buttons in **one** `tg_msg type="render"` call. Renders as two bubbles (voice on its own line, then text + buttons) for clean cross-client display — still one tool call.
-4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+4. Init empty `metadata.button_taps` accumulator; every button tap appends its exact label.
 
 Render envelope (all fields at top level, same as `voice`/`keyboard`):
 
@@ -114,7 +114,7 @@ Wait for the user's voice message or button tap.
 
 `shadow_slow`:
 
-- Append `🐢 慢速播放` to `ui_feedback` (mandatory).
+- Append `🐢 慢速播放` to `metadata.button_taps` (mandatory).
 - Brief ack via `tg_msg type="render"` (text only).
 - Same passage; `tts rate="-10%"`.
 - Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path, same text + buttons).
@@ -135,17 +135,15 @@ Wait for the user's voice message or button tap.
      "response": "",
      "feedback": "Learner tapped '😵 太难了，降级' before recording. Treat as negative evidence at the current tier.",
      "audio_path": "<tts file path of the abandoned audio>",
-     "ui_feedback": "😵 太难了，降级",
      "section": "listening",
      "domain": "listening",
-     "load_score": 0,
      "minutes": 0,
      "mode": "study",
-     "metadata": "{\"abandoned_reason\":\"too_hard\",\"tier\":\"<beginner|intermediate|advanced>\",\"clip_words\":<n>}"
+     "metadata": "{\"button_taps\":[\"😵 太难了，降级\"],\"abandoned_reason\":\"too_hard\",\"tier\":\"<beginner|intermediate|advanced>\",\"clip_words\":<n>}"
    }
    ```
 
-   After `persist` returns, reset the round (fresh `ui_feedback` accumulator).
+   After `persist` returns, reset the round (fresh `metadata.button_taps` accumulator).
 
 2. **Replacement.** Apply the demotion / length-down rule from §2.3 (the abandoned row will surface as one fail in the next `recent_practice` call). Brief ack via `tg_msg type="render"` (text only), generate a new simpler clip → State A.
 
@@ -210,7 +208,7 @@ Example call (two chunks — `gonna` + `wanna`):
 
 Bundle into the single State C `< PASS` render call (`url=<coaching audio>` + `text=<feedback>`, no buttons). No separate text/voice splits.
 
-Append `🎯 发音示范` to `ui_feedback` so State D records that coaching was given.
+Append `🎯 发音示范` to `metadata.button_taps` so State D records that coaching was given.
 
 ### State D: Persist Evidence
 
@@ -233,11 +231,9 @@ Minimum payload:
   "audio_path": "<tts file path>",
   "section": "listening",
   "domain": "listening",
-  "load_score": 2,
   "minutes": 1,
   "mode": "study",
-  "ui_feedback": "<comma-joined exact labels of every button tapped this round, e.g. '🐢 慢速播放' — empty if no button tapped>",
-  "metadata": "{\"tier\":\"intermediate\",\"clip_words\":12,\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
+  "metadata": "{\"button_taps\":[\"🐢 慢速播放\"],\"tier\":\"intermediate\",\"clip_words\":12,\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
   "errors": "[{\"key\":\"connected_speech_breakdown\",\"category\":\"listening\",\"severity\":\"medium\",\"original\":\"\",\"correction\":\"gonna\",\"note\":\"Failed to keep up at the 'gonna' linking; phoneme accuracy was OK but rhythm broke.\"},{\"key\":\"rhythm_chunking_error\",\"category\":\"listening\",\"severity\":\"low\",\"original\":\"\",\"correction\":\"\",\"note\":\"Stuttered between the 2nd and 3rd chunk; lost beat.\"}]",
   "subcap_scores": "[{\"key\":\"listening.connected_speech\",\"score\":6.0,\"evidence\":\"Stumbled on the 'gonna' linking and the schwa in 'to'.\"}]"
 }
@@ -245,14 +241,14 @@ Minimum payload:
 
 `prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
 
-`ui_feedback` mandatory whenever any 🐢/😵 button was tapped, even on `fluency ≥ 80`.
+`metadata.button_taps` mandatory whenever any 🐢/😵 button was tapped, even on `fluency ≥ 80`.
 
 State D persists fully-attempted clips only (with or without slow-down). Abandoned-on-too-hard rows are written by State B.
 
 ### State E: Continue (`shadow_next`)
 
 - Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
-- Apply §2.3 (skip `redo_count > 0`) before generating.
+- Apply §2.3 before generating.
 - **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
 - Generate next clip (State A step 1 — incl. dedup).
 
@@ -260,11 +256,10 @@ State D persists fully-attempted clips only (with or without slow-down). Abandon
 
 When the user sends another voice message after a sub-pass evaluation (no buttons shown), treat as consolidation retry on the **same passage**:
 
-1. **Recover parent sample** from chat memory (`id`, `prompt`, `prompt_hash`, `audio_path`, `redo_count`). If session was compacted, `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.shadowing","limit":1}` and grab them from the most-recent row. Do NOT regenerate the passage.
+1. **Recover parent sample** from chat memory (`id`, `prompt`, `prompt_hash`, `audio_path`). If session was compacted, `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.shadowing","limit":1}` and grab them from the most-recent row. Do NOT regenerate the passage.
 2. Run `pron_assess` with the recovered `prompt` as `reference_text` and the user's new audio.
 3. Persist via State D **with these overrides**:
    - `parent_sample_id` = previous round's sample `id`
-   - `redo_count` = `(previous.redo_count ?? 0) + 1` (null/missing → 0; first retry → 1)
    - `prompt_hash` = same as previous (intentional collision — same item)
    - `metadata` includes `"is_redo": true` and `"parent_fluency": <previous raw_score>`
 4. Apply the **same binary button logic** as State C:

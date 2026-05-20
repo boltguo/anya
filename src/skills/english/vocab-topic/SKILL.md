@@ -17,8 +17,8 @@ Trigger when:
 
 Required context before generating:
 
-1. **Pick `topic` first** (learner explicit, callback suffix, or auto from weakest coverage / upcoming writing prompt). Then call `persist {"action":"recent_practice","session_id":"<session>","skill_type":"vocab","limit":20,"metadata_filter":{"topic":"<topic>"}}` for prior-session topic coverage; if filter unsupported, fetch generic `recent_practice` and filter in-code.
-2. `persist {"action":"due_words","limit":40,"filter":{"topic_tag":"<topic>"}}` — pull existing words tagged for this topic. If the bank for this topic is thin (< 10 items), generate the missing ones and seed via `persist action="word_upsert"` with `origin="vocab-topic-seed"`, `topic_tag="<topic>"`.
+1. **Pick `topic` first** (learner explicit, callback suffix, or auto from weakest coverage / upcoming writing prompt). Then call `persist {"action":"recent_practice","session_id":"<session>","skill_type":"vocab","limit":20}`. Persist doesn't filter by metadata server-side — walk the returned rows and keep only those whose decoded `metadata.topic` matches your target topic.
+2. `persist {"action":"due_words","limit":40,"topic":"<topic>"}` — pull existing words tagged for this topic via the `lexical_topics` strict join. If the bank for this topic is thin (< 10 items), generate the missing ones and seed via `persist action="word_upsert"` with `origin="vocab-topic-seed"`, `topics="<topic>"` (persist mirrors `topics` into `lexical_topics` automatically).
 3. `persist {"action":"coach_context","days":14,"limit":8}` for `Vocabulary Profile.cefr` (caps register / item difficulty) and weakest writing/speaking subcaps (informs which topic to recommend if the user said "你看着安排").
 4. `MEMORY.md` / `USER.md` only as fallback.
 
@@ -39,7 +39,7 @@ This skill does NOT run §2.3-style PASS / FAIL / STREAK credit gating. Promotio
 | culture | media consumption, traditions, language, identity |
 | government | regulation, taxation, civil liberties, public services |
 
-For non-listed topics aligned with `USER.md` interests (e.g. `MOBA games`, `films`, `interview prep`), generate the bundle ad-hoc with `topic_tag="<topic>"`.
+For non-listed topics aligned with `USER.md` interests (e.g. `MOBA games`, `films`, `interview prep`), generate the bundle ad-hoc with `topics="<topic>"`.
 
 ### 2.1 Bundle composition
 
@@ -55,15 +55,20 @@ Total: **8–12 items**. Below 8 = bundle too thin (auto-seed). Above 12 = lose 
 
 ### 2.2 Auto-seeding
 
-If `due_words` for the topic returns < 10 items, generate the missing ones to bring the total to 10–12, and `persist action="word_upsert"` each one with `origin="vocab-topic-seed"`, `topic_tag="<topic>"`, `mastery="queued_new"`, `is_user_word=0`. Include CN gloss + IPA + a topic-grounded example sentence.
+If `due_words` for the topic returns < 10 items, generate the missing ones to bring the total to 10–12, and `persist action="word_upsert"` each one with `origin="vocab-topic-seed"`, `topics="<topic>"`, `mastery="queued_new"`, `is_user_word=0`. Include CN gloss + IPA + a topic-grounded example sentence.
 
 ### 2.3 Rating mapping
 
-After the recall round (§3 State C), per item:
+After the recall round (§3 State C), per item, on the canonical 0–5 scale:
 
-- Recalled correctly → `rating=4`.
-- Recalled with hesitation / partial → `rating=3`.
+- Recalled cleanly + used naturally → `rating=5`.
+- Recalled correctly but with hesitation → `rating=4`.
+- Recalled with partial gloss / shaky usage → `rating=3`.
 - Missed entirely → `rating=1`.
+
+Production prompts (the "1 sentence using ≥2 items" recall format) graduate to
+`rating=5` on a natural sentence; recognition-only prompts (CN→EN, fill-blank)
+cap at `rating=4` — production is the only path to 5.
 
 Persist via `persist action="word_review"` once per recalled/missed item.
 
@@ -118,13 +123,13 @@ Persist via `persist action="word_review"` once per recalled/missed item.
    [["🛑 太多了换一组|vt_easier"]]
    ```
 
-8. Init empty `ui_feedback` accumulator.
+8. Init empty `metadata.button_taps` accumulator.
 
 ### State B: Start Recall (after timer or user message)
 
 When the user sends any message (or the timer expires and the user responds):
 
-- Append the event to `ui_feedback`.
+- Append the event to `metadata.button_taps`.
 - Edit the bundle message to hide it: `tg_msg type="edit" message_id=<bundle_msg_id> text="📖 已隐藏 — 开始测"`. If edit fails, send a long separator block.
 - Proceed directly to State C.
 
@@ -135,17 +140,17 @@ When the user sends any message (or the timer expires and the user responds):
    ```
    completed=0, accuracy=0, response="",
    feedback="Learner tapped '🛑 太多了换一组' before recall. Treat as negative evidence at this topic / bundle size.",
-   ui_feedback="🛑 太多了换一组", load_score=0, minutes=0,
-   metadata={"abandoned_reason":"too_many","topic":"<topic>","bundle_size":<n>}
+   minutes=0,
+   metadata={"button_taps":["🛑 太多了换一组"],"abandoned_reason":"too_many","topic":"<topic>","bundle_size":<n>}
    ```
 
-   After `persist` returns, reset `ui_feedback`.
+   After `persist` returns, reset `metadata.button_taps`.
 
 2. **Replacement.** Pick a different (less abstract) topic OR shrink bundle to 8 items, brief Chinese ack via `tg_msg type="render"` (text only), regenerate → State A.
 
 ### State C: Recall Round
 
-After the bundle is hidden, run **5 mixed recall prompts** (no format dominates — mirror the catalog from `vocab-testme` §2.4 but stay shorter). Cycle through:
+After the bundle is hidden, run **5 mixed recall prompts** (no format dominates). Cycle through:
 
 | Format | UI | Item count |
 | --- | --- | --- |
@@ -162,7 +167,11 @@ Cover **at least one item from each kind** (concept / chunk / hedging). Don't te
 Per item:
 
 1. Send the question.
-2. When user answers, mark correct / shaky / missed and persist `word_review` immediately (rating 4 / 3 / 1).
+2. When user answers, mark and persist `word_review` immediately per §2.3:
+   - production-format correct + natural → `rating=5`
+   - recognition-format correct → `rating=4`
+   - shaky / partial → `rating=3`
+   - missed → `rating=1`
 3. Send a 1-line note: `✅ correct` / `⚠️ shaky → polished` / `❌ correct was {x}`.
 
 After all 5 prompts:
@@ -189,11 +198,8 @@ Minimum payload:
   "max_score": 5,
   "feedback": "<IN ENGLISH for DB / learner-state> Concepts solid (resilient, fluctuate). Chunks weaker — 'elaborate on' confused with 'elaborate about'. Hedging picked up well. Production sentence used 2 items naturally; would have been higher with 3+.",
   "section": "vocab",
-  "domain": "vocab",
-  "load_score": 1,
   "minutes": 5,
   "mode": "study",
-  "ui_feedback": "<comma-joined exact button labels tapped this session, e.g. '✅ 我看完了' — empty if none>",
   "metadata": "{\"topic\":\"education\",\"bundle_size\":10,\"kinds_covered\":[\"concept\",\"chunk\",\"hedging\"],\"recall_count\":5,\"seeded_count\":3,\"weakest_kind\":\"chunk\"}",
   "errors": "[{\"key\":\"collocation_error\",\"category\":\"vocab\",\"severity\":\"medium\",\"original\":\"elaborate about\",\"correction\":\"elaborate on\",\"note\":\"'elaborate' takes 'on'.\"}]",
   "subcap_scores": "[{\"key\":\"vocab.recall\",\"score\":6.0,\"evidence\":\"3 of 5 recall items correct.\"},{\"key\":\"vocab.production\",\"score\":6.0,\"evidence\":\"Used 2 of 10 bundle items in a single sentence; natural register.\"}]"
@@ -224,9 +230,8 @@ End-of-batch buttons:
 - `planner`: routes here ahead of a writing-essay prompt to seed the lexical bank.
 - `learner-state`: reads `samples` rows + per-word `word_reviews`; updates `MEMORY.md` `Vocabulary Profile.topic_coverage`.
 - `planner`: (proactive nudge) uses topic coverage to recommend rotation (don't keep drilling 'education' if `environment` is at 0% coverage and exams are coming).
-- `vocab-testme`: hand-off after every topic session — verify recall under varied formats.
 - `vocab-review`: companion for due-flow (vocab-topic seeds new items into the queue).
-- `writing-essay` / `speaking-roleplay`: downstream consumers — once the bundle lands in mastery, prompts on that topic become accessible.
+- `writing-essay` / `speaking-freetalk`: downstream consumers — once the bundle lands in mastery, prompts on that topic become accessible.
 - `support/data-contract`: defines the `persist` write protocol.
 
 ## 5. Failure And Fallbacks

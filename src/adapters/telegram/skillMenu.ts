@@ -19,7 +19,7 @@ const MENU: Record<string, { text: string; buttons: string[][] }> = {
     text: '🗣️ 口语训练\n\n开口说出来，慢慢练成自然对话。',
     buttons: [
       ['🎙️ 发音矫正|speaking-shadowing', '🔁 听后复述|speaking-repeat'],
-      ['💬 自由闲聊|speaking-freetalk', '🎭 情景对话|speaking-roleplay'],
+      ['💬 闲聊 / 情景对话|speaking-freetalk'],
       ['← 返回|nav:main'],
     ],
   },
@@ -35,7 +35,7 @@ const MENU: Record<string, { text: string; buttons: string[][] }> = {
     text: '📖 阅读训练\n\n读得快，也读得透。',
     buttons: [
       ['🌅 今日阅读|daily-article', '🐢 外刊精读|reading-deepdive'],
-      ['📰 话题讨论|material-discussion', '⚡ 快速略读|reading-skim-drill'],
+      ['⚡ 快速略读|reading-skim-drill'],
       ['← 返回|nav:main'],
     ],
   },
@@ -43,7 +43,7 @@ const MENU: Record<string, { text: string; buttons: string[][] }> = {
     text: '✍️ 写作训练\n\n从句子打磨到成篇，把英文写得地道。',
     buttons: [
       ['🏋️ 句型搭建|writing-builder', '🔁 升级改写|writing-rewrite'],
-      ['📔 日记碎碎念|writing-journal', '📝 综合长文|writing-essay'],
+      ['📝 综合长文|writing-essay'],
       ['← 返回|nav:main'],
     ],
   },
@@ -51,7 +51,6 @@ const MENU: Record<string, { text: string; buttons: string[][] }> = {
     text: '📚 词汇网络\n\n在语境里学，靠重复内化。',
     buttons: [
       ['🔄 到期复习|vocab-review', '🎯 话题词汇|vocab-topic'],
-      ['🧠 抽查测验|vocab-testme'],
       ['← 返回|nav:main'],
     ],
   },

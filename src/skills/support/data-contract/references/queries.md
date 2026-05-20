@@ -1,12 +1,8 @@
-# Typed Persist Recipes
+# Typed Persist Recipes (v3)
 
-Skills should not issue raw SQL against `study.db`. Use `persist` actions.
-The schema is owned by the agent at `src/storage/study/study.sql` (skills do
-not need to read it); treat `persist` as the data gateway.
+Skills must not issue raw SQL. Use `persist` actions.
 
-## Practice Evidence
-
-Use the post-practice protocol:
+## Practice Evidence (the most common write)
 
 ```json
 {
@@ -18,268 +14,188 @@ Use the post-practice protocol:
   "accuracy": 0.5,
   "raw_score": 3,
   "max_score": 6,
-  "feedback": "The user missed the full word 'software' and the article 'a'.",
+  "feedback": "Missed full word 'software' and article 'a'.",
   "errors": "[{\"key\":\"word_substitution\",\"category\":\"listening\",\"original\":\"soft\",\"correction\":\"software\",\"note\":\"完整词未听清\"}]",
-  "subcap_scores": "[{\"key\":\"listening.connected_speech\",\"score\":4.5,\"evidence\":\"弱读和词尾捕捉不稳\"}]"
+  "subcap_scores": "[{\"key\":\"listening.connected_speech\",\"value\":4.5,\"evidence\":\"弱读和词尾捕捉不稳\"}]",
+  "metadata": "{\"replays\":1}"
 }
 ```
 
-If a session is abandoned, still call:
+`study_session_id` is auto-resolved from `session_id` if you don't pass it.
+
+Abandoned write — minimal:
 
 ```json
 {
   "action": "practice",
   "skill_type": "writing.essay",
   "session_id": "tg:12345",
-  "completed": 0,
-  "mode": "study"
+  "completed": 0
 }
 ```
 
-## Learner Summary
+## Writing skills: 4 IELTS sub-dims go to `subcap_scores`, not `samples.band_*`
 
-For learner-state, coaching, and error-clinic:
+In v3 the only band column on `samples` is `band_overall`. The four IELTS
+sub-dims are written as subcap rows:
 
 ```json
 {
-  "action": "study_summary",
-  "days": 14
+  "action": "practice",
+  "skill_type": "writing.essay",
+  ...,
+  "band_overall": 5.5,
+  "subcap_scores": "[
+    {\"key\":\"writing.task_achievement\",\"value\":6.0,\"evidence\":\"Position clear; second support weak.\"},
+    {\"key\":\"writing.cohesion\",\"value\":6.0,\"evidence\":\"Paragraph breaks logical.\"},
+    {\"key\":\"writing.lexical_range\",\"value\":5.5,\"evidence\":\"Repeated 'important' four times.\"},
+    {\"key\":\"writing.grammar_accuracy\",\"value\":6.0,\"evidence\":\"One verb-form slip.\"}
+  ]"
 }
 ```
 
-Returns aggregated samples, section bands, recurring errors, weak subcaps,
-activity, and vocabulary mastery counts.
+`learner_state_scores` reads these to compute the radar.
 
-## Coaching Context
+## Recent Practice
 
-For private-coach style replies, prefer this higher-level aggregate:
+For in-session dedup (prompt_hash):
 
 ```json
 {
-  "action": "coach_context",
+  "action": "recent_practice",
+  "skill_type": "listening.dictation",
+  "limit": 5
+}
+```
+
+For cross-session i+1 difficulty signal (survives Telegram session resets):
+
+```json
+{
+  "action": "recent_practice",
+  "scope": "global",
+  "skill_type": "listening.dictation",
   "days": 14,
   "limit": 8
 }
 ```
 
-Returns:
+## Learner Summary
 
-- `profile`: structured learner profile mirror from `learner_profile`
-- `summary`: the same aggregates as `study_summary`
-- `due_words`: SRS cards due now
-- `due_tasks`: planned but unfinished study slots for today
-- `personal_error_cards`: vocabulary-style cards created from the learner's own mistakes
+```json
+{ "action": "study_summary", "days": 14 }
+```
 
-Use this when a skill needs the user's learning state to feel personal rather
-than generic. Do not dump the raw JSON to the learner; translate it into one
-specific diagnosis, one pressure point, and one next action.
+Returns aggregated samples / section bands / recurring errors (with derived
+`last_30d_count` + `last_example` JSON) / weak subcaps with `avg_unaided`
+(scaffold-stripped) / daily activity derived from samples / vocab mastery
+counts.
+
+## Learner State Scores (server-side EMA)
+
+```json
+{ "action": "learner_state_scores", "days": 14 }
+```
+
+Returns 4 section scores 0-100 (EMA-blended against last frozen snapshot),
+`raw_current`, `sample_counts`, `confidence` (high/medium/low). LLM no
+longer does the EMA math.
+
+## Coaching Context
+
+```json
+{ "action": "coach_context", "days": 14, "limit": 8 }
+```
+
+Returns `profile`, `summary`, `due_words`, `personal_error_cards`.
 
 ## Learning Session Lifecycle
 
-When `/new` starts a deliberate learning block, open a study session:
+`session_start` is mostly optional — the first `practice` write auto-creates
+an active session if none exists in the last 24h. Call it explicitly only
+when you want to attach metadata or force a new session.
 
 ```json
-{
-  "action": "session_start",
-  "session_key": "tg:12345",
-  "platform": "telegram",
-  "entrypoint": "new",
-  "plan": "{\"slots\":[{\"skill\":\"vocab-review\",\"minutes\":8},{\"skill\":\"listening-dictation\",\"minutes\":10}]}"
-}
+{ "action": "session_start", "session_key": "tg:12345" }
 ```
-
-When the learner finishes, abandons, or the agent closes the block:
 
 ```json
-{
-  "action": "session_end",
-  "session_key": "tg:12345",
-  "status": "closed",
-  "skills_used": "[\"vocab-review\",\"listening-dictation\"]",
-  "summary_text": "Reviewed due words, then completed one i+1 dictation sentence."
-}
+{ "action": "session_end", "study_session_id": 17, "status": "closed" }
 ```
-
-`persist` derives `samples_count` and `minutes_total` from `samples.session_id`
-when possible. Conversation history still belongs to `state.db`; `study_sessions`
-only tracks the learning wrapper.
 
 ## Progress Snapshots
-
-`learner-state` owns long-arc learning state. After refreshing `MEMORY.md`, it
-can freeze the current week. Compute the fields in `learner-state`; `persist`
-only stores the values:
 
 ```json
 {
   "action": "progress_snapshot",
   "current_level": "B1",
-  "listening_score": 67,
-  "speaking_score": 61,
-  "reading_score": 72,
-  "writing_score": 58,
-  "vocab_active_count": 42,
-  "vocab_mature_count": 13,
-  "total_minutes": 145,
-  "active_days": 4,
-  "sessions_count": 5,
-  "samples_count": 18,
-  "due_words_count": 9,
-  "weak_subcaps": "[{\"subcap_key\":\"listening.connected_speech\",\"avg_score\":4.8}]",
-  "top_errors": "[{\"recurrence_key\":\"article_missing\",\"seen_count\":6}]",
-  "notes": "Weekly learner-state refresh after 14-day coach_context review."
+  "notes": "Weekly learner-state refresh."
 }
 ```
 
-Read recent frozen snapshots for reports or cron summaries:
+If the four `*_score` fields are omitted, persist falls back to the server-side
+EMA from `learner_state_scores`.
 
 ```json
-{
-  "action": "progress_trend",
-  "limit": 8
-}
+{ "action": "progress_trend", "limit": 8 }
 ```
 
-Future cron jobs should call learner-state or these `persist` actions. Other
-practice skills should not write `progress_snapshots` directly.
-
 ## Profile Upsert
-
-After profile-manager collects user facts, update structured profile data:
 
 ```json
 {
   "action": "profile_upsert",
-  "profile": "{\"initialized\":1,\"name\":\"Bolt\",\"current_level\":\"B1\",\"target_level\":\"IELTS 7.0\",\"exam_date\":\"2026-09-01\",\"daily_minutes\":30,\"interests\":[\"AI\",\"programming\"],\"weaknesses\":\"listening chunks and writing cohesion\"}"
+  "profile": "{\"initialized\":1,\"name\":\"Bolt\",\"current_level\":\"B1\",\"target_level\":\"B2\",\"target_exam\":\"IELTS\",\"exam_date\":\"2026-09-01\",\"interests\":[\"AI\",\"programming\"]}"
 }
 ```
 
-`USER.md` remains the natural-language prompt summary. `learner_profile` is the
-structured planning mirror.
-
-## Daily Tasks
-
-Create a planned task:
-
-```json
-{
-  "action": "task_upsert",
-  "domain": "writing",
-  "task_type": "primary",
-  "skill": "writing-builder",
-  "mode": "study",
-  "callback": "writing-builder",
-  "reason": "Build sentence control before essay work.",
-  "load_score": 2,
-  "planned_minutes": 10
-}
-```
-
-Read today's tasks:
-
-```json
-{
-  "action": "due_tasks"
-}
-```
-
-Mark a task complete after a practice write:
-
-```json
-{
-  "action": "task_complete",
-  "task_id": 12,
-  "sample_id": 55
-}
-```
-
-## Vocabulary Upsert
-
-Save one word/chunk/pattern:
+## Vocabulary
 
 ```json
 {
   "action": "word_upsert",
   "word": "resilient",
   "item_kind": "word",
-  "definition": "able to recover quickly",
   "chinese": "有韧性的；恢复力强的",
   "ipa": "/rɪˈzɪl.i.ənt/",
   "pos": "adj",
+  "topics": "[\"mindset\",\"growth\"]",
   "example_en": "She proved resilient under pressure.",
   "mastery": "queued_new",
   "origin": "user_lookup",
-  "is_user_word": 1,
-  "priority": 5
+  "is_user_word": 1
 }
 ```
 
-Save multiple harvested items:
+Topics get mirrored into `lexical_topics`. Strict-match query:
 
 ```json
-{
-  "action": "word_upsert",
-  "origin": "practice_harvest",
-  "words": "[{\"word\":\"depend on\",\"item_kind\":\"chunk\",\"chinese\":\"依赖\",\"example_en\":\"I depend on public transport.\"},{\"word\":\"It is widely believed that...\",\"item_kind\":\"pattern\",\"chinese\":\"人们普遍认为...\"}]"
-}
+{ "action": "due_words", "topic": "mindset", "limit": 8 }
 ```
 
-Personal-error cards also live in `words`:
+Mastered sweep (planner-driven, low frequency):
 
 ```json
-{
-  "action": "word_upsert",
-  "word": "depend of",
-  "item_kind": "personal_error",
-  "definition": "depend on",
-  "chinese": "固定搭配 depend on",
-  "example_en": "I depend on public transport.",
-  "origin": "error-clinic"
-}
+{ "action": "due_words", "include_mastered": 1, "limit": 4 }
 ```
 
-## Vocabulary Reads
-
-Due words for SRS:
-
-```json
-{
-  "action": "due_words",
-  "limit": 8
-}
-```
-
-Lookup an item:
-
-```json
-{
-  "action": "word_lookup",
-  "word": "resilient"
-}
-```
-
-## Vocabulary Review
-
-After each flashcard result:
+Per-card SRS update (rating canonical 0-5):
 
 ```json
 {
   "action": "word_review",
   "word": "resilient",
-  "session_id": "tg:12345",
   "rating": 4,
   "card_type": "recall",
-  "context": "vocab-review"
+  "sample_id": 91
 }
 ```
 
-Rating contract:
-
-| Callback | rating | Meaning |
-| --- | --- | --- |
-| easy | 5 | Strong recall |
-| hard | 3 | Partial recall, still passed |
-| again | 1 | Failed recall |
+Mastery transitions (server-side):
+- `queued_new → learning` on first pass
+- `learning → known` at `consecutive_success ≥ 3`
+- `known → mastered` at `consecutive_success ≥ 5` AND `≥ 21 days since first success in streak`
+- Any tier regresses by one on a failure (mastered → known → learning → queued_new)
 
 ## Item-kind Contract
 
@@ -287,11 +203,11 @@ Rating contract:
 | --- | --- | --- |
 | `word` | single word | default |
 | `chunk` | multi-word expression | collocation / phrase |
-| `pattern` | sentence frame | reusable IELTS wording |
+| `pattern` | sentence frame | reusable wording |
 | `personal_error` | wrong phrase | `definition` holds the correction |
 
 ## Mastery / Origin Glossary
 
-- `mastery`: `queued_new` → `learning` → `known` → `mastered`
-- `origin`: `auto_seed` / `user_lookup` / `manual_save` / `practice_injected` / `briefing` / `auto_harvest`
+- `mastery`: `queued_new → learning → known → mastered` (regressible)
+- `origin`: `auto_seed` / `user_lookup` / `manual_save` / `practice_harvest` / `dictionary_lookup` / `error-clinic`
 - `transfer_level`: 0 seeded → 1 seen → 2 active-check pass → 3 spoke → 4 wrote
