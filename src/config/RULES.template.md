@@ -31,7 +31,7 @@ Use the `memory` tool to update prompt-facing files across sessions. Detailed le
 
 **CRITICAL — `action="replace"`** rewrites the whole file. Always send the full content; partial replacement deletes the rest.
 
-**Size cap — `USER.md` ≤ 1500 chars, `MEMORY.md` ≤ 1500 chars.** Both inject every turn — rewrite sections in place, never append. Exam date, current/target level, and target_exam live in `learner_profile`; read via `coach_context`, don't echo in markdown.
+**Size cap — `USER.md` ≤ 1500 chars, `MEMORY.md` ≤ 1500 chars.** Both inject every turn — rewrite sections in place, never append. `target_level`, `target_exam`, `exam_date` are DB-only (`learner_profile` via `coach_context`, never echoed in markdown). `current_level` and per-skill CEFR live in `MEMORY.md` so every turn carries them for difficulty calibration without a query.
 
 ## Turn Metadata
 

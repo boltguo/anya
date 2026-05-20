@@ -22,8 +22,3 @@
 - what_to_avoid: (not set)
 - redo_priority: (not set)
 - best_topic_hooks: (not set)
-
-## Metacognition
-
-- self_prediction_gap: (not set)
-- self_attribution_accuracy: (not set)

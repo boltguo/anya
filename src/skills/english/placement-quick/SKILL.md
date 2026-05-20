@@ -277,16 +277,14 @@ Vocab additionally carries `size_estimate: <approx word count>`.
 
 #### 6.3 Persist results to study.db
 
-All placement output goes to `study.db` — no markdown files. Issue these calls **in order**:
+Three writes, **in this order**:
 
-1. **`persist action="profile_upsert"`** — update the learner profile with the new ability picture so downstream skills (planner, every practice skill) can read it via `coach_context`.
+1. **`persist action="profile_upsert"`** — update the learner profile so downstream skills (planner, every practice skill) can read it via `coach_context`.
 
    | Field           | Value                                                                                                          |
    | --------------- | -------------------------------------------------------------------------------------------------------------- |
    | `current_level` | Weighted average of the 5 `general_level` values, CEFR sub-band (e.g. `B1-`). This is the i+1 anchor.          |
-   | `strengths`     | One-line: the highest dimension (e.g. "Reading (B2-, comprehension solid)").                                   |
-   | `weaknesses`    | One-line: the 1–2 lowest dimensions or most degraded under speed (e.g. "Speaking (A2+, halting); Writing (A2+, frozen tense)"). |
-   | `notes`         | Append placement summary: per-dimension `{general / domain / confidence}` tuples + lowest confidence among the 5 + listening/reading marked as receptive, speaking/writing as productive + vocab size estimate. Keep it scannable, ≤ 6 short lines. |
+   | `notes`         | Per-dimension `{general / domain / confidence}` tuples + lowest confidence among the 5 + listening/reading marked as receptive, speaking/writing as productive + vocab size estimate. ≤ 6 short lines. |
 
 2. **`persist action="progress_snapshot"`** — store the numeric scores for the trend table.
 
@@ -301,7 +299,33 @@ All placement output goes to `study.db` — no markdown files. Issue these calls
    | `weak_subcaps`       | JSON array of the 1–2 lowest dimensions, e.g. `["speaking","writing"]`. |
    | `notes`              | One sentence — e.g. "placement-quick baseline; lowest dimension confidence: medium". |
 
-   Do **not** call `memory` — that tool is deprecated for this skill.
+3. **`memory target=memory action=replace`** — rewrite `MEMORY.md` with the ability picture so every future turn's system prompt carries it (saves a `coach_context` call per turn). Use the existing template structure:
+
+   ```
+   # Learner Memory — Level & Ability State
+
+   ## Calibration
+   - last_updated: <YYYY-MM-DD>
+   - confidence: <low | medium | high>
+
+   ## Capabilities (0–100 EMA, CEFR per skill)
+   - overall:    score <weighted 0–100> · cefr <weighted sub-band>
+   - listening:  score <0–100> · cefr <general/domain>
+   - speaking:   score <0–100> · cefr <general/domain>
+   - reading:    score <0–100> · cefr <general/domain>
+   - writing:    score <0–100> · cefr <general/domain>
+   - vocabulary: receptive <size_est> / productive <rough guess>
+   - grammar:    mastered (not set) · weak (not set) · unstable_under_pressure (not set)
+
+   ## Coaching Strategy
+   - recommended_difficulty: i+1 anchor at <CEFR sub-band>; expand to i+1.5 only for the strongest dimension
+   - what_works: <one-line — e.g. "comprehension tasks">
+   - what_to_avoid: <one-line — e.g. "long writing prompts before sentence-level practice">
+   - redo_priority: <weakest 1–2 dimensions>
+   - best_topic_hooks: <pull 2–3 tags from learner_profile.interests>
+   ```
+
+   Keep ≤ 1500 chars. Leave `grammar` fields as `(not set)` — `learner-state` fills those from later sample analysis.
 
 #### 6.4 Render report
 
