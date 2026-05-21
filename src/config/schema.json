@@ -11,6 +11,7 @@
       "description": "LLM provider configuration (Codex backend).",
       "properties": {
         "model": { "type": "string", "default": "gpt-5.4" },
+        "subroutine_model": { "type": "string", "default": "gpt-5.4-mini", "description": "Smaller/faster model used by compound-tool internal LLM subroutines. Falls back to `model` if unset." },
         "max_retries": { "type": "integer", "default": 3 },
         "context_window": { "type": "integer", "default": 1000000 },
         "compress_threshold": { "type": "number", "default": 0.8, "minimum": 0, "maximum": 1 },

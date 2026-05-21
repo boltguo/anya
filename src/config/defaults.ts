@@ -6,6 +6,10 @@ export interface AnyaConfig {
 
   provider: {
     model: string;
+    // Smaller/faster variant used by llmSubroutine for compound-tool internal
+    // generations (sentence drills, coaching examples, rubric grading). Falls
+    // back to `model` if unset.
+    subroutine_model?: string;
     max_retries: number;
     context_window: number;
     compress_threshold: number;  // 0.0–1.0
@@ -72,6 +76,7 @@ export const DEFAULT_CONFIG: AnyaConfig = {
 
   provider: {
     model: 'gpt-5.4',
+    subroutine_model: 'gpt-5.4-mini',
     max_retries: 3,
     context_window: 1000000,
     compress_threshold: 0.8,

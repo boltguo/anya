@@ -48,7 +48,14 @@ export function registerVoiceHandler(rt: TelegramRuntime): void {
       agentLogger.info({ msg: 'tg_voice_transcribed', chatId: ctx.chat.id, text: sttResult.transcript.substring(0, 100) });
       trackStt(ctx.message.voice.duration || 0);
 
-      await rt.handleIncoming(ctx, sttResult.transcript, undefined, statusMessageId, {
+      // Embed audio_path directly in user content (in addition to turn metadata).
+      // The turn metadata block in the system prompt is reliable for the first
+      // tool call of a fresh turn, but LLMs drifted in State F (implicit retry)
+      // and hallucinated the wrong path. Inline anchoring lets the user message
+      // itself carry the canonical path so compound tools never look elsewhere.
+      const input = `[voice | audio_path=${audioPath}]\n${sttResult.transcript}`;
+
+      await rt.handleIncoming(ctx, input, undefined, statusMessageId, {
         trigger: 'voice',
         details: {
           audio_path: audioPath,

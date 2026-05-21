@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     id              TEXT PRIMARY KEY,
     session_key     TEXT NOT NULL,
     title           TEXT NOT NULL DEFAULT '',
+    -- Active skill drives per-turn tool filtering (Tier 2 compound tools).
+    -- NULL = no active skill (planner / menu state).
+    active_skill    TEXT,
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
     message_count   INTEGER NOT NULL DEFAULT 0

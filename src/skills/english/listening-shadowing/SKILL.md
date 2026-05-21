@@ -1,296 +1,182 @@
 ---
 name: listening-shadowing
 description: "Listening Rhythm Shadowing. Trigger when the user wants to practice listening comprehension by repeating short chunks. Focuses on rhythm, chunking, and catching fast speech, NOT isolated pronunciation."
+required_tools:
+  - generate_listening_clip
+  - assess_listening_fluency
 ---
 
 # Listening Shadowing
 
-Stay with the speaker — decoding speed and rhythm. **Fluency** drives i+1; pronunciation accuracy is recorded separately.
+Stay with the speaker — decoding speed and rhythm. **Fluency** drives i+1; the credit gating, sentence generation, and scoring math all live in compound tools. Your job is to route + write conversational feedback.
 
 ## 1. Inputs
 
 Trigger when:
-
 - User says: `听力跟读`, `影子跟读`, `跟读`, `shadowing`.
 - Callback `listening-shadowing`.
-- **Disambiguation**: bare `跟读` defaults here (rhythm). Route to `speaking-shadowing` only on explicit phoneme/发音/口音/怎么读/不会读 — that's a different drill.
+- **Disambiguation**: bare `跟读` defaults here (rhythm). Route to `speaking-shadowing` only on explicit phoneme/发音/口音/怎么读/不会读.
 
-Required context before generating:
+The first round needs an initial tier hint (Beginner / Intermediate / Advanced). Read from `MEMORY.md`:
+1. Prefer `Band Snapshot.Listening` (CEFR). Map `A1`/`A2` → Beginner, `B1` → Intermediate, `B2`/`C1`/`C2` → Advanced. Boundary suffix (`A2+`, `B1-`) → 降一级起步.
+2. If CEFR missing, lowest sub-cap in `Weak Spots.Listening` (0–10) → tier table in `generate_listening_clip` docs.
+3. **Never** treat `Core Capabilities.Listening: <n>/100` as IELTS band — that's a capability score.
 
-1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.shadowing","limit":20}` (`limit` int, not `"DEDUP_WINDOW"` string — `Number()` would NaN it). Returns rows with `accuracy` (= fluency/100), `prompt_hash`, decoded `metadata` (incl. `button_taps`) + flat `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup.
-2. `persist {"action":"coach_context","days":14,"limit":8}` for subcaps / errors. Slow signal — only re-call when tier changes.
-3. `MEMORY.md` / `USER.md` only as fallback. No raw `study.db` access.
+Pick **target weakness** from `persist coach_context` (cached server-side, 5-min TTL — read once per skill session, never re-call):
+- top recurring `listening.*` error key, or
+- the lowest `listening.*` subcap.
 
-## 2. Difficulty Policy
+## 2. Flow
 
-Target **i+1**: one stretch above the learner's current successful tempo. Adapt clip length / connected-speech density / accent; never combine multiple stretches.
+### State A: Deliver
 
-### 2.0 Constants & Tier
+Call `generate_listening_clip` ONCE per round:
 
-| Constant | Value | Meaning |
-| --- | --- | --- |
-| `PASS_THRESHOLD` | `0.85` | `accuracy ≥ PASS` (= fluency ≥ 85) is a pass. |
-| `FAIL_THRESHOLD` | `0.55` | Below = fail. |
-| `STREAK` | `2` | Passes/fails to move tier / length. |
-| `ACC_WINDOW` | `3` | Sample window for §2.2 mean. |
-| `DEDUP_WINDOW` | `20` | Rolling `prompt_hash` window. |
-
-**Score normalization (CRITICAL):** `pron_assess` returns `fluency` and pronunciation `accuracy` 0–100. DB `accuracy` column = `fluency / 100` (drives credit gating). Raw pronunciation goes to `band_pronunciation`; not used for tier decisions.
-
-Standard 100% speed only. Slow-down is the `shadow_slow` button (State B), not a tier property.
-
-| Tier (IELTS band ≈ CEFR) | Clip length | Connected speech | Accent |
-| --- | --- | --- | --- |
-| Beginner (< 5.0 ≈ A1–A2) | 5–8 words, 1 chunk | None / minimal linking | Standard US/UK |
-| Intermediate (5.0–6.0 ≈ B1) | 10–15 words, 2 chunks | Natural flow, basic linking (`gonna`, `wanna`) | Standard US/UK |
-| Advanced (≥ 6.5 ≈ B2+) | 20–30 words, 3+ chunks | Heavy reductions (`shoulda`, `whatcha`), elision | US/UK; non-standard only after stable in Advanced |
-
-**Reading the learner's level from `MEMORY.md`** (do NOT confuse capability score 0–100 with IELTS band 0–9):
-
-1. Prefer `Band Snapshot.Listening` (CEFR string). Map: `A1`/`A2` → Beginner, `B1` → Intermediate, `B2`/`C1`/`C2` → Advanced.
-2. Boundary suffix (`A2+`, `B1-`, `... → ... boundary`): **降一级起步**. E.g. `A2+` → Beginner.
-3. If CEFR missing, fall back to `Weak Spots.Listening` sub-cap scores (0–10): take the **lowest** sub-cap and use the tier table above.
-4. **Never** read `Core Capabilities.Listening: <n>/100` as IELTS band — that's a 0–100 capability score.
-
-### 2.2 Recent-accuracy
-
-Mean `accuracy` over last `ACC_WINDOW` `completed=1` rows of current `session_id` + `skill_type`. Abandoned (`completed=0`) excluded from mean but count as fail for `demotion_credit`.
-
-Fallback chain when fewer than `ACC_WINDOW` rows: 14-day mean from `coach_context.summary` → `MEMORY.md` band − 1 tier at min length → Beginner min (5 words). Never guess upward.
-
-### 2.3 Credit gating
-
-```
-promotion_credit = walk recent_practice.rows newest→oldest (skip rows with parent_sample_id IS NOT NULL):
-  count consecutive accuracy ≥ PASS; reset on any fail (< FAIL or completed=0); holds ([FAIL, PASS)) pass through.
-demotion_credit = mirror: count consecutive fail; reset on any pass; holds pass through.
-abandoned (completed=0, written by `shadow_hard`) = 1 fail.
+```json
+{
+  "session_id": "<session>",
+  "target_weakness": "listening.connected_speech",
+  "current_tier": "<from MEMORY.md or previous round>",
+  "current_length": <previous clip_words or tier-min>,
+  "voice": "en-US-AriaNeural"
+}
 ```
 
-| Credit | Action |
+Returns `{ prompt, prompt_hash, audio_path, tier, clip_words, decision, ... }`. Credit gating + dedup + sentence generation + tts are all inside.
+
+Then send **one** `tg_msg type="render"`. Mention the difficulty change naturally when one happened (`decision.action !== "hold"`) — keep it short, conversational, Anya voice:
+
+| `decision.action` + `decision.reason` | One-line phrasing in the tg_msg text (mix into Anya tone) |
 | --- | --- |
-| `promotion_credit ≥ STREAK` at tier ceiling | Promote tier; reset both credits; start at next tier's min length. |
-| `promotion_credit ≥ STREAK` inside tier | Length **+2**; reset `promotion_credit`. |
-| `demotion_credit ≥ STREAK` at tier floor | Demote tier; reset both credits; start at prev tier's max. |
-| `demotion_credit ≥ STREAK` inside tier | Length **−2**; reset `demotion_credit`. |
-| `shadow_hard` tap | Persists abandoned row (State B); surfaces as fail next call. |
-
-Redo rows (`parent_sample_id IS NOT NULL`) skipped from credit; still count for dedup.
-
-Hold: keep length, optionally swap **one** dimension (syntax / connected-speech / accent) to probe a different weakness from `coach_context.summary.errors`.
-
-### 2.4 Generation
-
-- Pick **one** target weakness from `coach_context.summary.errors|subcaps`.
-- Stretch **at most one** dimension per round: length, syntax, accent, connected-speech.
-- Reject any clip whose `prompt_hash` ∈ `recent_practice.recent_prompt_hashes`.
-- Don't repeat the same speech-act register (monologue vs. dialogue) for 2+ consecutive rounds.
-
-## 3. Flow
-
-### State A: Prepare And Deliver
-
-1. From §2.3 credits, decide tier and clip length. Generate the passage at chosen length/syntax/accent. Compute `prompt_hash` (§State D); regenerate on dedup hit.
-2. `tts` only for the target passage at 100% speed. No filler audio.
-3. Send voice + instruction + buttons in **one** `tg_msg type="render"` call. Renders as two bubbles (voice on its own line, then text + buttons) for clean cross-client display — still one tool call.
-4. Init empty `metadata.button_taps` accumulator; every button tap appends its exact label.
-
-Render envelope (all fields at top level, same as `voice`/`keyboard`):
+| `length_up` | "你连过 3 句都很稳，这次给你多加一个词试试 ✨" |
+| `promote_tier` | "你稳进 <new tier>! 难度悄悄升级了，准备好" |
+| `length_down` + `reason: streak` | "刚才连卡了 3 句，这次缩短一个词重新找节奏" |
+| `length_down` + `reason: too_hard_tap` | "好的，我把句子缩短一个词，慢慢来 🐢" |
+| `demote_tier` + `reason: streak` | "我把难度往下挪一格，先把基本节奏跟稳" |
+| `demote_tier` + `reason: too_hard_tap` | "OK，整体回退一档，先找回节奏感" |
+| `hold` | （不提，正常发题） |
 
 ```json
 {
   "type": "render",
-  "url": "<tts audio path>",
-  "text": "🎧 先盲听一遍，然后直接按住录音，**一边听一边跟我读（影子跟读）**。\n\n如果实在跟不上，可以点开看原文：||{correct English passage}||",
+  "url": "<audio_path from tool>",
+  "text": "🎧 先盲听一遍，然后直接按住录音，<b>一边听一边跟阿尼亚读（影子跟读）</b>。\n[难度变动一句话，若 action != hold]\n如果实在跟不上，可以点开看原文：||<prompt from tool>||",
   "buttons": "[[\"🐢 慢速播放|shadow_slow\", \"😵 太难了，降级|shadow_hard\"]]"
 }
 ```
 
-(`||...||` is the Telegram-spoiler shorthand; the adapter expands it to `<tg-spoiler>` HTML.)
+Remember `{prompt, prompt_hash, audio_path, tier, clip_words}` for State C / D / F (you'll need them).
 
-Wait for the user's voice message or button tap.
-
-### State B: Button Handling (before recording)
+### State B: Buttons before recording
 
 `shadow_slow`:
-
-- Append `🐢 慢速播放` to `metadata.button_taps` (mandatory).
-- Brief ack via `tg_msg type="render"` (text only).
-- Same passage; `tts rate="-10%"`. **Keep the original-speed TTS path in memory** — that's the one State D will persist.
-- Re-deliver via one `tg_msg type="render"` (same envelope as State A — slower audio path for this delivery only, same text + buttons).
+- Brief ack via `tg_msg type="render"` text-only.
+- Re-render at slow rate: call `tts` with `{"text": "<prompt>", "voice": "<same>", "rate": "-10%"}`. **Keep the original audio_path** — that's what `assess_listening_fluency` needs later.
+- Re-send via one `tg_msg type="render"` (slower audio + same buttons).
+- Append `🐢 慢速播放` to a local `button_taps` accumulator.
 
 `shadow_hard`:
-
-1. **Persist abandoned record FIRST** (before generating the replacement):
-
+1. Persist abandoned row FIRST via `persist action="practice"`:
    ```json
    {
-     "action": "practice",
      "skill_type": "listening.shadowing",
      "session_id": "<session>",
      "completed": 0,
      "accuracy": 0,
-     "prompt": "<the original passage that was abandoned>",
-     "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
+     "prompt": "<the original prompt>",
+     "prompt_hash": "<same as State A>",
      "response": "",
-     "feedback": "Learner tapped '😵 太难了，降级' before recording. Treat as negative evidence at the current tier.",
-     "audio_path": "<tts file path of the abandoned audio>",
+     "feedback": "Learner tapped '😵 太难了，降级' before recording.",
+     "audio_path": "<original audio_path>",
      "section": "listening",
-     "domain": "listening",
      "minutes": 0,
-     "mode": "study",
-     "metadata": "{\"button_taps\":[\"😵 太难了，降级\"],\"abandoned_reason\":\"too_hard\",\"tier\":\"<beginner|intermediate|advanced>\",\"clip_words\":<n>}"
+     "metadata": "{\"button_taps\":[\"😵 太难了，降级\"],\"abandoned_reason\":\"too_hard\",\"tier\":\"<tier>\",\"clip_words\":<n>}"
    }
    ```
+2. Brief ack → go to State A with the same `target_weakness`. `generate_listening_clip` will see the abandoned row in `recent_practice` and demote automatically.
 
-   After `persist` returns, reset the round (fresh `metadata.button_taps` accumulator).
+### State C: Evaluate (user sent voice)
 
-2. **Replacement.** Apply the demotion / length-down rule from §2.3 (the abandoned row will surface as one fail in the next `recent_practice` call). Brief ack via `tg_msg type="render"` (text only), generate a new simpler clip → State A.
-
-### State C: Evaluate
-
-When the user sends a voice message:
-
-1. Run `pron_assess` with the user's `audio_path` and the passage's `reference_text`. Returns 4 scores 0–100: `accuracy`, `fluency`, `completeness`, `prosody`.
-2. Map for DB:
-   - `accuracy = fluency / 100` (drives credit gating)
-   - `raw_score = fluency`, `max_score = 100`
-   - `band_pronunciation = <raw pron accuracy>` (separate; not a tier driver)
-3. Identify 1–2 specific places where native speakers link words (连读/吞音) that the user missed/stumbled on — drives `errors` / `subcap_scores`.
-4. **Persist FIRST, THEN feedback**. Sequential — State F's parent-sample lookup needs the row in DB before the next voice message arrives.
-
-Feedback content (no fixed header/template) — every reply MUST cover, in some natural form:
-
-- the four `pron_assess` scores. Use the **exact 3-character labels** so the line aligns visually: **准确度 / 流利度 / 完整度 / 韵律感**. Show all four numbers.
-- the correct English passage
-- a 1-line Chinese translation
-- 1–2 sentences naming the **specific 1–2 chunks** that broke rhythm (linking, weak form, chunk boundary)
-
-Two to four sentences after the score line, conversational.
-
-**Buttons (binary by `accuracy` vs `PASS_THRESHOLD`):**
-
-- `accuracy < PASS` (fluency < 85) — forced re-practice, **NO buttons**:
-  1. Generate coaching audio (see "Low-score coaching TTS" below).
-  2. Deliver coaching voice + feedback text in **one** `tg_msg type="render"` call: `url=<coaching audio>`, `text=<feedback + 这句还没跟稳节奏哦，先听听这一段示范，再多听几遍原音找找感觉，然后直接录音发给我！💪>`, **no `buttons`**. Renders as two bubbles (voice + text) for clean cross-client display.
-  3. Wait for the next voice message → re-evaluate via State F.
-- `accuracy ≥ PASS` (fluency ≥ 85, clean pass): **ONE `tg_msg type="render"`** (no `url`) with feedback text + buttons `[["🔄 再来一句|shadow_next", "🧭 练习其他|nav:main"]]`. On **perfect** (`accuracy === 1.0`, fluency 100) add `react: "🔥"` to the same call.
-
-**Low-score coaching TTS** (mandatory when `accuracy < PASS`):
-
-Goal: a focused, **slow + clear** model for the **specific 1–2 chunks** they stumbled on — not a slow copy of the full sentence (Telegram lets them replay the original).
-
-1. Pick **at most 2** items from this round's `errors[]` — prefer connected-speech / linking / weak-form over isolated phoneme slips (this skill is rhythm-focused).
-2. **Use `tts` segments mode** (renders proper SSML `<break time="..."/>` — clean breath gaps, not mumbled ellipses). Per chunk, 3 segments:
-   1. Voice: the **isolated phrase** (e.g. `"version of"`, `"gonna"`)
-   2. `{"break":"800ms"}`
-   3. Voice: a short **sentence fragment** containing the chunk (e.g. `"The latest version of React."`)
-3. Every voice segment uses `"rate": "-25%"` (genuinely slow — `-10%` isn't enough; the learner needs every consonant to land). Same `voice` as the original clip.
-4. Between two chunks: `{"break":"1500ms"}`.
-5. No English narration ("Listen to this linking:") — pure model phrases only; the report text already explains in Chinese.
-6. Target length 8–15 seconds at the slow rate.
-
-Example call (one chunk — `version of`):
+**One mandatory tool call: `assess_listening_fluency`.** Do NOT call `pron_assess`, `persist`, or `generate_fluency_coaching_audio` directly — all three fold in:
 
 ```json
 {
-  "segments": "[{\"voice\":\"en-US-AriaNeural\",\"text\":\"version of\",\"rate\":\"-25%\"},{\"break\":\"800ms\"},{\"voice\":\"en-US-AriaNeural\",\"text\":\"The latest version of React.\",\"rate\":\"-25%\"}]"
-}
-```
-
-Example call (two chunks — `gonna` + `wanna`):
-
-```json
-{
-  "segments": "[{\"voice\":\"en-US-AriaNeural\",\"text\":\"gonna\",\"rate\":\"-25%\"},{\"break\":\"800ms\"},{\"voice\":\"en-US-AriaNeural\",\"text\":\"I'm gonna call you later.\",\"rate\":\"-25%\"},{\"break\":\"1500ms\"},{\"voice\":\"en-US-AriaNeural\",\"text\":\"wanna\",\"rate\":\"-25%\"},{\"break\":\"800ms\"},{\"voice\":\"en-US-AriaNeural\",\"text\":\"I wanna go home.\",\"rate\":\"-25%\"}]"
-}
-```
-
-Bundle into the single State C `< PASS` render call (`url=<coaching audio>` + `text=<feedback>`, no buttons). No separate text/voice splits.
-
-Append `🎯 发音示范` to `metadata.button_taps` so State D records that coaching was given.
-
-### State D: Persist Evidence
-
-Call `persist action="practice"` (or omit `action`) **before** sending the State C feedback `tg_msg`.
-
-Minimum payload:
-
-```json
-{
-  "skill_type": "listening.shadowing",
+  "user_audio_path": "<from THIS turn's user message: [voice | audio_path=...]>",
+  "reference_prompt": "<the prompt from State A>",
+  "original_audio_path": "<the original-speed audio_path from State A — NOT the -10% slow version>",
   "session_id": "<session>",
-  "prompt": "<correct passage>",
-  "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
-  "response": "<transcription from pron_assess>",
-  "accuracy": 0.78,
-  "raw_score": 78,
-  "max_score": 100,
-  "band_pronunciation": 84,
-  "feedback": "<IN ENGLISH: fluency / rhythm verdict + 1-2 connected-speech moments>",
-  "audio_path": "<tts file path>",
-  "section": "listening",
-  "domain": "listening",
-  "minutes": 1,
-  "mode": "study",
-  "metadata": "{\"button_taps\":[\"🐢 慢速播放\"],\"tier\":\"intermediate\",\"clip_words\":12,\"promotion_credit_after\":1,\"demotion_credit_after\":0}",
-  "errors": "[{\"key\":\"connected_speech_breakdown\",\"category\":\"listening\",\"severity\":\"medium\",\"original\":\"\",\"correction\":\"gonna\",\"note\":\"Failed to keep up at the 'gonna' linking; phoneme accuracy was OK but rhythm broke.\"},{\"key\":\"rhythm_chunking_error\",\"category\":\"listening\",\"severity\":\"low\",\"original\":\"\",\"correction\":\"\",\"note\":\"Stuttered between the 2nd and 3rd chunk; lost beat.\"}]",
-  "subcap_scores": "[{\"key\":\"listening.connected_speech\",\"score\":6.0,\"evidence\":\"Stumbled on the 'gonna' linking and the schwa in 'to'.\"}]"
+  "target_weakness": "<same as State A>",
+  "tier": "<from State A>",
+  "clip_words": <from State A>,
+  "voice": "<voice used in State A, e.g. en-US-AriaNeural>",
+  "button_taps": "<JSON array, e.g. [\"🐢 慢速播放\"]>"
 }
 ```
 
-`prompt_hash` = first 16 hex chars of `SHA-1(normalized prompt)`; normalize = lowercase + strip punctuation + collapse whitespace. Read dedup window via `recent_practice.recent_prompt_hashes` (§1).
+Returns `{ ok, sample_id, pass, scores, accuracy_ratio, weak_words, recognized_text, coaching_audio_path, coaching_chunks, next_step }`. When `pass=false`, `coaching_audio_path` is pre-rendered for you (unless degradation — then it's `null`).
 
-`metadata.button_taps` mandatory whenever any 🐢/😵 button was tapped, even on `fluency ≥ 80`.
+Branch on `pass`:
 
-`audio_path` **MUST be the original-speed (State A) TTS path**, never the `-10%` slowed version generated in `shadow_slow`, and never the State C low-score coaching TTS. The slowed clip and the coaching demo are transient scaffolds; their existence is already signaled via `metadata.button_taps` (`🐢 慢速播放` / `🎯 发音示范`). Persisting the original anchors `pron_assess` re-runs and Revenge replays on the actual challenge.
+**`pass === false`** → forced re-practice, no buttons:
+- Send **one** `tg_msg type="render"` with `url=<coaching_audio_path>` (if non-null), text=<feedback>, **no buttons**.
+- Feedback MUST mention the `coaching_chunks` so the user knows what to focus on.
+- If `coaching_audio_path === null`: send text-only feedback, ask user to replay the original.
+- Wait for next voice → State F.
 
-State D persists fully-attempted clips only (with or without slow-down). Abandoned-on-too-hard rows are written by State B.
+**`pass === true`** → continue:
+- Send **one** `tg_msg type="render"` (no url): text=<feedback> + buttons `[["🔄 再来一句|shadow_next","🧭 练习其他|nav:main"]]`.
+- If `accuracy_ratio === 1.0`: add `react: "🔥"` in the same call.
+
+### State D: Feedback content
+
+Every reply MUST cover:
+- The four scores in this exact order: **准确度 / 流利度 / 完整度 / 韵律感**. Show all four numbers (from `scores`).
+- The correct English passage.
+- A 1-line Chinese translation.
+- 1–2 sentences naming **specific 1–2 chunks** that broke rhythm (use `weak_words`).
+
+Two to four sentences after the score line. Anya voice. No fixed template.
 
 ### State E: Continue (`shadow_next`)
 
-- Re-call `persist action="recent_practice"` (§1) for credits + dedup. Don't reconstruct from chat memory.
-- Apply §2.3 before generating.
-- **NEVER re-call `coach_context` within the same skill session.** It is cached server-side (5-min TTL) and expensive. Only `recent_practice` needs re-reading for credits / dedup.
-- Generate next clip (State A step 1 — incl. dedup).
+Call `generate_listening_clip` again with:
+- `current_tier` = the tier from the LAST `assess_listening_fluency` result
+- `current_length` = the clip_words from the LAST round
+- `target_weakness` = the same key (or a different `listening.*` subcap if you've already covered this one for 2+ rounds — pick from cached `coach_context.errors`).
 
-### State F: Implicit re-practice (`accuracy < PASS` loop)
+Then State A.
 
-When the user sends another voice message after a sub-pass evaluation (no buttons shown), treat as consolidation retry on the **same passage**:
+### State F: Implicit re-practice
 
-1. **Recover parent sample** from chat memory (`id`, `prompt`, `prompt_hash`, `audio_path`). If session was compacted, `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.shadowing","limit":1}` and grab them from the most-recent row. Do NOT regenerate the passage.
-2. Run `pron_assess` with the recovered `prompt` as `reference_text` and the user's new audio.
-3. Persist via State D **with these overrides**:
-   - `parent_sample_id` = previous round's sample `id`
-   - `prompt_hash` = same as previous (intentional collision — same item)
-   - `metadata` includes `"is_redo": true` and `"parent_fluency": <previous raw_score>`
-4. Apply the **same binary button logic** as State C:
-   - Still `< PASS` → no buttons; fresh coaching TTS (different chunk if possible); prompt to re-practice.
-   - `≥ PASS` → `shadow_next` + `nav:main`. Skip coaching TTS — success doesn't need it.
+User sent another voice after a `pass=false` round. Same passage:
 
-## 4. Collaborates With
+1. Recover `prompt`, `prompt_hash`, `original audio_path` from your State A memory. If session was compacted, call `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.shadowing","limit":1}` and read them from the most-recent row's `prompt` + `prompt_hash` + `audio_path` fields.
+2. Call `assess_listening_fluency` with:
+   - `user_audio_path` = the **NEW voice this turn** (extract from `[voice | audio_path=...]` in the incoming user message).
+   - `original_audio_path` = the recovered TTS reference path.
+   - Same `reference_prompt`, `session_id`, `target_weakness`, `tier`, `clip_words` as the previous round.
+3. Apply the same binary `pass` branch as State C. On retry-pass, skip coaching audio.
+
+## 3. Failure And Fallbacks
+
+- `generate_listening_clip` returned `ok: false` with `step: "dedup"` → very rare. Tell user "稍等一下我换一个题目" and retry with a different `target_weakness`.
+- `assess_listening_fluency` returned `ok: false` with `step: "pron_assess"` → brief feedback that assessment was unavailable; offer `shadow_next`. **Never** evaluate the recognized text manually — Whisper-style ASR auto-corrects pronunciation and would give a false pass.
+- `assess_listening_fluency` returned `coaching_audio_path: null` on a `pass=false` round (coaching generation degraded) → still send text feedback (no `url`); ask user to replay the original.
+- User types instead of recording → prompt for voice; typed answer is not a valid shadowing attempt.
+- Empty / inaudible audio → ask once: replay / `shadow_hard` / skip. If skipped, write `completed=0` via `persist` directly.
+
+## 4. Hard Rules
+
+1. **Voice in → `assess_listening_fluency` MUST be the first tool call.** Never call `pron_assess`, `persist`, or `generate_fluency_coaching_audio` directly during State C/F; all are folded into the compound tool to prevent skipping.
+2. **State A / E → `generate_listening_clip` MUST be the first tool call.** Never call `recent_practice` + a sentence-generation LLM round + `tts` manually; they are folded in to prevent re-implementing credit gating in prose.
+3. **No early reveals**: never show the transcript before they attempt, except inside `<tg-spoiler>` (`||...||`).
+4. **All Telegram sends go through `tg_msg type="render"`.** Voice + text + buttons + `react: "🔥"` all fold into one render call.
+5. **Binary buttons by `pass`**: `pass=false` → no buttons + coaching audio + forced re-practice; `pass=true` → `shadow_next` + `nav:main`. Never a dedicated retry button.
+6. **Feedback content (not format)**: every report covers 4 scores (准确度/流利度/完整度/韵律感), correct passage, brief translation, specific rhythm/linking diagnosis. Anya voice. No fixed template.
+7. **Surface difficulty change**: when `generate_listening_clip` returned `decision.action !== "hold"`, the State A tg_msg MUST include a one-line mention of the change so the learner sees the system adapting. Never silently adjust.
+
+## 5. Collaborates With
 
 - `planner`: routes here when listening rhythm / connected-speech / chunking is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running tempo state, updates `MEMORY.md`.
-- `speaking-shadowing`: complementary phoneme-focused skill (see §1 disambiguation).
-- `support/data-contract`: defines the `persist` write protocol.
-
-## 5. Failure And Fallbacks
-
-- `tts` fails → text error, no fake `audio_path`. Offer retry / menu.
-- `pron_assess` fails → brief feedback that assessment was unavailable; offer `shadow_next`. Don't persist a fake fluency score.
-- `persist` fails → still send feedback, but say it was not saved.
-- User types instead of recording → prompt for voice; typed answer is not a valid shadowing attempt.
-- `<tg-spoiler>` is client-side; no callback. Don't invent `spoiler_used`.
-- Empty / inaudible audio → ask once: replay / `shadow_hard` / skip. If skipped, `completed=0`.
-
-## 6. Hard Rules
-
-1. **No early reveals**: never show the transcript before they attempt, except inside `<tg-spoiler>`.
-2. **Score rhythm, not phonemes**: fluency drives credits; pronunciation accuracy goes to `band_pronunciation`.
-3. **All Telegram sends go through `tg_msg type="render"`.** Voice + text + buttons + perfect-score `react: "🔥"` (when `accuracy === 1.0`, fluency 100) all fold into one render call. State A / B's `shadow_slow` use render with `url`+`text`+`buttons`. State C / F `< PASS` use render with `url`+`text`, no buttons. State C / F `≥ PASS` use render with `text`+`buttons`, no `url`. Never split into separate `voice` / `text` / `keyboard` / `react` calls.
-4. Use `persist` for reads/writes; no raw DB.
-5. Don't update `MEMORY.md`; `learner-state` owns durable state.
-6. **Binary buttons by `accuracy` vs `PASS`**: `< PASS` → no buttons + coaching TTS + forced re-practice; `≥ PASS` → `shadow_next` + `nav:main`. Never a dedicated retry button.
-7. **Feedback content (not format)**: every report covers 4 scores (准确度/流利度/完整度/韵律感), correct passage, brief translation, specific rhythm/linking diagnosis. Format is the LLM's call — no fixed template.
-8. **Persist before feedback**: `await persist(...)` returns before sending the evaluation. State F needs the row in DB.
+- `speaking-shadowing`: complementary phoneme-focused skill (route there only on explicit phoneme/发音/口音 cues).

@@ -3,6 +3,7 @@
 import type { ToolDefinition, ToolContext, ToolParameterSchema, ToolDispatchResult } from '../agent/types.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { agentLogger } from '../lib/logger.js';
+import { getSkill } from '../agent/skills/loader.js';
 
 let toolsLoaded = false;
 
@@ -19,6 +20,7 @@ export async function registerAllTools(): Promise<void> {
     import('../tools/pronAssess.js'),
     import('../tools/persist.js'),
     import('../tools/cron.js'),
+    import('../tools/compound/index.js'),
   ]);
 }
 
@@ -31,17 +33,37 @@ export function register(tool: ToolDefinition): void {
   tools.set(tool.name, tool);
 }
 
-// Filter order: platform → deny → allow (allow is a hard override).
+// Filter order: tier → platform → deny → allow (allow is a hard override).
+//
+// Tier filtering: baseline tools are always exposed. Compound tools are exposed
+// only when the session's active_skill declares them in `required_tools`.
+// This keeps the LLM's tool list focused (e.g. shadowing skill sees fluency
+// assessors but not essay graders) while preserving cross-skill utility
+// actions (add word, look up, check progress) regardless of active skill.
 export function getToolSchemas(
   _config: AnyaConfig,
   platform: string = 'telegram',
   toolPolicy?: { allow?: string[]; deny?: string[] },
+  activeSkill?: string | null,
 ): Array<{
   name: string;
   description: string;
   parameters: ToolParameterSchema;
 }> {
   let enabled = [...tools.values()];
+
+  // Tier 2 (compound) gating: skill must opt in via required_tools.
+  const allowedCompound = new Set<string>();
+  if (activeSkill) {
+    const skill = getSkill(activeSkill);
+    if (skill) {
+      for (const name of skill.requiredTools) allowedCompound.add(name);
+    }
+  }
+  enabled = enabled.filter(t => {
+    if (t.tier === 'compound') return allowedCompound.has(t.name);
+    return true;
+  });
 
   if (platform !== 'telegram') {
     enabled = enabled.filter(t => t.name !== 'tg_msg');

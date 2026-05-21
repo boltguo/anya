@@ -43,6 +43,11 @@ export interface LLMResponse {
 
 export interface ChatOptions {
   sessionId?: string;
+  // Per-call model override. When set, takes precedence over config.provider.model.
+  // Used by llmSubroutine to route lightweight focused generations (sentence
+  // generation, rubric grading) through a smaller/faster model variant while
+  // the main agent loop keeps the heavier default.
+  model?: string;
 }
 
 export interface LLMProvider {
@@ -80,10 +85,16 @@ export interface ToolParameterSchema {
   required?: string[];
 }
 
+export type ToolTier = 'baseline' | 'compound';
+
 export interface ToolDefinition {
   name: string;
   description: string;
   parameters: ToolParameterSchema;
+  // 'baseline' = always exposed to LLM. 'compound' = only exposed when the
+  // session's active_skill lists it in `required_tools`. Defaults to baseline
+  // when omitted, preserving existing tool behavior.
+  tier?: ToolTier;
   timeoutMs?: number;
   execute: (args: Record<string, unknown>, context: ToolContext) => Promise<string>;
 }

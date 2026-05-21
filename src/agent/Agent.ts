@@ -5,7 +5,8 @@ import type { AnyaConfig } from '../config/defaults.js';
 import { buildSystemPrompt } from './promptBuilder.js';
 import { createProvider } from '../providers/index.js';
 import { getToolSchemas, dispatch } from '../tools/registry.js';
-import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle } from '../storage/state/sessions.js';
+import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle, getActiveSkill, setActiveSkill } from '../storage/state/sessions.js';
+import { getSkill } from './skills/loader.js';
 import { agentLogger } from '../lib/logger.js';
 import { trackLlm } from '../lib/usage.js';
 import { truncateHistory, sanitizeHistory, compactCompletedPractice } from './history.js';
@@ -65,7 +66,9 @@ export class Agent {
     history = compactCompletedPractice(history);
     history = sanitizeHistory(history);
 
-    const systemPrompt = buildSystemPrompt(this.config) + buildTurnContextBlock(turnMeta);
+    const baseSystemPrompt = buildSystemPrompt(this.config) + buildTurnContextBlock(turnMeta);
+    let activeSkill = getActiveSkill(sessionId);
+    let systemPrompt = buildSystemPromptWithSkill(baseSystemPrompt, activeSkill);
 
     const messages: Message[] = [
       { role: 'system', content: systemPrompt },
@@ -85,8 +88,10 @@ export class Agent {
     const maxLoops = this.config.provider.max_react_loops;
     const contextLimit = this.config.provider.context_window;
     const compressor = new ContextCompressor(this.config, this.provider);
-    // Tool schemas are loop-invariant (depend on static config + platform + policy).
-    const toolSchemas = getToolSchemas(this.config, this.adapter.platform, toolPolicy);
+    // Tool schemas vary by active_skill (compound tools are tier-gated). We
+    // recompute only when active_skill changes mid-turn (see skill_view handler
+    // below); otherwise the same list is reused across loop iterations.
+    let toolSchemas = getToolSchemas(this.config, this.adapter.platform, toolPolicy, activeSkill);
     let totalToolCalls = 0;
     let tgSent = false;
     let compressionCount = 0;
@@ -209,6 +214,24 @@ export class Agent {
             } catch { /* non-JSON result — don't set tgSent */ }
           }
 
+          // Activating a skill: skill_view of a top-level SKILL.md (no file param)
+          // becomes the active skill for this session. Refresh system prompt
+          // (injects skill body) and tool schemas (gates compound tools).
+          if (toolCall.name === 'skill_view' && !toolCall.args.file && !result.isError) {
+            const skillName = String(toolCall.args.name || '');
+            if (skillName && skillName !== activeSkill) {
+              const skill = getSkill(skillName);
+              if (skill) {
+                await setActiveSkill(sessionId, skillName);
+                activeSkill = skillName;
+                systemPrompt = buildSystemPromptWithSkill(baseSystemPrompt, activeSkill);
+                messages[0] = { role: 'system', content: systemPrompt };
+                toolSchemas = getToolSchemas(this.config, this.adapter.platform, toolPolicy, activeSkill);
+                agentLogger.info({ msg: 'active_skill_changed', sessionId, skill: activeSkill });
+              }
+            }
+          }
+
           if (this.config.ui.show_tool_calls && this.adapter.showToolResult) {
             this.adapter.showToolResult(toolCall.name, result.content, result.isError);
           }
@@ -282,6 +305,22 @@ function degradeForStorage(messages: Message[]): Message[] {
     }
     return msg;
   });
+}
+
+// Inject the active skill's SKILL.md body into the system prompt so the state
+// machine survives across turns (e.g. shadowing State C after the user records
+// voice). Tool filtering already restricts which compound tools are visible;
+// this gives the LLM the procedural map for what to call when.
+function buildSystemPromptWithSkill(baseSystemPrompt: string, activeSkill: string | null): string {
+  if (!activeSkill) return baseSystemPrompt;
+  const skill = getSkill(activeSkill);
+  if (!skill) return baseSystemPrompt;
+  return [
+    baseSystemPrompt,
+    `\n## Active Skill: ${activeSkill}\n`,
+    skill.body,
+    `\n> The active skill above is the current workflow. Tool exposure is already filtered to its required_tools. Resume from the conversation state — do not re-call \`skill_view\` for this skill.`,
+  ].join('\n');
 }
 
 // Per-turn context appended to the static system prompt. Keeps user.content

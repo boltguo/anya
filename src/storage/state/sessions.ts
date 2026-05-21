@@ -162,3 +162,18 @@ export async function updateSessionTitle(sessionId: string, title: string): Prom
     db.prepare('UPDATE sessions SET title = ? WHERE id = ?').run(title, sessionId);
   });
 }
+
+export function getActiveSkill(sessionId: string): string | null {
+  const db = getDb();
+  const row = db.prepare('SELECT active_skill FROM sessions WHERE id = ?').get(sessionId) as
+    | { active_skill: string | null }
+    | undefined;
+  return row?.active_skill ?? null;
+}
+
+export async function setActiveSkill(sessionId: string, skillName: string | null): Promise<void> {
+  await withWriteRetry(() => {
+    const db = getDb();
+    db.prepare('UPDATE sessions SET active_skill = ? WHERE id = ?').run(skillName, sessionId);
+  });
+}

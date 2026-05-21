@@ -22,7 +22,7 @@ export class CodexProvider implements LLMProvider {
     const { instructions, input } = toResponsesInput(messages);
 
     const body: Record<string, unknown> = {
-      model: config.provider.model,
+      model: options?.model || config.provider.model,
       instructions: instructions || 'You are a helpful assistant.',
       input,
       store: false,
