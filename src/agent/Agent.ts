@@ -4,7 +4,7 @@ import type { Message, Adapter, MessageFile, LLMProvider } from './types.js';
 import type { AnyaConfig } from '../config/defaults.js';
 import { buildSystemPrompt } from './promptBuilder.js';
 import { createProvider } from '../providers/index.js';
-import { getToolSchemas, dispatch } from '../tools/registry.js';
+import { getToolSchemas, getAllTools, dispatch } from '../tools/registry.js';
 import { getOrCreateSession, createSession, loadMessages, saveMessages, updateSessionTitle, getActiveSkill, setActiveSkill } from '../storage/state/sessions.js';
 import { getSkill } from '../skills/loader.js';
 import { agentLogger } from '../lib/logger.js';
@@ -55,7 +55,7 @@ export class Agent {
     }
 
     let history = loadMessages(sessionId);
-    const maxHistory = this.config.advanced.max_history_messages || 200;
+    const maxHistory = this.config.provider.max_history_messages || 200;
     history = truncateHistory(history, maxHistory);
     history = trimOldToolResults(history);
     history = sanitizeHistory(history);
@@ -88,8 +88,8 @@ export class Agent {
       await updateSessionTitle(sessionId, title);
     }
 
-    const maxLoops = this.config.advanced.max_react_loops;
-    const contextLimit = this.config.advanced.context_window;
+    const maxLoops = this.config.provider.max_react_loops;
+    const contextLimit = this.config.provider.context_window;
     const compressor = new ContextCompressor(this.config, this.provider);
     let totalToolCalls = 0;
     let tgSent = false;
@@ -100,7 +100,7 @@ export class Agent {
 
     for (let loop = 0; loop < maxLoops; loop++) {
 
-      const tokenCount = lastRealTokenCount || estimateTokens(messages, this.config.tools.enabled.length);
+      const tokenCount = lastRealTokenCount || estimateTokens(messages, getAllTools().length);
       if (compressor.shouldCompress(messages, tokenCount, contextLimit) && compressionCount < MAX_COMPRESSIONS) {
         compressionCount++;
         const compressed = await compressor.compress(messages, contextLimit);

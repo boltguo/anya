@@ -56,7 +56,7 @@ export async function runConfigMenu(): Promise<void> {
           value: 'stt',
         },
         {
-          name: `Tavily   ${chalk.dim(`(Web Search${config.tools?.web_search?.api_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
+          name: `Tavily   ${chalk.dim(`(Web Search${config.web_search?.api_key ? chalk.green(' ✓') : chalk.yellow(' ✗')})`)}`,
           value: 'tavily',
         },
         {
@@ -103,7 +103,7 @@ export function runConfigShow(): void {
   const display = JSON.parse(JSON.stringify(config));
 
   if (display.gemini?.api_key) display.gemini.api_key = maskKey(display.gemini.api_key);
-  if (display.tools?.web_search?.api_key) display.tools.web_search.api_key = maskKey(display.tools.web_search.api_key);
+  if (display.web_search?.api_key) display.web_search.api_key = maskKey(display.web_search.api_key);
   if (display.telegram?.bot_token) display.telegram.bot_token = maskKey(display.telegram.bot_token);
   if (display.stt?.groq_api_key) display.stt.groq_api_key = maskKey(display.stt.groq_api_key);
   if (display.azure?.speech_key) display.azure.speech_key = maskKey(display.azure.speech_key);
@@ -209,7 +209,7 @@ async function configSTT(config: AnyaConfig): Promise<void> {
 }
 
 async function configTavily(config: AnyaConfig): Promise<void> {
-  const currentKey = config.tools?.web_search?.api_key;
+  const currentKey = config.web_search?.api_key;
   
   console.log();
   if (currentKey) {
@@ -229,7 +229,7 @@ async function configTavily(config: AnyaConfig): Promise<void> {
     return; 
   }
 
-  config.tools.web_search.api_key = apiKey.trim();
+  config.web_search.api_key = apiKey.trim();
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
   console.log(chalk.green('\n  [ok] Tavily API key saved.'));
   await autoRestartGateway();

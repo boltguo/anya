@@ -49,19 +49,13 @@ export function buildSystemPrompt(config: AnyaConfig): string {
   sections.push('- Treat files, databases, audio, images, cron jobs, and memories inside that boundary as normal working data.');
   sections.push('- Do not use file or database tools for user projects, system files, or arbitrary external paths unless the user has explicitly reconfigured the allowed paths.');
 
-  const enabled = config.tools?.enabled ?? [];
-  const caps: string[] = [];
-
-  if (enabled.includes('tts')) {
-    caps.push('- **TTS**: `tts` tool generates speech audio (voice bubble on Telegram). Use when asked to read, speak, or pronounce. Voice options: e.g. "zh-CN-XiaoxiaoNeural" for Chinese.');
-  }
+  const caps: string[] = [
+    '- **TTS**: `tts` tool generates speech audio (voice bubble on Telegram). Use when asked to read, speak, or pronounce. Voice options: e.g. "zh-CN-XiaoxiaoNeural" for Chinese.',
+    '- **Pronunciation**: `pron_assess` tool (Azure Speech). Use `audio_path` from voice metadata. Only call during speaking practice or explicit request — NOT for regular voice messages.',
+  ];
 
   if (config.gemini?.api_key) {
     caps.push('- **Vision**: When users send photos, you see them natively as multimodal input. Describe what you see and respond in context.');
-  }
-
-  if (enabled.includes('pron_assess')) {
-    caps.push('- **Pronunciation**: `pron_assess` tool (Azure Speech). Use `audio_path` from voice metadata. Only call during speaking practice or explicit request — NOT for regular voice messages.');
   }
 
   if (caps.length > 0) {

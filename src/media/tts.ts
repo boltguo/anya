@@ -10,6 +10,7 @@ import type { AnyaConfig } from '../config/defaults.js';
 const DEFAULT_VOICE = 'en-US-AriaNeural';
 const DEFAULT_RATE = '+0%';
 
+
 export interface TtsOptions {
   voice?: string;
   rate?: string;
@@ -39,9 +40,8 @@ export async function textToSpeech(
 
   const speechKey = config.azure.speech_key;
   const speechRegion = config.azure.speech_region || 'eastasia';
-  const ttsConfig = config.tts ?? {};
-  const voice = opts?.voice || ttsConfig.voice || DEFAULT_VOICE;
-  const rate = opts?.rate || ttsConfig.rate || DEFAULT_RATE;
+  const voice = opts?.voice || config.tts?.voice || DEFAULT_VOICE;
+  const rate = opts?.rate || DEFAULT_RATE;
   const wantOpus = opts?.format === 'opus';
 
   const maxLen = 8000;

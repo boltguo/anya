@@ -117,7 +117,7 @@ function registerUsage(rt: TelegramRuntime): void {
     const cacheHitPct = usage.llm.input_tokens > 0
       ? Math.round((usage.llm.cached_tokens / usage.llm.input_tokens) * 100)
       : 0;
-    let llmSection = `🧠 <b>LLM</b> (${rt.config.provider.backend})\n` +
+    let llmSection = `🧠 <b>LLM</b> (codex)\n` +
       `├ Calls: <code>${fmtNum(usage.llm.calls)}</code>\n` +
       `├ Input: <code>${fmtNum(usage.llm.input_tokens)}</code>\n` +
       `├ Output: <code>${fmtNum(usage.llm.output_tokens)}</code>\n` +
