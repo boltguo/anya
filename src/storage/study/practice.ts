@@ -12,7 +12,7 @@ export function logPractice(db: DatabaseSync, args: Record<string, unknown>): un
   const skillType = String(args.skill_type || '');
   const completed = Number(args.completed ?? 1);
   const prompt = String(args.prompt || (completed === 0 ? '[abandoned]' : ''));
-  const response = String(args.response ?? args.raw_content ?? (completed === 0 ? '[abandoned]' : ''));
+  const response = String(args.response || args.raw_content || (completed === 0 ? '[abandoned]' : ''));
   const feedback = String(args.feedback || (completed === 0 ? 'Session abandoned before evaluation.' : ''));
 
   if (!skillType) return { error: 'Missing skill_type' };

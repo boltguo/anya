@@ -50,14 +50,21 @@ function getCaption(args: Record<string, unknown>): string | undefined {
   return (args.text as string) || (args.caption as string) || undefined;
 }
 
+// Convert ||hidden|| shorthand into <tg-spoiler>...</tg-spoiler>. Single-line,
+// non-greedy, and inner content cannot contain | — avoids markdown-table conflicts.
+function applySpoiler(text: string | undefined): string {
+  if (!text) return '';
+  return text.replace(/\|\|([^\n|]+?)\|\|/g, '<tg-spoiler>$1</tg-spoiler>');
+}
+
 register({
   name: 'tg_msg',
-  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), edit, delete, react, countdown (auto-edit timer with {seconds} placeholder), paginate (multi-page with client-side flipping). Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> for hidden/reveal text (great for learning). Follow the active prompt instructions and skill-specific interaction rules.',
+  description: 'Send or manage Telegram messages. Use `type` to choose the format: text, audio, voice, document (send files), keyboard (inline buttons), quiz (auto-scored poll), edit, delete, react, countdown (auto-edit timer with {seconds} placeholder), paginate (multi-page with client-side flipping), render (compound: react + media + text/buttons in one tool call, supports terminal flag to end the LLM turn). Default parse mode is HTML. Use <tg-spoiler>text</tg-spoiler> or ||hidden|| for hidden/reveal text. Follow the active prompt instructions and skill-specific interaction rules.',
   parameters: {
     type: 'object',
     properties: {
-      type:       { type: 'string', description: 'Message type: text | audio | voice | document | keyboard | quiz | edit | delete | react | countdown | paginate' },
-      text:       { type: 'string', description: 'Message text/caption (HTML format). For countdown: use {seconds} as placeholder. For paginate: pages separated by ---PAGE--- delimiter.' },
+      type:       { type: 'string', description: 'Message type: text | audio | voice | document | keyboard | quiz | edit | delete | react | countdown | paginate | render' },
+      text:       { type: 'string', description: 'Message text/caption (HTML format). For countdown: use {seconds} as placeholder. For paginate: pages separated by ---PAGE--- delimiter. For render: main text body, supports ||spoiler|| shorthand.' },
       url:        { type: 'string', description: 'For audio/voice/document: URL or file path of the media to send.' },
       buttons:    { type: 'string', description: 'JSON 2D array for keyboard: [["label|callback_data",...]].' },
       options:    { type: 'string', description: 'For quiz: JSON array of option strings.' },
@@ -70,6 +77,9 @@ register({
       parse_mode: { type: 'string', description: 'Parse mode: HTML (default), Markdown, MarkdownV2, or none.' },
       seconds:    { type: 'integer', description: 'For countdown: duration in seconds.' },
       expire_text:{ type: 'string', description: 'For countdown: text to show when timer reaches 0.' },
+      react:      { type: 'object', description: 'For render: {"target":"user"|tag|message_id, "emoji":"👍"}. Reaction is sent before media/text.' },
+      media:      { type: 'object', description: 'For render: {"type":"voice"|"audio"|"document", "url":"/path"}.' },
+      terminal:   { type: 'boolean', description: 'For render (and any sent_content type): if true, end the LLM turn immediately after this tool call succeeds. Default false.' },
     },
     required: ['type'],
   },
@@ -209,8 +219,74 @@ register({
         return JSON.stringify({ ok: true, message_id: msgId, page_count: pages.length, sent_content: true });
       }
 
+      case 'render': {
+        const replyTo = resolveReplyTo(args.reply_to, tg);
+        const parseMode = (args.parse_mode as string) || 'HTML';
+        const terminal = args.terminal === true || args.terminal === 'true';
+        const messageIds: number[] = [];
+
+        // 1. reaction — fire-and-forget; never block main send
+        const reactArg = args.react as { target?: unknown; emoji?: unknown } | undefined;
+        if (reactArg && reactArg.target) {
+          const rawTarget = reactArg.target;
+          const target = rawTarget === 'user' ? tg.getUserMessageId()
+                       : typeof rawTarget === 'number' ? rawTarget
+                       : String(rawTarget);
+          const emoji = String(reactArg.emoji || '👍');
+          if (target) {
+            try { await tg.react(target as number | string, emoji); }
+            catch { /* reaction failure must not break the message flow */ }
+          }
+        }
+
+        // 2. media (optional) — caption only if there are no buttons to attach later
+        const mediaArg = args.media as { type?: string; url?: string } | undefined;
+        const text = renderText(applySpoiler(args.text as string | undefined), parseMode);
+        const buttons = args.buttons ? parseArray(args.buttons) : undefined;
+        const hasButtons = Array.isArray(buttons) && buttons.length > 0;
+
+        let mediaSent = false;
+        if (mediaArg && mediaArg.url) {
+          const url = String(mediaArg.url);
+          const mediaCaption = (!hasButtons && text) ? text : undefined;
+          const mediaType = String(mediaArg.type || 'voice');
+          let id: number | null = null;
+          if (mediaType === 'audio') {
+            id = await tg.sendAudio(url, mediaCaption, { replyTo, tag: args.tag as string, parseMode: parseMode as any });
+          } else if (mediaType === 'document') {
+            id = await tg.sendDocument(url, { caption: mediaCaption, replyTo, tag: args.tag as string, parseMode });
+          } else {
+            id = await tg.sendVoice(url, mediaCaption, { replyTo, tag: args.tag as string, parseMode: parseMode as any });
+          }
+          if (id) messageIds.push(id);
+          mediaSent = true;
+        }
+
+        // 3. text + buttons (or plain text) — only when not already absorbed as media caption
+        const captionAlreadyOnMedia = mediaSent && !hasButtons && !!text;
+        if (hasButtons) {
+          // text may be empty here; sendKeyboard requires some text — use a thin-space fallback
+          const kbText = text || '​';
+          // Avoid double-replying to user when media already did the reply
+          const replyToText = mediaSent ? undefined : replyTo;
+          const tagForText = mediaSent ? undefined : (args.tag as string | undefined);
+          const id = await tg.sendKeyboard(kbText, buttons!, { replyTo: replyToText, tag: tagForText });
+          messageIds.push(id);
+        } else if (text && !captionAlreadyOnMedia) {
+          const id = await tg.sendMessage(text, { replyTo, tag: args.tag as string, parseMode: parseMode as any });
+          messageIds.push(id);
+        }
+
+        return JSON.stringify({
+          ok: true,
+          message_ids: messageIds,
+          sent_content: messageIds.length > 0,
+          terminal,
+        });
+      }
+
       default:
-        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, audio, voice, document, keyboard, quiz, edit, delete, react, action, paginate.` });
+        return JSON.stringify({ error: `Unknown type: ${type}. Use: text, audio, voice, document, keyboard, quiz, edit, delete, react, countdown, paginate, render.` });
     }
   },
 });

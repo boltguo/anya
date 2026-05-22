@@ -215,11 +215,15 @@ export class Agent {
             }
           }
 
+          let terminalRender = false;
           if (toolCall.name === 'tg_msg' && !result.isError) {
             try {
               const parsed = JSON.parse(result.content);
               if (parsed.ok && parsed.sent_content) {
                 tgSent = true;
+              }
+              if (parsed.ok && parsed.terminal === true) {
+                terminalRender = true;
               }
             } catch { /* non-JSON result — don't set tgSent */ }
           }
@@ -236,6 +240,21 @@ export class Agent {
           };
           messages.push(toolMsg);
           newMessages.push(toolMsg);
+
+          if (terminalRender) {
+            // Skip the redundant "tools=0" round-trip — skill explicitly declared this
+            // tg_msg as the last user-visible action of the turn. Persist what we have
+            // (assistant tool calls + tool results) so the next turn loads valid history.
+            const degraded = degradeForStorage(newMessages);
+            await saveMessages(sessionId, degraded);
+
+            return {
+              content: response.content || '',
+              sessionId,
+              toolCallCount: totalToolCalls,
+              tgSent,
+            };
+          }
         }
 
         continue;

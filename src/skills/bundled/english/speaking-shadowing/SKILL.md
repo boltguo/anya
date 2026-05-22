@@ -93,21 +93,28 @@ Hold: keep length, optionally swap **one** dimension (target phoneme / linking /
 
 1. From §2.3 + §2.4, decide tier and length, target phoneme, topic (rotate). Generate the sentence at chosen length / phoneme density. Compute `prompt_hash` (§State D); regenerate on dedup hit.
 2. `tts` only for the target sentence at 100% speed. No filler audio.
-3. Send voice FIRST: a separate `tg_msg type="voice"` call with the audio `url`. Wait for delivery.
-4. THEN send instruction: a separate `tg_msg type="keyboard"` call (text + buttons only — **never include `url` here**, the keyboard endpoint has no media slot). Never parallel — see Hard Rule 3.
-   - Text: `🎧 先听示范，然后按住录音键**朗读原句**，我来帮你揪出发音细节。\n\n原文：<tg-spoiler>{correct English sentence}</tg-spoiler>`
-   - Buttons: `[["🐢 慢速示范|speak_slow", "😵 太长了，换短句|speak_hard"]]`
-5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
-6. Wait for the user's voice message or button tap.
+3. Send the prompt as **one** `tg_msg type="render"` call (`terminal: true`). The renderer plays the voice first, then attaches the instruction text + buttons.
+
+   ```json
+   {
+     "type": "render",
+     "media": { "type": "voice", "url": "<tts file path>" },
+     "text": "🎧 先听示范，然后按住录音键**朗读原句**，我来帮你揪出发音细节。\n\n原文：||{correct English sentence}||",
+     "buttons": [["🐢 慢速示范|speak_slow", "😵 太长了，换短句|speak_hard"]],
+     "terminal": true
+   }
+   ```
+
+4. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+5. Wait for the user's voice message or button tap.
 
 ### State B: Button Handling (before recording)
 
 `speak_slow`:
 
 - Append `🐢 慢速示范` to `ui_feedback` (mandatory — survives into State D so a "passed only at slow speed" attempt is not mistaken for native-tempo competence).
-- Brief ack via `tg_msg type="text"`.
 - Same sentence; `tts rate="-10%"`.
-- Send slower voice FIRST, THEN re-send instruction keyboard. Never parallel.
+- Re-send via one `tg_msg type="render"` (`terminal: true`) — slow voice + same instruction text + same two buttons. The brief ack can sit on the first line of `text` (e.g. `"慢一档，再示范一次🐢"`); no separate `type="text"` call.
 
 `speak_hard`:
 
@@ -137,7 +144,7 @@ Hold: keep length, optionally swap **one** dimension (target phoneme / linking /
 
    After `persist` returns, reset the round (fresh `ui_feedback` accumulator).
 
-2. **Replacement.** Apply the demotion / length-down rule from §2.3 (the abandoned row will surface as one fail in the next `recent_practice` call). Brief ack via `tg_msg type="text"`, generate a new shorter sentence → State A.
+2. **Replacement.** Apply the demotion / length-down rule from §2.3 (the abandoned row will surface as one fail in the next `recent_practice` call). Generate a new shorter sentence; the brief ack ("换一句短一点的👇") can sit on the first line of State A's render `text` — no separate `tg_msg type="text"` call.
 
 ### State C: Evaluate
 
@@ -159,14 +166,36 @@ Feedback content (no fixed header/template) — every reply MUST cover, in some 
 
 Two to four sentences after the score line, conversational.
 
-**Buttons (binary by `accuracy` vs `PASS_THRESHOLD`):**
+**Delivery (binary by `accuracy` vs `PASS_THRESHOLD`)** — always one `tg_msg type="render"` (`terminal: true`):
 
 - `accuracy < PASS` (Azure pron < 85) — forced re-practice, **NO buttons**:
   1. Generate coaching audio (see "Low-score coaching TTS" below).
-  2. **Send voice FIRST**: `tg_msg type="voice"` with the coaching audio (separate message, no caption).
-  3. **THEN send feedback text**: `tg_msg type="text"` with the feedback + nudge (`对照刚才的精度示范，按住录音再读一遍发给我！💪`). Voice and text are always separate messages.
-  4. Wait for the next voice message → re-evaluate via State F.
-- `accuracy ≥ PASS` (Azure pron ≥ 85, clean pass): **ONE `tg_msg type="keyboard"`** with feedback text + buttons `[["🔄 练下一句|speak_next", "🧭 练习其他|nav:main"]]`.
+  2. Send one render envelope: coaching voice as `media`, feedback + nudge (`对照刚才的精度示范，按住录音再读一遍发给我！💪`) as `text`, no `buttons`, no `react`. The renderer will dispatch the voice first, then the text — single tool call, single LLM turn.
+
+     ```json
+     {
+       "type": "render",
+       "media": { "type": "voice", "url": "<coaching audio path>" },
+       "text": "<feedback line(s) + nudge>",
+       "terminal": true
+     }
+     ```
+
+  3. Wait for the next voice message → re-evaluate via State F.
+
+- `accuracy ≥ PASS` (Azure pron ≥ 85, clean pass): one render envelope with `react` + feedback text + next buttons. **No coaching audio.**
+
+     ```json
+     {
+       "type": "render",
+       "react": { "target": "user", "emoji": "🔥" },
+       "text": "<short feedback with the 4 scores line>",
+       "buttons": [["🔄 练下一句|speak_next", "🧭 练习其他|nav:main"]],
+       "terminal": true
+     }
+     ```
+
+     Emoji policy: `accuracy = 1.0` → `🔥`; `≥ PASS` but `< 1.0` → `👍`. Never use `tg_msg type="react"` as a standalone call (see Hard Rule 9).
 
 **Max retry rule**: If the **same phoneme** has failed 3 consecutive times across re-practices (State F), stop drilling it. Send a short ack ("这个音今天先放一放，下次再攻克 💪"), auto-advance to `speak_next` (State E). Prevents frustration loops.
 
@@ -243,20 +272,19 @@ Error keys: `pronunciation_vowel`, `pronunciation_consonant`, `pronunciation_str
 
 When the user sends another voice message after a sub-pass evaluation (no buttons shown), treat as consolidation retry on the **same sentence**:
 
-**⚡ Retry cost budget: 2-3 tool calls MAX per retry turn.** Do NOT re-call `recent_practice` or `coach_context` — tier cannot change mid-retry and the prompt is already known.
+**⚡ Retry cost budget: 2 tool calls MAX per retry turn.** Do NOT re-call `recent_practice` or `coach_context` — tier cannot change mid-retry and the prompt is already known.
 
 1. **Recover parent sample** from chat memory (`id`, `prompt`, `prompt_hash`, `audio_path`, `redo_count`). These are all available in the current conversation context — do NOT call `persist` to retrieve them. Only if the session was compacted and chat memory is truly empty, fall back to `persist {"action":"recent_practice","session_id":"<session>","skill_type":"speaking.shadowing","limit":1}`.
 2. Run `pron_assess` with the recovered `prompt` as `reference_text` and the user's new audio. **(Tool call 1)**
-3. Send voice (separate `tg_msg type="voice"`) THEN feedback text (`tg_msg type="text"` or `type="keyboard"` depending on pass/fail). **(Tool calls 2-3)**
-4. Persist via State D **with these overrides**: **(Tool call 3)**
+3. Persist via State D **with these overrides** (still part of the same loop, before the render):
    - `parent_sample_id` = previous round's sample `id`
    - `redo_count` = `(previous.redo_count ?? 0) + 1` (null/missing → 0; first retry → 1)
    - `prompt_hash` = same as previous (intentional collision — same item)
    - `metadata` includes `"is_redo": true` and `"parent_accuracy": <previous accuracy>`
-5. Apply the **same binary button logic** as State C:
-    - Still `< PASS` → no buttons; fresh coaching TTS targeting a **different** phoneme if possible; voice (separate) then text (separate).
-    - Still `< PASS` AND this is the **3rd consecutive fail on the same phoneme** → auto-advance (see "Max retry rule" in State C).
-    - `≥ PASS` → `[["🔄 练下一句|speak_next", "🧭 练习其他|nav:main"]]`. Skip coaching TTS — success doesn't need it.
+4. Send one `tg_msg type="render"` envelope (`terminal: true`) — same binary shape as State C:
+   - Still `< PASS` → no buttons; fresh coaching TTS targeting a **different** phoneme if possible; coaching voice as `media`, feedback + nudge as `text`.
+   - Still `< PASS` AND this is the **3rd consecutive fail on the same phoneme** → auto-advance (see "Max retry rule" in State C).
+   - `≥ PASS` → `react` (🔥 / 👍) + feedback `text` + `[["🔄 练下一句|speak_next", "🧭 练习其他|nav:main"]]`. Skip coaching TTS — success doesn't need it.
 
 ## 4. Collaborates With
 
@@ -280,12 +308,11 @@ When the user sends another voice message after a sub-pass evaluation (no button
 
 1. **Never assess without the tool**: MUST use `pron_assess` to get real data. Don't guess pronunciation.
 2. **Score phonemes, not rhythm**: pronunciation accuracy drives credits; fluency goes to `subcap_scores.speaking.fluency`.
-3. **Voice before instruction, sequential.** Never `tg_msg type="voice"` and `type="keyboard"` in parallel.
+3. **Every user-visible step ships as one `tg_msg type="render"` with `terminal: true`** — prompt delivery, slow replay, pass feedback, fail+coaching feedback. The renderer handles voice-before-text ordering internally; never split into separate `tg_msg type="voice"` + `type="text"` / `type="keyboard"` calls.
 4. Use `persist` for reads/writes; no raw DB.
 5. Don't update `MEMORY.md`; `learner-state` owns durable state.
-6. **Binary buttons by `accuracy` vs `PASS`**: `< PASS` → no buttons + coaching TTS + forced re-practice; `≥ PASS` → `speak_next` + `nav:main`. Never a dedicated retry button.
+6. **Binary delivery by `accuracy` vs `PASS`**: `< PASS` → render with coaching voice + nudge text, no buttons; `≥ PASS` → render with `react` (🔥/👍) + feedback text + `speak_next` / `nav:main` buttons. Never a dedicated retry button.
 7. **Feedback content (not format)**: every report covers 4 scores (准确度/流利度/完整度/韵律感), correct sentence, brief translation, specific phoneme diagnosis. Format is the LLM's call — no fixed template.
-8. **Persist before feedback**: `await persist(...)` returns before sending the evaluation. State F needs the row in DB.
-9. **One-call keyboard**: when buttons are shown, report text + buttons in a single `tg_msg type="keyboard"` call. Never split.
-10. **Voice and text always separate.** Never bundle feedback text into voice `caption`. Send `tg_msg type="voice"` first (standalone), then `tg_msg type="text"` or `type="keyboard"` separately. When accuracy ≥ PASS, combine feedback into the `tg_msg type="keyboard"` call (no voice needed).
-11. **3-fail auto-advance.** If the same phoneme fails 3 consecutive re-practices, stop drilling it and auto-advance to the next sentence.
+8. **Persist before feedback**: `await persist(...)` returns before sending the render envelope. State F needs the row in DB.
+9. **Reactions live inside the render envelope's `react` field.** Never use `tg_msg type="react"` as a standalone call for accuracy-driven 🔥/👍 — that costs an extra loop.
+10. **3-fail auto-advance.** If the same phoneme fails 3 consecutive re-practices, stop drilling it and auto-advance to the next sentence.

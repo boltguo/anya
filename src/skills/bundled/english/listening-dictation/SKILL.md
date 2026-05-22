@@ -91,34 +91,30 @@ Hold: keep length, optionally swap **one** dimension (syntax/accent/connected-sp
 1. From `coach_context` + §2.3 credits, decide: tier, length, target weakness, i+1 stretch dimension (or hold), expected subcaps.
 2. Generate the sentence at chosen length/syntax/accent. Compute `prompt_hash` (§State D); regenerate if dedup hits.
 3. `tts` only for the target sentence at 100% speed. No filler audio.
-4. Send voice FIRST: a separate `tg_msg type="voice"` call with the audio `url`. Wait for delivery.
-5. THEN send instruction: a separate `tg_msg type="keyboard"` call (text + buttons only — **never include `url` here**, the keyboard endpoint has no media slot). Never parallel — see Hard Rule 5.
-6. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
+4. Send the prompt as **one** `tg_msg type="render"` call — bundles voice + instruction + buttons into a single tool call and ends the turn (`terminal: true`). The renderer dispatches the voice first, then the instruction keyboard.
+5. Init empty `ui_feedback` accumulator; every button tap appends its exact label.
 
-Text:
-
-```text
-来，听听这一句。把你听到的英文打出来。
-
-实在听不出可以点开看原文：<tg-spoiler>{correct English sentence}</tg-spoiler>
-```
-
-Buttons:
+Render envelope:
 
 ```json
-[["🐢 慢速播放|dict_slow", "😵 太难了，换简单点|dict_easier"]]
+{
+  "type": "render",
+  "media": { "type": "voice", "url": "<tts file path>" },
+  "text": "来，听听这一句。把你听到的英文打出来。\n\n实在听不出可以点开看原文：||{correct English sentence}||",
+  "buttons": [["🐢 慢速播放|dict_slow", "😵 太难了，换简单点|dict_easier"]],
+  "terminal": true
+}
 ```
 
-Wait for the typed answer or button tap.
+`||...||` is the spoiler shorthand — the renderer converts it to `<tg-spoiler>...</tg-spoiler>`. Wait for the typed answer or button tap.
 
 ### State B: Button Handling
 
 `dict_slow`:
 
 - Append `🐢 慢速播放` to `ui_feedback`.
-- Brief ack via `tg_msg type="text"`.
 - Same sentence; `tts rate="-10%"`.
-- Send slower voice FIRST, THEN re-send instruction keyboard. Never parallel.
+- Re-send via one `tg_msg type="render"` (`terminal: true`) — the slower voice + same instruction text + same two buttons. The brief Chinese ack can sit on the first line of `text` (e.g. `"放慢一档，再听一次👂"`); no separate `type="text"` call.
 
 `dict_easier`:
 
@@ -165,7 +161,27 @@ Buttons (always, regardless of accuracy):
 [["🔄 再来一句|dict_next", "🧭 练习其他|nav:main"]]
 ```
 
-**Critical**: feedback + buttons in **one** `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` — see Hard Rule 7. Voice is replayable from chat history, so no dedicated retry button.
+**Critical**: feedback + reaction + buttons go out in **one** `tg_msg type="render"` (`terminal: true`). Use the envelope's `react` field for the accuracy-driven emoji; do NOT call `tg_msg type="react"` separately (that wastes a loop — see Hard Rule 7).
+
+Reaction policy:
+
+| accuracy | `react` field |
+| --- | --- |
+| `= 1.0` | `{"target":"user","emoji":"🔥"}` |
+| `≥ PASS_THRESHOLD` (0.80) | `{"target":"user","emoji":"👍"}` |
+| `< PASS_THRESHOLD` | omit `react` |
+
+Render envelope shape:
+
+```json
+{
+  "type": "render",
+  "react": {"target": "user", "emoji": "👍"},
+  "text": "<short Chinese feedback covering correct sentence, translation, missed words, root cause>",
+  "buttons": [["🔄 再来一句|dict_next", "🧭 练习其他|nav:main"]],
+  "terminal": true
+}
+```
 
 ### State D: Persist Evidence
 
@@ -232,6 +248,6 @@ State D persists attempted sentences only. Abandoned rows are written in State B
 2. Diff every word. Don't hide missed articles, plurals, function words, boundaries.
 3. Use `persist` for reads/writes; no raw DB.
 4. Don't update `MEMORY.md`; `learner-state` owns durable ability state.
-5. **Voice before keyboard, sequential.** Never `tg_msg type="voice"` and `type="keyboard"` in parallel.
+5. **Use `tg_msg type="render"` with `terminal: true` for every user-visible step** (prompt, slow replay, feedback). The renderer handles the voice-before-keyboard ordering — never split into separate `tg_msg type="voice"` + `type="keyboard"` calls.
 6. **Feedback content (not format) required.** State C must always cover: correct sentence, brief translation, specific missed/mistaken words, one-phrase root cause. Format is the LLM's call — no fixed template.
-7. **One-call keyboard.** Reports + buttons go out in a single `tg_msg type="keyboard"` call. Never `type="text"` then `type="edit"` to attach buttons. Same for State A's instruction message.
+7. **Reactions belong inside the render envelope's `react` field.** Never use `tg_msg type="react"` as a standalone call for accuracy-driven 🔥/👍 — that costs an extra loop. Map accuracy → emoji per the §3 State C table.
