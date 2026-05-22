@@ -1,23 +1,22 @@
 ---
-name: listening-shadowing
-description: "Listening Rhythm Shadowing. Trigger when the user wants to practice listening comprehension by repeating short chunks. Focuses on rhythm, chunking, and catching fast speech, NOT isolated pronunciation."
+name: listening-chunkdrill
+description: "Chunk-level listening drill. Play a short clip, learner repeats to lock in rhythm and meaning units. Trains decoding speed and chunking, not phoneme accuracy. Trigger for '跟读', '意群跟读', '听力跟读', '影子跟读', 'chunk listening'."
 ---
 
-# Listening Shadowing
+# Listening ChunkDrill
 
-Different from `speaking-shadowing` (phoneme accuracy). Goal here: stay with the speaker — decoding speed and rhythm. The signal driving i+1 is **fluency**, not pronunciation accuracy.
+Chunk-level listening + repeat. Play a 1–3 chunk clip, learner repeats once. Goal: stay with the speaker — decoding speed and rhythm. The signal driving i+1 is **fluency**, not pronunciation accuracy.
 
 ## 1. Inputs
 
 Trigger when:
 
-- User says: `听力跟读`, `影子跟读`, `跟读`, `shadowing`.
-- Callback `listening-shadowing`.
-- **Disambiguation**: bare `跟读` defaults here (rhythm). Route to `speaking-shadowing` only on explicit phoneme/发音/口音/怎么读/不会读 — that's a different drill.
+- User says: `跟读`, `意群跟读`, `听力跟读`, `影子跟读`, `chunk listening`, `节奏练习`.
+- Callback `listening-chunkdrill`.
 
 Required context before generating:
 
-1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.shadowing","limit":20}` (`limit` int, not `"DEDUP_WINDOW"` string — `Number()` would NaN it). Returns rows with `accuracy` (= fluency/100), `prompt_hash`, `ui_feedback`, decoded `metadata` + flat `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup.
+1. `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.chunkdrill","limit":20}` (`limit` int, not `"DEDUP_WINDOW"` string — `Number()` would NaN it). Returns rows with `accuracy` (= fluency/100), `prompt_hash`, `ui_feedback`, decoded `metadata` + flat `recent_prompt_hashes`. Source of truth for §2.3 credit and §2.4 dedup.
 2. `persist {"action":"coach_context","days":14,"limit":8}` for subcaps / errors. Slow signal — only re-call when tier changes.
 3. `MEMORY.md` / `USER.md` only as fallback. No raw `study.db` access.
 
@@ -115,7 +114,7 @@ Hold: keep length, optionally swap **one** dimension (syntax / connected-speech 
    ```json
    {
      "action": "practice",
-     "skill_type": "listening.shadowing",
+     "skill_type": "listening.chunkdrill",
      "session_id": "<session>",
      "completed": 0,
      "accuracy": 0,
@@ -209,7 +208,7 @@ Minimum payload:
 
 ```json
 {
-  "skill_type": "listening.shadowing",
+  "skill_type": "listening.chunkdrill",
   "session_id": "<session>",
   "prompt": "<correct passage>",
   "prompt_hash": "<sha1(normalized prompt) first 16 chars>",
@@ -249,7 +248,7 @@ State D persists fully-attempted clips only (with or without slow-down). Abandon
 
 When the user sends another voice message after a sub-pass evaluation (no buttons shown), treat as consolidation retry on the **same passage**:
 
-1. **Recover parent sample** from chat memory (`id`, `prompt`, `prompt_hash`, `audio_path`, `redo_count`). If session was compacted, `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.shadowing","limit":1}` and grab them from the most-recent row. Do NOT regenerate the passage.
+1. **Recover parent sample** from chat memory (`id`, `prompt`, `prompt_hash`, `audio_path`, `redo_count`). If session was compacted, `persist {"action":"recent_practice","session_id":"<session>","skill_type":"listening.chunkdrill","limit":1}` and grab them from the most-recent row. Do NOT regenerate the passage.
 2. Run `pron_assess` with the recovered `prompt` as `reference_text` and the user's new audio.
 3. Persist via State D **with these overrides**:
    - `parent_sample_id` = previous round's sample `id`
@@ -265,7 +264,6 @@ When the user sends another voice message after a sub-pass evaluation (no button
 - `planner`: routes here when listening rhythm / connected-speech / chunking is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running tempo state, updates `MEMORY.md`.
 - `planner`: (proactive nudge) uses errors/subcap scores to explain rhythm/linking patterns.
-- `speaking-shadowing`: complementary phoneme-focused skill (see §1 disambiguation).
 - `support/data-contract`: defines the `persist` write protocol.
 
 ## 5. Failure And Fallbacks

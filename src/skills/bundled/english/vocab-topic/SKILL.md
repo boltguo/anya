@@ -145,7 +145,7 @@ When the user sends any message (or the timer expires and the user responds):
 
 ### State C: Recall Round
 
-After the bundle is hidden, run **5 mixed recall prompts** (no format dominates — mirror the catalog from `vocab-testme` §2.4 but stay shorter). Cycle through:
+After the bundle is hidden, run **5 mixed recall prompts** (no format dominates). Cycle through:
 
 | Format | UI | Item count |
 | --- | --- | --- |
@@ -224,8 +224,7 @@ End-of-batch buttons:
 - `planner`: routes here ahead of a writing-essay prompt to seed the lexical bank.
 - `learner-state`: reads `samples` rows + per-word `word_reviews`; updates `MEMORY.md` `Vocabulary Profile.topic_coverage`.
 - `planner`: (proactive nudge) uses topic coverage to recommend rotation (don't keep drilling 'education' if `environment` is at 0% coverage and exams are coming).
-- `vocab-testme`: hand-off after every topic session — verify recall under varied formats.
-- `vocab-review`: companion for due-flow (vocab-topic seeds new items into the queue).
+- `vocab-review`: companion for due-flow (vocab-topic seeds new items into the queue, vocab-review pulls them in due order).
 - `writing-essay` / `speaking-roleplay`: downstream consumers — once the bundle lands in mastery, prompts on that topic become accessible.
 - `support/data-contract`: defines the `persist` write protocol.
 

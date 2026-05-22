@@ -322,7 +322,7 @@ tts -> tg_msg voice -> tg_msg keyboard
 1. [listening-dictation](../src/skills/bundled/english/listening-dictation/SKILL.md) — State A 出题、State B `dict_slow`、State C 反馈全部改 render；Hard Rule 5/7 改写。
 2. [speaking-shadowing](../src/skills/bundled/english/speaking-shadowing/SKILL.md) — State A 出题、State B `speak_slow`/`speak_hard`、State C（pass 与 fail 两条路径）、State F retry 全部改 render；Hard Rule 3/9/10 改写。
 
-未迁移（继续走旧 type，本期不动）：vocab-review、vocab-topic、reading-skim-drill、listening-shadowing、speaking-roleplay 等其它 skill。
+未迁移（继续走旧 type，本期不动）：vocab-review、vocab-topic、reading-skim-drill、listening-chunkdrill、speaking-roleplay 等其它 skill。
 
 **Phase 3 暂未做 adapter 扩展**（即"voice + buttons 合并成单条 TG 消息"），按用户决策走渐进路线。
 
@@ -379,7 +379,7 @@ Agent: terminal render 后直接结束 turn
 按"调用频率 × 复杂度"排序的候选：
 
 1. **vocab-review** —— SRS 每卡都跑，调用最频繁；流程固定，迁移成本低。需同时验证 `tg_msg type="edit"`（reveal）与 render 的协同。
-2. **listening-shadowing** —— 与 listening-dictation 同构（voice + buttons），迁移模板可直接复用。
+2. **listening-chunkdrill** —— 与 listening-dictation 同构（voice + buttons），迁移模板可直接复用。
 3. **vocab-topic** / **reading-skim-drill** —— 涉及 `countdown` + 后续 keyboard，需先决定是把 countdown 纳入 render 还是保持独立。
 4. **speaking-roleplay** / **speaking-freetalk** —— voice + react 组合，迁移逻辑直接。
 
@@ -457,5 +457,5 @@ Telegram 消息发送已经成为 anya 的领域 adapter 能力，而不再是�
 下一步重点（§11）：
 
 1. adapter 扩展（voice+caption+buttons 合并为单条 TG 消息，UX 改善）
-2. 迁移 vocab-review、listening-shadowing 等高频 skill
+2. 迁移 vocab-review、listening-chunkdrill 等高频 skill
 3. 高频消息模板化

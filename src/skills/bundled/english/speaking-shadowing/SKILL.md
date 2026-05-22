@@ -5,15 +5,14 @@ description: "Speaking Pronunciation Clinic. Trigger ONLY when the user explicit
 
 # Speaking Shadowing (Pronunciation Clinic)
 
-Different from `listening-shadowing` (rhythm clinic). Goal here: phoneme-level accuracy. The signal driving i+1 is **pronunciation accuracy**, not fluency.
+Phoneme-level pronunciation drill. Play a target word/sentence, learner re-records, Azure scores per-phoneme. The signal driving i+1 is **pronunciation accuracy**.
 
 ## 1. Inputs
 
 Trigger when:
 
-- User says: `练发音`, `纠正口音`, `怎么读`, `pronunciation`.
+- User says: `练发音`, `纠正口音`, `怎么读`, `pronunciation`, `发音`, `不会读`.
 - Callback `speaking-shadowing`.
-- **Disambiguation**: explicit phoneme/发音/口音/不会读 → here. Bare `跟读` defaults to `listening-shadowing` (rhythm) — that's a different drill.
 
 Required context before generating:
 
@@ -291,7 +290,6 @@ When the user sends another voice message after a sub-pass evaluation (no button
 - `planner`: routes here when phoneme accuracy is the highest-value drill.
 - `learner-state`: reads persisted evidence, computes long-running pronunciation state, updates `MEMORY.md`.
 - `planner`: (proactive nudge) uses errors/subcap scores to explain articulation patterns.
-- `listening-shadowing`: complementary rhythm-focused skill (see §1 disambiguation).
 - `speaking-azure-score`: defines the `pron_assess` request/response contract and error taxonomy.
 - `support/data-contract`: defines the `persist` write protocol.
 

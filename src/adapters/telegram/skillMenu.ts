@@ -26,7 +26,7 @@ const MENU: Record<string, { text: string; buttons: string[][] }> = {
   listening: {
     text: '🎧 听力训练\n\n抓得到细节，跟得上意群。',
     buttons: [
-      ['✏️ 句子精听|listening-dictation', '🎙️ 意群跟读|listening-shadowing'],
+      ['✏️ 句子精听|listening-dictation', '🎙️ 意群跟读|listening-chunkdrill'],
       ['🔢 数字捕捉|listening-numberdrill', '📻 播客泛听|listening-podcast'],
       ['← 返回|nav:main'],
     ],
@@ -34,8 +34,7 @@ const MENU: Record<string, { text: string; buttons: string[][] }> = {
   reading: {
     text: '📖 阅读训练\n\n读得快，也读得透。',
     buttons: [
-      ['🌅 今日阅读|daily-article', '🐢 外刊精读|reading-deepdive'],
-      ['📰 话题讨论|material-discussion', '⚡ 快速略读|reading-skim-drill'],
+      ['📰 外刊问答|reading-article', '⚡ 快速略读|reading-skim-drill'],
       ['← 返回|nav:main'],
     ],
   },
@@ -51,7 +50,6 @@ const MENU: Record<string, { text: string; buttons: string[][] }> = {
     text: '📚 词汇网络\n\n在语境里学，靠重复内化。',
     buttons: [
       ['🔄 到期复习|vocab-review', '🎯 话题词汇|vocab-topic'],
-      ['🧠 抽查测验|vocab-testme'],
       ['← 返回|nav:main'],
     ],
   },

@@ -5,7 +5,7 @@ description: "MUST trigger when the user explicitly asks to save a word/phrase (
 
 # Global Vocabulary Harvest (Active & Passive)
 
-Helper skill — **not** a practice loop. Saves words / chunks into the SRS queue with full context, either on user request or as a passive auto-call from another skill (reading-deepdive, writing-rewrite, writing-journal, listening-podcast). Does NOT have its own state machine, tier, or credit gating; it produces `word_upsert` actions only.
+Helper skill — **not** a practice loop. Saves words / chunks into the SRS queue with full context, either on user request or as a passive auto-call from another skill (reading-article, writing-rewrite, writing-journal, listening-podcast). Does NOT have its own state machine, tier, or credit gating; it produces `word_upsert` actions only.
 
 ## 1. When to Use
 
@@ -16,7 +16,7 @@ Helper skill — **not** a practice loop. Saves words / chunks into the SRS queu
 
 **Passive triggers** (called by another skill):
 
-- End of `reading-deepdive` to extract 2–3 collocations from the passage.
+- End of `reading-article` to extract 3–5 collocations from the passage.
 - End of `writing-rewrite` to harvest the takeaway-chunk teaching point.
 - End of `writing-journal` to save the polished phrasal verb / idiom.
 - End of `listening-podcast` if a key collocation carried the pivot.
