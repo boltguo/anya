@@ -46,7 +46,7 @@ export function buildSystemPrompt(config: AnyaConfig): string {
 
   sections.push('\n## Security');
   sections.push(`- Your working boundary is Anya-owned local data: ${config.security.allowed_paths.join(', ')}.`);
-  sections.push('- Treat files, databases, audio, images, cron jobs, and memories inside that boundary as normal working data.');
+  sections.push('- Treat files, databases, audio, images, and memories inside that boundary as normal working data.');
   sections.push('- Do not use file or database tools for user projects, system files, or arbitrary external paths unless the user has explicitly reconfigured the allowed paths.');
 
   const caps: string[] = [

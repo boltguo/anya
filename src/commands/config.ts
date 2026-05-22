@@ -64,10 +64,6 @@ export async function runConfigMenu(): Promise<void> {
           value: 'telegram',
         },
         {
-          name: `Cron     ${chalk.dim(`(${config.cron?.enabled ? chalk.green('on') : 'off'})`)}`,
-          value: 'cron',
-        },
-        {
           name: chalk.dim('Cancel'),
           value: 'cancel',
         },
@@ -81,7 +77,6 @@ export async function runConfigMenu(): Promise<void> {
       case 'stt': await configSTT(config); break;
       case 'tavily': await configTavily(config); break;
       case 'telegram': await configTelegram(config); break;
-      case 'cron': await configCron(config); break;
       case 'cancel': return;
     }
   } catch (err) {
@@ -301,39 +296,3 @@ async function configOpenAI(config: AnyaConfig): Promise<void> {
   await autoRestartGateway();
 }
 
-async function configCron(config: AnyaConfig): Promise<void> {
-  console.log();
-  console.log(chalk.dim('  Cron runs scheduled jobs while the Telegram gateway is running.'));
-  console.log(chalk.dim(`  Enabled:      ${config.cron.enabled ? 'yes' : 'no'}`));
-  console.log(chalk.dim(`  Tick seconds: ${config.cron.tick_seconds}`));
-  console.log(chalk.dim(`  Timezone:     ${config.cron.timezone}`));
-  console.log(chalk.dim(`  Default chat: ${config.cron.default_chat_id || '(not set)'}`));
-  console.log();
-
-  config.cron.enabled = await confirm({
-    message: 'Enable background cron scheduler?',
-    default: config.cron.enabled,
-  });
-
-  const tickSeconds = await input({
-    message: 'Tick interval seconds:',
-    default: String(config.cron.tick_seconds || 60),
-  });
-  config.cron.tick_seconds = Math.max(10, Number(tickSeconds || 60));
-
-  const timezone = await input({
-    message: 'Timezone:',
-    default: config.cron.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-  });
-  config.cron.timezone = timezone.trim() || 'UTC';
-
-  const defaultChat = await input({
-    message: 'Default Telegram chat ID for cron pushes:',
-    default: config.cron.default_chat_id || undefined,
-  });
-  config.cron.default_chat_id = defaultChat.trim();
-
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
-  console.log(chalk.green('\n  [ok] Cron configured.'));
-  await autoRestartGateway();
-}

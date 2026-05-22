@@ -34,13 +34,6 @@ export interface AnyaConfig {
     allowed_user_ids: number[];
   };
 
-  cron: {
-    enabled: boolean;
-    tick_seconds: number;  // in seconds
-    timezone: string;
-    default_chat_id: string;
-  };
-
   stt: {
     groq_api_key: string;
     model: string;
@@ -84,12 +77,6 @@ export const DEFAULT_CONFIG: AnyaConfig = {
 
   security: { allowed_paths: ['~/.anya/'], fence_mode: 'deny' },
   telegram: { enabled: false, bot_token: '', allowed_user_ids: [] },
-  cron: {
-    enabled: false,
-    tick_seconds: 60,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    default_chat_id: '',
-  },
   stt: { groq_api_key: '', model: 'whisper-large-v3-turbo' },
   tts: { voice: 'en-US-AriaNeural' },
   azure: { speech_key: '', speech_region: 'eastasia' },

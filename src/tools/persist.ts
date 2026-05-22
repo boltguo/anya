@@ -108,8 +108,8 @@ register({
 
       study_session_id: { type: 'integer', description: 'study_sessions id for session_end.' },
       session_key: { type: 'string', description: 'Learning session key, e.g. tg:12345.' },
-      platform: { type: 'string', description: 'telegram | cli | cron | web.' },
-      entrypoint: { type: 'string', description: 'new | cron_morning | manual | etc.' },
+      platform: { type: 'string', description: 'telegram | cli | web.' },
+      entrypoint: { type: 'string', description: 'new | manual | etc.' },
       skills_used: { type: 'string', description: 'JSON array of skill slugs used in a learning session.' },
       plan: { type: 'string', description: 'JSON plan object/array for a learning session.' },
       summary_text: { type: 'string', description: 'Session recap for session_end.' },

@@ -11,7 +11,6 @@ Personalised recommendation. Invoked when the user taps "✨ 今日推荐" or ty
 
 - Callback `planner` (the 今日推荐 button on the main menu)
 - Free-form text like `练习什么 / 学什么好 / 给我个建议`
-- Cron-triggered proactive nudges (Workflow B below)
 
 If the learner names a specific mode (e.g. "听写"), match against `references/routing-table.md` and jump straight to that skill — skip the recommendation.
 
@@ -49,26 +48,9 @@ Priority for what to surface in the text:
 
 Then attach `menu.json.main.buttons` **unchanged** as the inline keyboard. Do not generate `vocab-review|...` style buttons inline — the menu already has them.
 
-## Workflow B — Proactive Nudge (cron-triggered)
-
-When triggered by cron (not user), evaluate nudge triggers. Most runs should produce **no message** — silence is valid.
-
-1. Read `MEMORY.md` and `persist action="coach_context"` for the last 7 days.
-2. Evaluate triggers in `references/triggers.md` in priority order.
-3. If none fire, output `[SILENT]` and stop.
-4. If one fires, send a short message (≤ 4 sentences) with exactly one action button via `tg_msg type="keyboard"`.
-5. Record the push with `persist action="practice"`, `skill_type="planner.proactive"`, `section="coaching"`, `completed=1`, `load_score=0`.
-
-**Nudge rules**:
-- **One Focus**: exactly one high-ROI task per nudge. No laundry list.
-- **No Data Dumps**: weave data into a natural Chinese sentence.
-- **No MEMORY writes.** `learner-state` owns durable ability-state updates.
-- **No repeated nudges.** Record every sent push so later runs can avoid repeating it.
-
 ## Resources
 
 - `references/routing-table.md` — free-form text → skill map
-- `references/triggers.md` — proactive nudge trigger catalogue
 
 ## Rules
 

@@ -131,7 +131,7 @@ only stores the values:
 }
 ```
 
-Read recent frozen snapshots for reports or cron summaries:
+Read recent frozen snapshots for reports:
 
 ```json
 {
@@ -140,8 +140,8 @@ Read recent frozen snapshots for reports or cron summaries:
 }
 ```
 
-Future cron jobs should call learner-state or these `persist` actions. Other
-practice skills should not write `progress_snapshots` directly.
+Only `learner-state` should call these `persist` actions. Other practice skills
+should not write `progress_snapshots` directly.
 
 ## Profile Upsert
 

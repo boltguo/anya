@@ -157,7 +157,6 @@ export class TelegramSessionAdapter implements Adapter {
     pron_assess: '🗣️ Assessing pronunciation',
     db: '🗄️ Querying database',
     persist: '💾 Saving data',
-    cron: '⏰ Updating schedule',
   };
 
   private statusText = '🧠 Thinking...';

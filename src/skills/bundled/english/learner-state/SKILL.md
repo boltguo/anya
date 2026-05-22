@@ -10,7 +10,6 @@ Data-driven MEMORY refresh and long-arc learning-state owner. Uses `persist acti
 ## 1. When to Use
 - Manual user trigger: `我现在水平`, `我现在几分`, `sync`, `refresh`, `最近学得怎么样`
 - Callback/System triggers: `learner-state`
-- Future cron trigger: weekly/daily scheduled state refresh. Cron should call this skill or its `persist` actions, not raw SQL.
 - Note: This skill NEVER launches new tests. It only reads historical data.
 
 ## 2. Workflow (State Machine - STRICT EXECUTION)
@@ -33,7 +32,7 @@ Execute the following actions:
    - `Coaching & Adaptive Controls`: merge coaching strategy + adaptive training parameters into one section.
    - `Study Consistency`: recent minutes, active days, reviewed words, and planned tasks from `coach_context.summary.activity` / `coach_context.due_tasks`.
    - **Compact-write rules**: omit fields with value "n/a", "not tested", 0, or "none". Per-skill profiles: max 4 lines each. Do not duplicate info across sections.
-3. **Weekly Snapshot**: If this is a manual progress report, weekly cron run, or meaningful state refresh, compute the snapshot fields from `coach_context`, `progress_trend`, and MEMORY, then call `persist action="progress_snapshot"` with the computed values:
+3. **Weekly Snapshot**: If this is a manual progress report or meaningful state refresh, compute the snapshot fields from `coach_context`, `progress_trend`, and MEMORY, then call `persist action="progress_snapshot"` with the computed values:
    - `current_level`, four skill scores, vocabulary counts, total minutes, active days, sample/session counts, due-word count, weakest subcaps JSON, top errors JSON, and notes.
    - This writes `progress_snapshots`. `persist` only upserts the provided values; it does not decide scores or learner state.
    - Do not let ordinary practice skills write this table.

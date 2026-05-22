@@ -9,7 +9,6 @@ import type { MessageFile } from '../../agent/types.js';
 
 import { TelegramSessionAdapter } from './SessionAdapter.js';
 import { formatTgError } from './errors.js';
-import { startScheduler, stopScheduler } from '../../services/scheduler.js';
 import { markdownToTelegramHtml } from './format.js';
 
 import { ChatQueue } from './chatQueue.js';
@@ -141,12 +140,6 @@ export class TelegramAdapter implements TelegramRuntime {
     agentLogger.info({ msg: 'tg_bot_starting' });
     console.log('[gateway] Telegram bot starting...');
 
-    if (this.config.cron?.enabled) {
-      startScheduler(this.config, {
-        sendProactiveMessage: (chatId, text) => this.sendProactiveMessage(chatId, text),
-      });
-    }
-
     await this.bot.start({
       onStart: (info) => {
         console.log(`[gateway] Bot @${info.username} is running`);
@@ -156,7 +149,6 @@ export class TelegramAdapter implements TelegramRuntime {
   }
 
   stop(): void {
-    stopScheduler();
     this.bot.stop();
   }
 }
